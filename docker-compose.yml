@@ -6,9 +6,10 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     ports:
-      - "3001:3001"
+      - "0.0.0.0:3001:3001"
     environment:
-      - REACT_APP_API_URL=http://localhost:3002
+      - REACT_APP_API_URL=http://0.0.0.0:3002
+      - HOST=0.0.0.0
     depends_on:
       - backend
     volumes:
@@ -22,9 +23,10 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     ports:
-      - "3002:3002"
+      - "0.0.0.0:3002:3002"
     environment:
       - PORT=3002
+      - HOST=0.0.0.0
       - DNS_SERVER=${DNS_SERVER:-127.0.0.1}
       - TEMP_DIR=/tmp/snap-dns
     volumes:
