@@ -25,14 +25,23 @@ async function generateTempKeyFile(keyConfig) {
     const keyFileName = `key-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.conf`;
     const keyFilePath = path.join(tempDir, keyFileName);
 
-    const keyFileContent = `key "${keyConfig.keyName}" {
+    const escapedKeyValue = keyConfig.keyValue.replace(/"/g, '\\"');
+    const escapedKeyName = keyConfig.keyName.replace(/"/g, '\\"');
+
+    const keyFileContent = `key "${escapedKeyName}" {
     algorithm ${keyConfig.algorithm};
-    secret "${keyConfig.keyValue}";
+    secret "${escapedKeyValue}";
 };`;
 
     try {
+        console.log('Writing key file:', keyFileContent.replace(escapedKeyValue, 'REDACTED'));
+        
         await fs.writeFile(keyFilePath, keyFileContent, { mode: 0o600 });
         console.log('Key file created:', keyFilePath);
+        
+        const written = await fs.readFile(keyFilePath, 'utf8');
+        console.log('Verified key file contents:', written.replace(escapedKeyValue, 'REDACTED'));
+        
         return keyFilePath;
     } catch (error) {
         console.error('Error creating key file:', error);
