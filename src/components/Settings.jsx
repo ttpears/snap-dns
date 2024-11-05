@@ -6,7 +6,11 @@ import {
   Button,
   Paper,
   IconButton,
-  Alert
+  Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useConfig } from '../context/ConfigContext';
@@ -21,7 +25,8 @@ function Settings() {
     keyName: '',
     keyValue: '',
     algorithm: 'hmac-sha512',
-    zones: []
+    zones: [],
+    type: 'internal'
   });
 
   const handleAddKey = (e) => {
@@ -49,7 +54,8 @@ function Settings() {
         keyName: '',
         keyValue: '',
         algorithm: 'hmac-sha512',
-        zones: []
+        zones: [],
+        type: 'internal'
       });
     } catch (err) {
       setError(err.message);
@@ -143,6 +149,19 @@ function Settings() {
           margin="normal"
           helperText="Comma-separated list of zones"
         />
+
+        <FormControl fullWidth margin="normal">
+          <InputLabel>Key Type</InputLabel>
+          <Select
+            name="type"
+            value={newKey.type}
+            onChange={handleInputChange}
+            required
+          >
+            <MenuItem value="internal">Internal</MenuItem>
+            <MenuItem value="external">External</MenuItem>
+          </Select>
+        </FormControl>
 
         <Button
           type="submit"
