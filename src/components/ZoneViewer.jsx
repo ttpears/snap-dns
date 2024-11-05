@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Paper,
   Typography,
@@ -25,10 +25,11 @@ import {
   Refresh as RefreshIcon,
   ContentCopy as CopyIcon,
 } from '@mui/icons-material';
+import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
-import { localConfig } from '../config/local';
 
 function ZoneViewer() {
+  const { config } = useConfig();
   const [selectedZone, setSelectedZone] = useState('');
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -38,18 +39,28 @@ function ZoneViewer() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
 
-  const recordTypes = ['ALL', 'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SOA', 'PTR', 'SRV'];
+  // Get all available zones from the user's configuration
+  const availableZones = useMemo(() => {
+    const zones = new Set();
+    config.keys?.forEach(key => {
+      key.zones?.forEach(zone => zones.add(zone));
+    });
+    return Array.from(zones);
+  }, [config.keys]);
 
   const getKeyForZone = useCallback((zoneName) => {
     console.log('Looking for key for zone:', zoneName);
-    for (const key of localConfig.keys) {
-      if (key.zones.includes(zoneName)) {
+    if (!config.keys) return null;
+    
+    for (const key of config.keys) {
+      if (key.zones?.includes(zoneName)) {
         console.log('Found key:', { ...key, keyValue: '[REDACTED]' });
         return key;
       }
     }
+    console.log('No key found for zone:', zoneName);
     return null;
-  }, []);
+  }, [config.keys]);
 
   const loadZoneRecords = useCallback(async () => {
     if (!selectedZone) {
@@ -128,10 +139,7 @@ function ZoneViewer() {
           Zone Viewer
         </Typography>
         <IconButton 
-          onClick={() => {
-            console.log('Refresh clicked for zone:', selectedZone);
-            loadZoneRecords();
-          }} 
+          onClick={loadZoneRecords} 
           disabled={!selectedZone || loading}
           color="primary"
         >
@@ -145,17 +153,16 @@ function ZoneViewer() {
           onChange={(e) => setSelectedZone(e.target.value)}
           displayEmpty
           fullWidth
+          sx={{ mb: 2 }}
         >
           <MenuItem value="" disabled>
             Select a DNS Zone
           </MenuItem>
-          {localConfig.keys.flatMap(key => 
-            key.zones.map(zone => (
-              <MenuItem key={`${key.id}-${zone}`} value={zone}>
-                {zone} ({key.name})
-              </MenuItem>
-            ))
-          )}
+          {availableZones.map((zone) => (
+            <MenuItem key={zone} value={zone}>
+              {zone} ({getKeyForZone(zone)?.name || 'Unknown Key'})
+            </MenuItem>
+          ))}
         </Select>
 
         <TextField
@@ -191,6 +198,12 @@ function ZoneViewer() {
         </Alert>
       )}
 
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+          <CircularProgress />
+        </Box>
+      )}
+
       <TableContainer>
         <Table size="small">
           <TableHead>
@@ -203,13 +216,7 @@ function ZoneViewer() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={5} align="center">
-                  <CircularProgress size={24} />
-                </TableCell>
-              </TableRow>
-            ) : filteredRecords
+            {filteredRecords
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((record, index) => (
                   <TableRow key={`${record.name}-${record.type}-${index}`}>
