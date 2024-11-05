@@ -10,12 +10,15 @@ import {
   Autocomplete,
   Typography,
   Alert,
-  Paper
+  Paper,
+  Link
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 
 function AddDNSRecord() {
+  const navigate = useNavigate();
   const { config } = useConfig();
   const [selectedKey, setSelectedKey] = useState('');
   const [formData, setFormData] = useState({
@@ -27,26 +30,52 @@ function AddDNSRecord() {
   });
   const [error, setError] = useState(null);
 
+  // Get available keys from config
   const availableKeys = useMemo(() => {
     return config?.keys || [];
   }, [config?.keys]);
 
-  const selectedKeyConfig = useMemo(() => {
-    return availableKeys.find(k => k.id === selectedKey);
+  // Get zones for selected key
+  const keyZones = useMemo(() => {
+    const key = availableKeys.find(k => k.id === selectedKey);
+    return key?.zones || [];
   }, [availableKeys, selectedKey]);
 
-  const handleKeyChange = (event) => {
-    setSelectedKey(event.target.value);
-    setFormData(prev => ({ ...prev, zone: '' })); // Reset zone when key changes
-  };
+  // Record types
+  const recordTypes = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'PTR', 'SRV', 'CAA'];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedKey || !formData.zone) return;
+    setError(null);
+
+    if (!selectedKey) {
+      setError('Please select a DNS key');
+      return;
+    }
 
     try {
-      await dnsService.addRecord(formData.zone, formData, selectedKeyConfig);
-      // Handle success
+      const keyConfig = availableKeys.find(k => k.id === selectedKey);
+      await dnsService.addRecord(
+        formData.zone,
+        {
+          name: formData.name,
+          type: formData.type,
+          value: formData.value,
+          ttl: parseInt(formData.ttl, 10)
+        },
+        keyConfig
+      );
+
+      // Clear form after successful submission
+      setFormData({
+        zone: '',
+        name: '',
+        type: 'A',
+        value: '',
+        ttl: '3600'
+      });
+      
+      // Optionally show success message
     } catch (err) {
       setError(err.message);
     }
@@ -54,20 +83,27 @@ function AddDNSRecord() {
 
   if (!availableKeys.length) {
     return (
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" color="error">
+      <Paper sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
+        <Typography variant="h6" gutterBottom>
           No DNS Keys Configured
         </Typography>
-        <Typography>
-          Please configure DNS keys in Settings before adding records.
+        <Typography paragraph>
+          Before you can add DNS records, you need to configure at least one DNS key.
         </Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => navigate('/settings')}
+        >
+          Go to Settings
+        </Button>
       </Paper>
     );
   }
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 600 }}>
-      <Typography variant="h6" gutterBottom>
+    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 600, mx: 'auto' }}>
+      <Typography variant="h5" gutterBottom>
         Add DNS Record
       </Typography>
 
@@ -77,28 +113,36 @@ function AddDNSRecord() {
         </Alert>
       )}
 
+      {/* Key Selection */}
       <FormControl fullWidth margin="normal">
-        <InputLabel>Select DNS Key</InputLabel>
+        <InputLabel>DNS Key</InputLabel>
         <Select
           value={selectedKey}
-          onChange={handleKeyChange}
+          onChange={(e) => {
+            setSelectedKey(e.target.value);
+            setFormData(prev => ({ ...prev, zone: '' })); // Reset zone when key changes
+          }}
           required
         >
+          <MenuItem value="" disabled>
+            Select a DNS Key
+          </MenuItem>
           {availableKeys.map(key => (
             <MenuItem key={key.id} value={key.id}>
-              {key.name} ({key.type})
+              {key.name} ({key.type}) - {key.server}
             </MenuItem>
           ))}
         </Select>
       </FormControl>
 
+      {/* Zone Selection/Input */}
       {selectedKey && (
         <Autocomplete
           value={formData.zone}
           onChange={(_, newValue) => {
             setFormData(prev => ({ ...prev, zone: newValue }));
           }}
-          options={selectedKeyConfig?.zones || []}
+          options={keyZones}
           freeSolo
           renderInput={(params) => (
             <TextField
@@ -107,19 +151,76 @@ function AddDNSRecord() {
               required
               fullWidth
               margin="normal"
-              helperText="Select a managed zone or enter a custom zone"
+              helperText={keyZones.length ? 
+                "Select a managed zone or type a custom zone name" : 
+                "Type a zone name"}
             />
           )}
         />
       )}
 
-      {formData.zone && (
+      {/* Show remaining fields only when both key and zone are selected */}
+      {selectedKey && formData.zone && (
         <>
-          {/* Existing record fields */}
+          <TextField
+            name="name"
+            label="Record Name"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            required
+            fullWidth
+            margin="normal"
+            helperText={`Will be added to ${formData.zone}`}
+          />
+
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Record Type</InputLabel>
+            <Select
+              name="type"
+              value={formData.type}
+              onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
+              required
+            >
+              {recordTypes.map(type => (
+                <MenuItem key={type} value={type}>{type}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <TextField
+            name="value"
+            label="Record Value"
+            value={formData.value}
+            onChange={(e) => setFormData(prev => ({ ...prev, value: e.target.value }))}
+            required
+            fullWidth
+            margin="normal"
+          />
+
+          <TextField
+            name="ttl"
+            label="TTL"
+            type="number"
+            value={formData.ttl}
+            onChange={(e) => setFormData(prev => ({ ...prev, ttl: e.target.value }))}
+            fullWidth
+            margin="normal"
+            helperText="Time To Live in seconds"
+          />
+
+          <Button
+            type="submit"
+            variant="contained"
+            color="primary"
+            fullWidth
+            sx={{ mt: 2 }}
+          >
+            Add Record
+          </Button>
         </>
       )}
     </Box>
   );
 }
 
-export default AddDNSRecord; 
+export default AddDNSRecord;
