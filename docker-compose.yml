@@ -6,10 +6,10 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     ports:
-      - "0.0.0.0:3001:3001"
+      - "172.16.16.140:3001:3001"
     environment:
-      - REACT_APP_API_URL=http://0.0.0.0:3002
-      - HOST=0.0.0.0
+      - REACT_APP_API_URL=http://172.16.16.140:3002
+      - HOST=172.16.16.140
       - NODE_ENV=development
       - REACT_APP_DEBUG=true
     depends_on:
@@ -30,10 +30,10 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     ports:
-      - "0.0.0.0:3002:3002"
+      - "172.16.16.140:3002:3002"
     environment:
       - PORT=3002
-      - HOST=0.0.0.0
+      - HOST=172.16.16.140
       - NODE_ENV=development
       - DEBUG=express:*
     volumes:

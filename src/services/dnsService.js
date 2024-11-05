@@ -1,3 +1,5 @@
+import { localConfig } from '../config/local';
+
 export const SUPPORTED_ALGORITHMS = {
   'hmac-sha512': 'HMAC-SHA512',
   'hmac-sha384': 'HMAC-SHA384',
@@ -8,12 +10,17 @@ export const SUPPORTED_ALGORITHMS = {
 };
 
 class DNSService {
+  constructor() {
+    this.baseUrl = 'http://172.16.16.140:3002';  // Use the actual IP address instead of 0.0.0.0
+  }
+
   async getZoneRecords(zoneName, keyConfig) {
     try {
-      if (!keyConfig) {
-        console.error('No key config provided');
-        throw new Error('Key configuration is required');
-      }
+      console.log('Fetching zone:', zoneName);
+      console.log('Using key config:', {
+        ...keyConfig,
+        keyValue: '[REDACTED]'
+      });
 
       const params = new URLSearchParams({
         server: keyConfig.server,
@@ -22,25 +29,20 @@ class DNSService {
         algorithm: keyConfig.algorithm
       });
 
-      const url = `${process.env.REACT_APP_API_URL}/zone/${encodeURIComponent(zoneName)}/axfr`;
-      console.log('Fetching zone records from:', url);
-      console.log('With key config:', {
-        ...keyConfig,
-        keyValue: '[REDACTED]'
-      });
+      const url = `${this.baseUrl}/zone/${encodeURIComponent(zoneName)}/axfr`;
+      console.log('Request URL:', url.replace(keyConfig.keyValue, '[REDACTED]'));
 
       const response = await fetch(`${url}?${params}`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        mode: 'cors'  // Explicitly enable CORS
       });
-      
-      console.log('Response status:', response.status);
       
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Server error response:', errorData);
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
       

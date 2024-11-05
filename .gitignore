@@ -75,3 +75,6 @@ debug.log
 *.zone
 *.tsig
 *.key.conf
+
+# Local configuration
+src/config/local.js

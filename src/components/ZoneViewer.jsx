@@ -25,11 +25,9 @@ import {
   Refresh as RefreshIcon,
   ContentCopy as CopyIcon,
 } from '@mui/icons-material';
-import { useConfig } from '../context/ConfigContext';
-import { dnsService } from '../services/dnsService';
+import { localConfig } from '../config/local';
 
 function ZoneViewer() {
-  const { config } = useConfig();
   const [selectedZone, setSelectedZone] = useState('');
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -43,17 +41,14 @@ function ZoneViewer() {
 
   const getKeyForZone = useCallback((zoneName) => {
     console.log('Looking for key for zone:', zoneName);
-    console.log('Available keys:', config.keys);
-    
-    for (const key of (config.keys || [])) {
+    for (const key of localConfig.keys) {
       if (key.zones.includes(zoneName)) {
         console.log('Found key:', { ...key, keyValue: '[REDACTED]' });
         return key;
       }
     }
-    console.log('No key found for zone:', zoneName);
     return null;
-  }, [config.keys]);
+  }, []);
 
   const loadZoneRecords = useCallback(async () => {
     if (!selectedZone) {
@@ -146,22 +141,20 @@ function ZoneViewer() {
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
         <Select
           value={selectedZone}
-          onChange={(e) => {
-            console.log('Zone selected:', e.target.value);
-            setSelectedZone(e.target.value);
-          }}
+          onChange={(e) => setSelectedZone(e.target.value)}
           displayEmpty
           fullWidth
-          sx={{ mb: 2 }}
         >
           <MenuItem value="" disabled>
             Select a DNS Zone
           </MenuItem>
-          {(config.savedZones || []).map((zone) => (
-            <MenuItem key={zone.name} value={zone.name}>
-              {zone.name}
-            </MenuItem>
-          ))}
+          {localConfig.keys.flatMap(key => 
+            key.zones.map(zone => (
+              <MenuItem key={`${key.id}-${zone}`} value={zone}>
+                {zone} ({key.name})
+              </MenuItem>
+            ))
+          )}
         </Select>
 
         <TextField
