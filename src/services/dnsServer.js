@@ -35,26 +35,40 @@ class DnsServer {
   }
 
   async addRecord(zone, record, keyConfig) {
-    const response = await fetch(`${this.baseUrl}/zone/${zone}/record`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
+    try {
+      console.log('Adding record:', {
+        zone,
+        record,
         server: keyConfig.server,
         keyName: keyConfig.keyName,
-        keyValue: keyConfig.keyValue,
-        algorithm: keyConfig.algorithm,
-        record: record
-      })
-    });
+        algorithm: keyConfig.algorithm
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to add record: ${errorText}`);
+      const response = await fetch(`${this.baseUrl}/zone/${zone}/record`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          server: keyConfig.server,
+          keyName: keyConfig.keyName,
+          keyValue: keyConfig.keyValue,
+          algorithm: keyConfig.algorithm,
+          record: record
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server response:', errorText);
+        throw new Error(`Failed to add record: ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error adding record:', error);
+      throw error;
     }
-
-    return await response.json();
   }
 
   async updateRecord(zone, originalRecord, newRecord, keyConfig) {
