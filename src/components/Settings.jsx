@@ -6,17 +6,17 @@ import {
   Button,
   Paper,
   Alert,
+  Select,
+  MenuItem,
   FormControl,
   InputLabel,
-  Select,
-  MenuItem
+  Chip,
+  Stack
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
 import { useConfig } from '../context/ConfigContext';
 
 function Settings() {
   const { config, updateConfig } = useConfig();
-  const [error, setError] = useState(null);
   const [newKey, setNewKey] = useState({
     id: '',
     name: '',
@@ -27,24 +27,42 @@ function Settings() {
     zones: [],
     type: 'internal'
   });
+  const [currentZone, setCurrentZone] = useState('');
+  const [error, setError] = useState(null);
 
-  const handleAddKey = (e) => {
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setNewKey(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleAddZone = () => {
+    if (currentZone && !newKey.zones.includes(currentZone)) {
+      setNewKey(prev => ({
+        ...prev,
+        zones: [...prev.zones, currentZone]
+      }));
+      setCurrentZone('');
+    }
+  };
+
+  const handleRemoveZone = (zoneToRemove) => {
+    setNewKey(prev => ({
+      ...prev,
+      zones: prev.zones.filter(zone => zone !== zoneToRemove)
+    }));
+  };
+
+  const handleSubmit = (e) => {
     e.preventDefault();
     setError(null);
 
     try {
-      // Validate required fields
-      if (!newKey.name || !newKey.server || !newKey.keyName || !newKey.keyValue) {
-        throw new Error('Please fill in all required fields');
-      }
-
-      // Create unique ID if not provided
-      const keyId = newKey.id || `key-${Date.now()}`;
-
-      // Update config with new key
-      const updatedKeys = [...(config.keys || []), { ...newKey, id: keyId }];
+      const updatedKeys = [...(config.keys || []), newKey];
       updateConfig({ ...config, keys: updatedKeys });
-
+      
       // Reset form
       setNewKey({
         id: '',
@@ -61,18 +79,10 @@ function Settings() {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewKey(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
   return (
-    <Paper sx={{ p: 3 }}>
+    <Paper sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
       <Typography variant="h5" gutterBottom>
-        DNS Key Management
+        Add DNS Key
       </Typography>
 
       {error && (
@@ -81,15 +91,15 @@ function Settings() {
         </Alert>
       )}
 
-      <Box component="form" onSubmit={handleAddKey} sx={{ mt: 2 }}>
+      <Box component="form" onSubmit={handleSubmit}>
         <TextField
           name="name"
           label="Key Name"
           value={newKey.name}
           onChange={handleInputChange}
           fullWidth
-          required
           margin="normal"
+          required
         />
 
         <TextField
@@ -98,8 +108,8 @@ function Settings() {
           value={newKey.server}
           onChange={handleInputChange}
           fullWidth
-          required
           margin="normal"
+          required
         />
 
         <TextField
@@ -108,8 +118,8 @@ function Settings() {
           value={newKey.keyName}
           onChange={handleInputChange}
           fullWidth
-          required
           margin="normal"
+          required
         />
 
         <TextField
@@ -118,39 +128,29 @@ function Settings() {
           value={newKey.keyValue}
           onChange={handleInputChange}
           fullWidth
+          margin="normal"
           required
-          margin="normal"
-          type="password"
-        />
-
-        <TextField
-          name="algorithm"
-          label="Algorithm"
-          value={newKey.algorithm}
-          onChange={handleInputChange}
-          fullWidth
-          margin="normal"
-          helperText="Default: hmac-sha512"
-        />
-
-        <TextField
-          name="zones"
-          label="Managed Zones"
-          value={newKey.zones.join(', ')}
-          onChange={(e) => {
-            const zonesText = e.target.value;
-            setNewKey(prev => ({
-              ...prev,
-              zones: zonesText.split(',').map(z => z.trim()).filter(Boolean)
-            }));
-          }}
-          fullWidth
-          margin="normal"
-          helperText="Comma-separated list of zones"
         />
 
         <FormControl fullWidth margin="normal">
-          <InputLabel>Key Type</InputLabel>
+          <InputLabel>Algorithm</InputLabel>
+          <Select
+            name="algorithm"
+            value={newKey.algorithm}
+            onChange={handleInputChange}
+            required
+          >
+            <MenuItem value="hmac-sha512">HMAC-SHA512</MenuItem>
+            <MenuItem value="hmac-sha384">HMAC-SHA384</MenuItem>
+            <MenuItem value="hmac-sha256">HMAC-SHA256</MenuItem>
+            <MenuItem value="hmac-sha224">HMAC-SHA224</MenuItem>
+            <MenuItem value="hmac-sha1">HMAC-SHA1</MenuItem>
+            <MenuItem value="hmac-md5">HMAC-MD5</MenuItem>
+          </Select>
+        </FormControl>
+
+        <FormControl fullWidth margin="normal">
+          <InputLabel>Type</InputLabel>
           <Select
             name="type"
             value={newKey.type}
@@ -162,35 +162,47 @@ function Settings() {
           </Select>
         </FormControl>
 
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            Managed Zones
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+            {newKey.zones.map((zone) => (
+              <Chip
+                key={zone}
+                label={zone}
+                onDelete={() => handleRemoveZone(zone)}
+              />
+            ))}
+          </Stack>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextField
+              value={currentZone}
+              onChange={(e) => setCurrentZone(e.target.value)}
+              label="Add Zone"
+              size="small"
+              fullWidth
+            />
+            <Button
+              onClick={handleAddZone}
+              variant="outlined"
+              disabled={!currentZone}
+            >
+              Add
+            </Button>
+          </Box>
+        </Box>
+
         <Button
           type="submit"
           variant="contained"
           color="primary"
-          startIcon={<AddIcon />}
-          sx={{ mt: 2 }}
+          fullWidth
+          sx={{ mt: 3 }}
         >
           Add Key
         </Button>
       </Box>
-
-      {/* Display existing keys */}
-      {config.keys?.length > 0 && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Configured Keys
-          </Typography>
-          {config.keys.map(key => (
-            <Paper key={key.id} sx={{ p: 2, mt: 2 }}>
-              <Typography variant="subtitle1">{key.name}</Typography>
-              <Typography variant="body2">Server: {key.server}</Typography>
-              <Typography variant="body2">Key Name: {key.keyName}</Typography>
-              <Typography variant="body2">
-                Zones: {key.zones?.join(', ') || 'No zones configured'}
-              </Typography>
-            </Paper>
-          ))}
-        </Box>
-      )}
     </Paper>
   );
 }
