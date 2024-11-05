@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3001:3001"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3002
+    depends_on:
+      - backend
+    volumes:
+      - ./src:/app/src
+      - /app/node_modules
+    networks:
+      - snap-dns-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - DNS_SERVER=${DNS_SERVER:-127.0.0.1}
+      - TEMP_DIR=/tmp/snap-dns
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - temp-keys:/tmp/snap-dns
+    networks:
+      - snap-dns-network
+    cap_add:
+      - NET_RAW  # Required for dig to work properly
+
+volumes:
+  temp-keys:
+    driver: local
+
+networks:
+  snap-dns-network:
+    driver: bridge 
