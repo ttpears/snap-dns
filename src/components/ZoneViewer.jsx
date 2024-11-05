@@ -54,6 +54,11 @@ function ZoneViewer() {
     if (!selectedZone) return;
     
     const keyConfig = getKeyForZone(selectedZone);
+    console.log('Using key config:', {
+      ...keyConfig,
+      keyValue: keyConfig?.keyValue ? '[REDACTED]' : 'missing'
+    });
+
     if (!keyConfig) {
       setError('No key configuration found for this zone');
       return;
@@ -65,12 +70,13 @@ function ZoneViewer() {
       const zoneRecords = await dnsService.getZoneRecords(selectedZone, keyConfig);
       setRecords(Array.isArray(zoneRecords) ? zoneRecords : []);
     } catch (err) {
+      console.error('Failed to load zone records:', err);
       setError(err.message || 'Failed to load zone records');
       setRecords([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedZone, config.keys]);
+  }, [selectedZone]);
 
   useEffect(() => {
     if (selectedZone) {

@@ -17,6 +17,8 @@ class DNSService {
         algorithm: keyConfig.algorithm
       });
 
+      console.log('Fetching zone records from:', `${process.env.REACT_APP_API_URL}/zone/${encodeURIComponent(zoneName)}/axfr`);
+      
       const response = await fetch(
         `${process.env.REACT_APP_API_URL}/zone/${encodeURIComponent(zoneName)}/axfr?${params}`,
         {
@@ -28,14 +30,17 @@ class DNSService {
       );
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to fetch zone records');
+        const errorData = await response.json();
+        console.error('Server error:', errorData);
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
       
-      return await response.json();
+      const data = await response.json();
+      console.log(`Received ${data.length} records for zone ${zoneName}`);
+      return data;
     } catch (error) {
-      console.error('Failed to fetch zone records:', error);
-      throw error;
+      console.error('DNS service error:', error);
+      throw new Error(`Failed to fetch zone records: ${error.message}`);
     }
   }
 

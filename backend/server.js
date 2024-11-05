@@ -9,10 +9,22 @@ require('dotenv').config();
 const app = express();
 
 app.use(cors({
-  origin: '*',  // Allow all origins
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: true, // Allow all origins
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
+
+// Add an OPTIONS handler for preflight requests
+app.options('*', cors());
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+  console.log('Query params:', req.query);
+  next();
+});
+
 app.use(express.json());
 
 async function ensureTempDir() {
@@ -59,6 +71,14 @@ async function cleanupTempFile(filePath) {
 app.get('/zone/:zoneName/axfr', async (req, res) => {
   const { zoneName } = req.params;
   const { server, keyName, keyValue, algorithm } = req.query;
+
+  console.log('Zone transfer request received:', {
+    zoneName,
+    server,
+    keyName,
+    algorithm,
+    hasKeyValue: !!keyValue
+  });
 
   if (!server || !keyName || !keyValue || !algorithm) {
     return res.status(400).json({ 
