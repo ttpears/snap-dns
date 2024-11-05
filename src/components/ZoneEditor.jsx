@@ -113,11 +113,19 @@ function ZoneEditor() {
         throw new Error('No key configuration found for this zone');
       }
 
-      const zoneData = await dnsService.fetchZoneRecords(selectedZone, keyConfig);
-      setRecords(zoneData);
+      // Debug log to verify key config
+      console.log('Using key config:', {
+        server: keyConfig.server,
+        keyName: keyConfig.keyName,
+        keyValue: keyConfig.keyValue,
+        algorithm: keyConfig.algorithm
+      });
+
+      const records = await dnsService.fetchZoneRecords(selectedZone, keyConfig);
+      setRecords(records);
     } catch (err) {
       console.error('Failed to load zone records:', err);
-      setError('Failed to load zone records');
+      setError(err.message);
     } finally {
       setLoading(false);
     }

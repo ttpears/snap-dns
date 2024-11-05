@@ -5,6 +5,14 @@ class DnsServer {
 
   async getRecords(zone, keyConfig) {
     try {
+      console.log('Sending AXFR request:', {
+        zone,
+        server: keyConfig.server,
+        keyName: keyConfig.keyName,
+        keyValue: keyConfig.keyValue,
+        algorithm: keyConfig.algorithm
+      });
+
       const response = await fetch(`${this.baseUrl}/zone/${zone}/axfr`, {
         method: 'POST',
         headers: {
@@ -21,10 +29,11 @@ class DnsServer {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Server response:', errorText);
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+        throw new Error(`Server error: ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('Received records:', data);
       return data;
     } catch (error) {
       console.error('DNS Server error:', error);
