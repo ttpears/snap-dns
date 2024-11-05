@@ -1,19 +1,34 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
-import { dnsService } from '../services/dnsService';
 
 const ConfigContext = createContext();
 
+const STORAGE_KEY = 'dnsConfig';
+const DARK_MODE_KEY = 'darkMode';
+
 export function ConfigProvider({ children }) {
-  const [config, setConfig] = useState({ keys: [] });
+  // Initialize config from localStorage
+  const [config, setConfig] = useState(() => {
+    const savedConfig = localStorage.getItem(STORAGE_KEY);
+    return savedConfig ? JSON.parse(savedConfig) : { keys: [] };
+  });
+
   const [darkMode, setDarkMode] = useState(() => {
-    // Get initial mode from localStorage or default to 'dark'
-    const savedMode = localStorage.getItem('darkMode');
+    const savedMode = localStorage.getItem(DARK_MODE_KEY);
     return savedMode !== null ? savedMode === 'true' : true;
   });
 
-  // Create theme based on dark mode preference
+  // Save config to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  }, [config]);
+
+  // Save dark mode preference whenever it changes
+  useEffect(() => {
+    localStorage.setItem(DARK_MODE_KEY, darkMode.toString());
+  }, [darkMode]);
+
   const theme = useMemo(
     () =>
       createTheme({
@@ -25,11 +40,7 @@ export function ConfigProvider({ children }) {
   );
 
   const toggleDarkMode = () => {
-    setDarkMode(prev => {
-      const newMode = !prev;
-      localStorage.setItem('darkMode', newMode.toString());
-      return newMode;
-    });
+    setDarkMode(prev => !prev);
   };
 
   const updateConfig = (newConfig) => {
