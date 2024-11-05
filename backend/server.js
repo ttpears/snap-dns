@@ -11,8 +11,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+async function ensureTempDir() {
+  const tempDir = process.env.TEMP_DIR || '/tmp/snap-dns';
+  try {
+    await fs.mkdir(tempDir, { recursive: true, mode: 0o700 });
+    return tempDir;
+  } catch (error) {
+    console.error('Error creating temp directory:', error);
+    throw error;
+  }
+}
+
 async function generateTempKeyFile(keyConfig) {
-  const tempDir = process.env.TEMP_DIR || '/tmp';
+  const tempDir = await ensureTempDir();
   const keyFileName = `key-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.conf`;
   const keyFilePath = path.join(tempDir, keyFileName);
 
@@ -21,13 +32,21 @@ async function generateTempKeyFile(keyConfig) {
     secret "${keyConfig.keyValue}";
 };`;
 
-  await fs.writeFile(keyFilePath, keyFileContent);
-  return keyFilePath;
+  try {
+    // Write file with restricted permissions
+    await fs.writeFile(keyFilePath, keyFileContent, { mode: 0o600 });
+    console.log('Key file created:', keyFilePath);
+    return keyFilePath;
+  } catch (error) {
+    console.error('Error creating key file:', error);
+    throw error;
+  }
 }
 
 async function cleanupTempFile(filePath) {
   try {
     await fs.unlink(filePath);
+    console.log('Cleaned up key file:', filePath);
   } catch (error) {
     console.error('Error cleaning up temp file:', error);
   }
@@ -54,37 +73,53 @@ app.get('/zone/:zoneName/axfr', async (req, res) => {
     });
 
     // Execute dig with TSIG key
-    const command = `dig @${server} ${zoneName} AXFR -k ${keyFilePath}`;
+    const command = `dig @${server} ${zoneName} AXFR -k "${keyFilePath}"`;
     console.log('Executing command:', command.replace(keyValue, '[REDACTED]'));
 
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        console.error('Dig error:', error);
-        return res.status(500).json({ 
-          error: true, 
-          message: 'Zone transfer failed',
-          details: error.message 
-        });
-      }
+    exec(command, async (error, stdout, stderr) => {
+      try {
+        // Clean up key file immediately after dig execution
+        if (keyFilePath) {
+          await cleanupTempFile(keyFilePath);
+        }
 
-      if (stderr) {
-        console.warn('Dig stderr:', stderr);
-      }
+        if (error) {
+          console.error('Dig error:', error);
+          return res.status(500).json({ 
+            error: true, 
+            message: 'Zone transfer failed',
+            details: error.message 
+          });
+        }
 
-      const records = parseDigOutput(stdout);
-      res.json(records);
+        if (stderr) {
+          console.warn('Dig stderr:', stderr);
+        }
+
+        const records = parseDigOutput(stdout);
+        res.json(records);
+      } catch (cleanupError) {
+        console.error('Error in cleanup:', cleanupError);
+        // Still try to send response even if cleanup fails
+        if (!res.headersSent) {
+          res.status(500).json({ 
+            error: true, 
+            message: 'Error cleaning up temporary files' 
+          });
+        }
+      }
     });
   } catch (error) {
     console.error('AXFR error:', error);
+    // Clean up on error
+    if (keyFilePath) {
+      await cleanupTempFile(keyFilePath);
+    }
     res.status(500).json({ 
       error: true, 
       message: 'Failed to fetch zone records',
       details: error.message 
     });
-  } finally {
-    if (keyFilePath) {
-      await cleanupTempFile(keyFilePath);
-    }
   }
 });
 
@@ -119,5 +154,9 @@ function parseDigOutput(output) {
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log('DNS Server:', process.env.DNS_SERVER || 'not configured');
+  ensureTempDir().then(dir => {
+    console.log('Temporary directory:', dir);
+  }).catch(error => {
+    console.error('Failed to create temporary directory:', error);
+  });
 }); 
