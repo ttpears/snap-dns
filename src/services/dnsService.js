@@ -113,6 +113,51 @@ class DNSService {
       throw error;
     }
   }
+
+  async addRecord(zone, record, keyConfig) {
+    try {
+      console.log('Adding record to zone:', zone);
+      console.log('Record:', record);
+      console.log('Using key config:', {
+        ...keyConfig,
+        keyValue: '[REDACTED]'
+      });
+
+      const url = `${this.baseUrl}/zone/${encodeURIComponent(zone)}/record`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          server: keyConfig.server,
+          keyName: keyConfig.keyName,
+          keyValue: keyConfig.keyValue,
+          algorithm: keyConfig.algorithm,
+          record: {
+            name: record.name,
+            type: record.type,
+            value: record.value,
+            ttl: parseInt(record.ttl, 10)
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to add record');
+      }
+      
+      const data = await response.json();
+      console.log('Record added successfully:', data);
+      return data;
+    } catch (error) {
+      console.error('DNS service error:', error);
+      throw error;
+    }
+  }
 }
 
 export const dnsService = new DNSService(); 

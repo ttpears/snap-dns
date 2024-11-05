@@ -112,9 +112,55 @@ function ZoneViewer() {
     }
   }, [selectedZone, loadZoneRecords]);
 
-  const handleCopyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-  };
+  const handleCopy = useCallback(async (text) => {
+    try {
+      if (!navigator.clipboard) {
+        throw new Error('Clipboard API not available');
+      }
+      await navigator.clipboard.writeText(text);
+      console.log('Copied to clipboard:', text);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  }, []);
+
+  const renderRecordRow = (record) => (
+    <TableRow key={`${record.name}-${record.type}-${record.value}`}>
+      <TableCell>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {record.name}
+          <IconButton
+            size="small"
+            onClick={() => handleCopy(record.name)}
+            sx={{ ml: 1 }}
+          >
+            <Tooltip title="Copy">
+              <CopyIcon fontSize="small" />
+            </Tooltip>
+          </IconButton>
+        </Box>
+      </TableCell>
+      <TableCell>{record.ttl}</TableCell>
+      <TableCell>{record.class}</TableCell>
+      <TableCell>
+        <Chip label={record.type} size="small" />
+      </TableCell>
+      <TableCell>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {record.value}
+          <IconButton
+            size="small"
+            onClick={() => handleCopy(record.value)}
+            sx={{ ml: 1 }}
+          >
+            <Tooltip title="Copy">
+              <CopyIcon fontSize="small" />
+            </Tooltip>
+          </IconButton>
+        </Box>
+      </TableCell>
+    </TableRow>
+  );
 
   const filteredRecords = records.filter(record => {
     const matchesSearch = searchTerm === '' || 
@@ -235,50 +281,7 @@ function ZoneViewer() {
           <TableBody>
             {filteredRecords
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((record, index) => (
-                  <TableRow key={`${record.name}-${record.type}-${index}`}>
-                    <TableCell>
-                      <Chip 
-                        label={record.type}
-                        size="small"
-                        color={getRecordTypeColor(record.type)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title="Click to copy">
-                        <Box 
-                          component="span" 
-                          sx={{ cursor: 'pointer' }}
-                          onClick={() => handleCopyToClipboard(record.name)}
-                        >
-                          {record.name}
-                        </Box>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title="Click to copy">
-                        <Box 
-                          component="span" 
-                          sx={{ cursor: 'pointer' }}
-                          onClick={() => handleCopyToClipboard(record.value)}
-                        >
-                          {record.value}
-                        </Box>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>{record.ttl}</TableCell>
-                    <TableCell align="right">
-                      <IconButton 
-                        size="small"
-                        onClick={() => handleCopyToClipboard(
-                          `${record.name} ${record.ttl} IN ${record.type} ${record.value}`
-                        )}
-                      >
-                        <CopyIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                .map((record, index) => renderRecordRow(record))}
           </TableBody>
         </Table>
       </TableContainer>
