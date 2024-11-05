@@ -25,6 +25,7 @@ import {
   Refresh as RefreshIcon,
   ContentCopy as CopyIcon,
 } from '@mui/icons-material';
+import { dnsService } from '../services/dnsService';
 import { localConfig } from '../config/local';
 
 function ZoneViewer() {
