@@ -1,18 +1,13 @@
 class DnsServer {
   constructor() {
-    this.baseUrl = 'http://localhost:3002';
+    this.baseUrl = process.env.REACT_APP_API_URL;
+    console.log('Using backend URL:', this.baseUrl);
   }
 
   async getRecords(zone, keyConfig) {
     try {
-      console.log('Sending AXFR request:', {
-        zone,
-        server: keyConfig.server,
-        keyName: keyConfig.keyName,
-        keyValue: keyConfig.keyValue,
-        algorithm: keyConfig.algorithm
-      });
-
+      console.log('Making AXFR request to:', `${this.baseUrl}/zone/${zone}/axfr`);
+      
       const response = await fetch(`${this.baseUrl}/zone/${zone}/axfr`, {
         method: 'POST',
         headers: {
@@ -32,9 +27,7 @@ class DnsServer {
         throw new Error(`Server error: ${errorText}`);
       }
 
-      const data = await response.json();
-      console.log('Received records:', data);
-      return data;
+      return await response.json();
     } catch (error) {
       console.error('DNS Server error:', error);
       throw error;
