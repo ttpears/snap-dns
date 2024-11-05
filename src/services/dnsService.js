@@ -10,6 +10,11 @@ export const SUPPORTED_ALGORITHMS = {
 class DNSService {
   async getZoneRecords(zoneName, keyConfig) {
     try {
+      if (!keyConfig) {
+        console.error('No key config provided');
+        throw new Error('Key configuration is required');
+      }
+
       const params = new URLSearchParams({
         server: keyConfig.server,
         keyName: keyConfig.keyName,
@@ -17,21 +22,25 @@ class DNSService {
         algorithm: keyConfig.algorithm
       });
 
-      console.log('Fetching zone records from:', `${process.env.REACT_APP_API_URL}/zone/${encodeURIComponent(zoneName)}/axfr`);
-      
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/zone/${encodeURIComponent(zoneName)}/axfr?${params}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
+      const url = `${process.env.REACT_APP_API_URL}/zone/${encodeURIComponent(zoneName)}/axfr`;
+      console.log('Fetching zone records from:', url);
+      console.log('With key config:', {
+        ...keyConfig,
+        keyValue: '[REDACTED]'
+      });
+
+      const response = await fetch(`${url}?${params}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
         }
-      );
+      });
+      
+      console.log('Response status:', response.status);
       
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Server error:', errorData);
+        console.error('Server error response:', errorData);
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
       
@@ -40,7 +49,7 @@ class DNSService {
       return data;
     } catch (error) {
       console.error('DNS service error:', error);
-      throw new Error(`Failed to fetch zone records: ${error.message}`);
+      throw error;
     }
   }
 

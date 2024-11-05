@@ -41,25 +41,31 @@ function ZoneViewer() {
 
   const recordTypes = ['ALL', 'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SOA', 'PTR', 'SRV'];
 
-  const getKeyForZone = (zoneName) => {
-    for (const key of config.keys) {
+  const getKeyForZone = useCallback((zoneName) => {
+    console.log('Looking for key for zone:', zoneName);
+    console.log('Available keys:', config.keys);
+    
+    for (const key of (config.keys || [])) {
       if (key.zones.includes(zoneName)) {
+        console.log('Found key:', { ...key, keyValue: '[REDACTED]' });
         return key;
       }
     }
+    console.log('No key found for zone:', zoneName);
     return null;
-  };
+  }, [config.keys]);
 
   const loadZoneRecords = useCallback(async () => {
-    if (!selectedZone) return;
+    if (!selectedZone) {
+      console.log('No zone selected');
+      return;
+    }
     
+    console.log('Loading records for zone:', selectedZone);
     const keyConfig = getKeyForZone(selectedZone);
-    console.log('Using key config:', {
-      ...keyConfig,
-      keyValue: keyConfig?.keyValue ? '[REDACTED]' : 'missing'
-    });
-
+    
     if (!keyConfig) {
+      console.error('No key configuration found for zone:', selectedZone);
       setError('No key configuration found for this zone');
       return;
     }
@@ -67,7 +73,13 @@ function ZoneViewer() {
     setLoading(true);
     setError(null);
     try {
+      console.log('Fetching records with key config:', {
+        ...keyConfig,
+        keyValue: '[REDACTED]'
+      });
+      
       const zoneRecords = await dnsService.getZoneRecords(selectedZone, keyConfig);
+      console.log(`Received ${zoneRecords.length} records`);
       setRecords(Array.isArray(zoneRecords) ? zoneRecords : []);
     } catch (err) {
       console.error('Failed to load zone records:', err);
@@ -76,7 +88,7 @@ function ZoneViewer() {
     } finally {
       setLoading(false);
     }
-  }, [selectedZone]);
+  }, [selectedZone, getKeyForZone]);
 
   useEffect(() => {
     if (selectedZone) {
@@ -120,7 +132,10 @@ function ZoneViewer() {
           Zone Viewer
         </Typography>
         <IconButton 
-          onClick={loadZoneRecords} 
+          onClick={() => {
+            console.log('Refresh clicked for zone:', selectedZone);
+            loadZoneRecords();
+          }} 
           disabled={!selectedZone || loading}
           color="primary"
         >
@@ -131,7 +146,10 @@ function ZoneViewer() {
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
         <Select
           value={selectedZone}
-          onChange={(e) => setSelectedZone(e.target.value)}
+          onChange={(e) => {
+            console.log('Zone selected:', e.target.value);
+            setSelectedZone(e.target.value);
+          }}
           displayEmpty
           fullWidth
           sx={{ mb: 2 }}
@@ -139,13 +157,11 @@ function ZoneViewer() {
           <MenuItem value="" disabled>
             Select a DNS Zone
           </MenuItem>
-          {config.keys.flatMap(key => 
-            key.zones.map(zone => (
-              <MenuItem key={`${key.id}-${zone}`} value={zone}>
-                {zone} ({key.name})
-              </MenuItem>
-            ))
-          )}
+          {(config.savedZones || []).map((zone) => (
+            <MenuItem key={zone.name} value={zone.name}>
+              {zone.name}
+            </MenuItem>
+          ))}
         </Select>
 
         <TextField
