@@ -21,30 +21,46 @@ async function ensureTempDir() {
 }
 
 async function generateTempKeyFile(keyConfig) {
+    console.log('=== Generating Key File ===');
+    console.log('Key Name:', keyConfig.keyName);
+    console.log('Algorithm:', keyConfig.algorithm);
+    // Don't log the actual key value
+    
     const tempDir = await ensureTempDir();
+    console.log('Temp directory:', tempDir);
+    
     const keyFileName = `key-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.conf`;
     const keyFilePath = path.join(tempDir, keyFileName);
+    console.log('Key file path:', keyFilePath);
 
-    const escapedKeyValue = keyConfig.keyValue.replace(/"/g, '\\"');
-    const escapedKeyName = keyConfig.keyName.replace(/"/g, '\\"');
-
-    const keyFileContent = `key "${escapedKeyName}" {
+    const keyFileContent = `key "${keyConfig.keyName}" {
     algorithm ${keyConfig.algorithm};
-    secret "${escapedKeyValue}";
+    secret "${keyConfig.keyValue}";
 };`;
 
     try {
-        console.log('Writing key file:', keyFileContent.replace(escapedKeyValue, 'REDACTED'));
+        // Log masked content (for security)
+        console.log('Writing key file content:', keyFileContent.replace(keyConfig.keyValue, 'REDACTED'));
         
         await fs.writeFile(keyFilePath, keyFileContent, { mode: 0o600 });
-        console.log('Key file created:', keyFilePath);
+        console.log('Key file created successfully');
         
-        const written = await fs.readFile(keyFilePath, 'utf8');
-        console.log('Verified key file contents:', written.replace(escapedKeyValue, 'REDACTED'));
+        // Verify file exists and is readable
+        const stats = await fs.stat(keyFilePath);
+        console.log('File stats:', {
+            size: stats.size,
+            mode: stats.mode.toString(8),
+            uid: stats.uid,
+            gid: stats.gid
+        });
+        
+        // Verify content (masked)
+        const content = await fs.readFile(keyFilePath, 'utf8');
+        console.log('Verified file content:', content.replace(keyConfig.keyValue, 'REDACTED'));
         
         return keyFilePath;
     } catch (error) {
-        console.error('Error creating key file:', error);
+        console.error('Error in generateTempKeyFile:', error);
         throw error;
     }
 }
