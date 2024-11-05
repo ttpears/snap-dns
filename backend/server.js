@@ -92,6 +92,7 @@ app.post('/zone/:zoneName/axfr', async (req, res) => {
     console.log('\n=== Zone Transfer Request ===');
     console.log('Time:', new Date().toISOString());
     console.log('Zone:', req.params.zoneName);
+    console.log('Request body:', req.body);
     
     const { zoneName } = req.params;
     const { server, keyName, keyValue, algorithm } = req.body;
@@ -113,9 +114,11 @@ app.post('/zone/:zoneName/axfr', async (req, res) => {
         });
 
         console.log('Generated key file:', keyFilePath);
-        console.log('Executing dig command...');
-
+        console.log('Key file contents:');
+        console.log(await fs.readFile(keyFilePath, 'utf8'));
+        
         const command = `dig +time=10 +tries=1 @${server} ${zoneName} AXFR -k "${keyFilePath}" +multiline`;
+        console.log('Executing command:', command);
         
         exec(command, { timeout: 15000 }, async (error, stdout, stderr) => {
             try {
@@ -126,11 +129,12 @@ app.post('/zone/:zoneName/axfr', async (req, res) => {
 
                 if (error) {
                     console.error('Dig error:', error);
+                    console.error('Dig stdout:', stdout);
                     console.error('Dig stderr:', stderr);
                     return res.status(500).json({ 
                         error: true, 
                         message: 'Zone transfer failed',
-                        details: error.message
+                        details: `${error.message}\nstdout: ${stdout}\nstderr: ${stderr}`
                     });
                 }
 
@@ -159,83 +163,6 @@ app.post('/zone/:zoneName/axfr', async (req, res) => {
         res.status(500).json({ 
             error: true, 
             message: 'Failed to fetch zone records',
-            details: error.message 
-        });
-    }
-});
-
-app.post('/zone/:zoneName/record', async (req, res) => {
-    console.log('\n=== Add DNS Record Request ===');
-    console.log('Time:', new Date().toISOString());
-    console.log('Zone:', req.params.zoneName);
-    
-    const { zoneName } = req.params;
-    const { server, keyName, keyValue, algorithm, record } = req.body;
-
-    if (!server || !keyName || !keyValue || !algorithm || !record) {
-        return res.status(400).json({ 
-            error: true, 
-            message: 'Missing required information' 
-        });
-    }
-
-    let keyFilePath;
-    try {
-        keyFilePath = await generateTempKeyFile({
-            keyName,
-            keyValue,
-            algorithm
-        });
-
-        // Create nsupdate command file
-        const updateFile = path.join(await ensureTempDir(), `update-${Date.now()}.txt`);
-        const updateContent = `server ${server}
-zone ${zoneName}
-update add ${record.name} ${record.ttl} ${record.type} ${record.value}
-send
-`;
-
-        await fs.writeFile(updateFile, updateContent, { mode: 0o600 });
-
-        const command = `nsupdate -k "${keyFilePath}" "${updateFile}"`;
-        
-        exec(command, { timeout: 10000 }, async (error, stdout, stderr) => {
-            try {
-                // Clean up files
-                await Promise.all([
-                    cleanupTempFile(keyFilePath),
-                    cleanupTempFile(updateFile)
-                ]);
-
-                if (error) {
-                    console.error('nsupdate error:', error);
-                    console.error('nsupdate stderr:', stderr);
-                    return res.status(500).json({ 
-                        error: true, 
-                        message: 'Failed to update DNS record',
-                        details: error.message
-                    });
-                }
-
-                res.json({ success: true, message: 'Record added successfully' });
-            } catch (cleanupError) {
-                console.error('Error in cleanup:', cleanupError);
-                if (!res.headersSent) {
-                    res.status(500).json({ 
-                        error: true, 
-                        message: 'Error cleaning up temporary files' 
-                    });
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Record update error:', error);
-        if (keyFilePath) {
-            await cleanupTempFile(keyFilePath);
-        }
-        res.status(500).json({ 
-            error: true, 
-            message: 'Failed to update DNS record',
             details: error.message 
         });
     }
