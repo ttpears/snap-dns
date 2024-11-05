@@ -14,8 +14,12 @@ import {
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 
-function AddDNSRecord({ zone, onRecordAdded }) {
+function AddDNSRecord() {
   const { config } = useConfig();
+  const [selectedKey, setSelectedKey] = useState('');
+  const [selectedZone, setSelectedZone] = useState('');
+  const [manualZone, setManualZone] = useState('');
+  const [useManualZone, setUseManualZone] = useState(false);
   const [newRecord, setNewRecord] = useState({
     name: '',
     ttl: 3600,
@@ -31,18 +35,21 @@ function AddDNSRecord({ zone, onRecordAdded }) {
     setSuccess(false);
 
     try {
-      console.log('Adding record for zone:', zone);
-      console.log('Record details:', newRecord);
-
-      const keyConfig = config.keys.find(key => 
-        key.zones?.includes(zone)
-      );
-
+      const keyConfig = config.keys.find(key => key.id === selectedKey);
       if (!keyConfig) {
-        throw new Error('No key configuration found for this zone');
+        throw new Error('Please select a valid key');
       }
 
-      await dnsService.addRecord(zone, newRecord, keyConfig);
+      const zoneToUse = useManualZone ? manualZone : selectedZone;
+      if (!zoneToUse) {
+        throw new Error('Please select or enter a zone');
+      }
+
+      console.log('Adding record for zone:', zoneToUse);
+      console.log('Using key:', keyConfig.name);
+      console.log('Record details:', newRecord);
+
+      await dnsService.addRecord(zoneToUse, newRecord, keyConfig);
       setSuccess(true);
       
       // Reset form
@@ -52,11 +59,6 @@ function AddDNSRecord({ zone, onRecordAdded }) {
         type: 'A',
         value: ''
       });
-
-      // Notify parent component
-      if (onRecordAdded) {
-        onRecordAdded();
-      }
     } catch (err) {
       console.error('Failed to add record:', err);
       setError(err.message);
@@ -64,73 +66,129 @@ function AddDNSRecord({ zone, onRecordAdded }) {
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 600, mx: 'auto' }}>
-      <Typography variant="h5" gutterBottom>
+    <Paper sx={{ p: 3, mb: 3 }}>
+      <Typography variant="h6" gutterBottom>
         Add DNS Record
       </Typography>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+        {/* Key Selection */}
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel>Select Key</InputLabel>
+          <Select
+            value={selectedKey}
+            onChange={(e) => setSelectedKey(e.target.value)}
+            label="Select Key"
+            required
+          >
+            {config.keys.map((key) => (
+              <MenuItem key={key.id} value={key.id}>
+                {key.name} ({key.server})
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
-      <TextField
-        name="name"
-        label="Record Name"
-        value={newRecord.name}
-        onChange={(e) => setNewRecord(prev => ({ ...prev, name: e.target.value }))}
-        required
-        fullWidth
-        margin="normal"
-        helperText={`Will be added to ${zone}`}
-      />
+        {/* Zone Selection */}
+        <Box sx={{ mb: 2 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => setUseManualZone(!useManualZone)}
+            sx={{ mb: 1 }}
+          >
+            {useManualZone ? 'Select from Managed Zones' : 'Enter Zone Manually'}
+          </Button>
 
-      <FormControl fullWidth margin="normal">
-        <InputLabel>Record Type</InputLabel>
-        <Select
-          name="type"
-          value={newRecord.type}
-          onChange={(e) => setNewRecord(prev => ({ ...prev, type: e.target.value }))}
+          {useManualZone ? (
+            <TextField
+              fullWidth
+              label="Enter Zone"
+              value={manualZone}
+              onChange={(e) => setManualZone(e.target.value)}
+              required
+            />
+          ) : (
+            <FormControl fullWidth>
+              <InputLabel>Select Zone</InputLabel>
+              <Select
+                value={selectedZone}
+                onChange={(e) => setSelectedZone(e.target.value)}
+                label="Select Zone"
+                required
+              >
+                {selectedKey && config.keys.find(k => k.id === selectedKey)?.zones.map((zone) => (
+                  <MenuItem key={zone} value={zone}>
+                    {zone}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        </Box>
+
+        {/* Record Details */}
+        <TextField
+          fullWidth
+          label="Name"
+          value={newRecord.name}
+          onChange={(e) => setNewRecord({ ...newRecord, name: e.target.value })}
+          sx={{ mb: 2 }}
           required
-        >
-          {['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'PTR', 'SRV', 'CAA'].map(type => (
-            <MenuItem key={type} value={type}>{type}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+        />
 
-      <TextField
-        name="value"
-        label="Record Value"
-        value={newRecord.value}
-        onChange={(e) => setNewRecord(prev => ({ ...prev, value: e.target.value }))}
-        required
-        fullWidth
-        margin="normal"
-      />
+        <TextField
+          fullWidth
+          label="TTL"
+          type="number"
+          value={newRecord.ttl}
+          onChange={(e) => setNewRecord({ ...newRecord, ttl: parseInt(e.target.value) })}
+          sx={{ mb: 2 }}
+          required
+        />
 
-      <TextField
-        name="ttl"
-        label="TTL"
-        type="number"
-        value={newRecord.ttl}
-        onChange={(e) => setNewRecord(prev => ({ ...prev, ttl: e.target.value }))}
-        fullWidth
-        margin="normal"
-        helperText="Time To Live in seconds"
-      />
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel>Record Type</InputLabel>
+          <Select
+            value={newRecord.type}
+            onChange={(e) => setNewRecord({ ...newRecord, type: e.target.value })}
+            label="Record Type"
+            required
+          >
+            {['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS'].map((type) => (
+              <MenuItem key={type} value={type}>
+                {type}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
-      <Button
-        type="submit"
-        variant="contained"
-        color="primary"
-        fullWidth
-        sx={{ mt: 2 }}
-      >
-        Add Record
-      </Button>
-    </Box>
+        <TextField
+          fullWidth
+          label="Value"
+          value={newRecord.value}
+          onChange={(e) => setNewRecord({ ...newRecord, value: e.target.value })}
+          sx={{ mb: 2 }}
+          required
+        />
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {success && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            Record added successfully
+          </Alert>
+        )}
+
+        <Button type="submit" variant="contained" color="primary">
+          Add Record
+        </Button>
+      </Box>
+    </Paper>
   );
 }
 
