@@ -537,6 +537,14 @@ function ZoneEditor() {
         >
           <RefreshIcon />
         </IconButton>
+
+        <Button
+          variant="contained"
+          onClick={() => setShowAddRecord(!showAddRecord)}
+          disabled={!selectedZone}
+        >
+          {showAddRecord ? 'Cancel Add' : 'Add Record'}
+        </Button>
       </Box>
 
       {error && (
