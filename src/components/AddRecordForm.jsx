@@ -12,7 +12,7 @@ import {
   Alert
 } from '@mui/material';
 import { useConfig } from '../context/ConfigContext';
-import dnsService from '../services/dnsService';
+import { dnsService } from '../services/dnsService';
 
 function AddRecordForm() {
   const { config } = useConfig();
@@ -22,18 +22,25 @@ function AddRecordForm() {
     type: 'A',
     value: '',
     ttl: '3600',
-    selectedKey: ''  // Add key selection
+    selectedKey: ''
   });
   const [error, setError] = useState(null);
 
   // Get managed zones from config
   const managedZones = useMemo(() => {
+    if (!config?.keys?.length) {
+      console.log('No keys found in config');
+      return [];
+    }
     const zones = new Set();
-    config.keys?.forEach(key => {
-      key.zones?.forEach(zone => zones.add(zone));
+    config.keys.forEach(key => {
+      if (key.zones?.length) {
+        key.zones.forEach(zone => zones.add(zone));
+      }
     });
+    console.log('Available zones:', Array.from(zones));
     return Array.from(zones);
-  }, [config.keys]);
+  }, [config?.keys]);
 
   // Get available keys for the selected zone
   const availableKeys = useMemo(() => {
@@ -114,8 +121,8 @@ function AddRecordForm() {
         onChange={(event, newValue) => {
           setFormData(prev => ({
             ...prev,
-            zone: newValue,
-            selectedKey: ''  // Reset key selection when zone changes
+            zone: newValue || '',
+            selectedKey: ''
           }));
         }}
         options={managedZones}
@@ -128,7 +135,9 @@ function AddRecordForm() {
             required
             fullWidth
             margin="normal"
-            helperText="Select a managed zone or type a custom zone name"
+            helperText={managedZones.length ? 
+              "Select a managed zone or type a custom zone name" : 
+              "No managed zones found. Type a zone name to continue"}
           />
         )}
       />
