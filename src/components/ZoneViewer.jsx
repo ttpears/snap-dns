@@ -39,6 +39,9 @@ function ZoneViewer() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
 
+  // Add the record types constant
+  const recordTypes = ['ALL', 'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SOA', 'PTR', 'SRV', 'CAA'];
+
   // Get all available zones from the user's configuration
   const availableZones = useMemo(() => {
     const zones = new Set();
