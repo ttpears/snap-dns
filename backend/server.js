@@ -19,10 +19,9 @@ const app = express();
 
 // Add request logging middleware
 app.use((req, res, next) => {
-  log(`${req.method} ${req.url}`);
-  log('Headers:', req.headers);
-  log('Query:', req.query);
-  log('Body:', req.body);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log('Headers:', req.headers);
+  console.log('Query params:', req.query);
   next();
 });
 
@@ -40,18 +39,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: true, message: err.message });
 });
 
-app.get('/zone/:zoneName/axfr', async (req, res) => {
+app.post('/zone/:zoneName/axfr', async (req, res) => {
+  console.log('\n=== Zone Transfer Request ===');
+  console.log('Time:', new Date().toISOString());
+  console.log('Zone:', req.params.zoneName);
+  
   const { zoneName } = req.params;
-  const { server, keyName, keyValue, algorithm } = req.query;
-
-  console.log('AXFR request for:', {
-    zone: zoneName,
-    dnsServer: server,
-    keyName,
-    algorithm
-  });
+  const { server, keyName, keyValue, algorithm } = req.body;
 
   if (!server || !keyName || !keyValue || !algorithm) {
+    console.error('Missing required parameters');
     return res.status(400).json({ 
       error: true, 
       message: 'Missing required TSIG key information' 
@@ -66,36 +63,44 @@ app.get('/zone/:zoneName/axfr', async (req, res) => {
       algorithm
     });
 
-    // Execute dig with verbose output for debugging
+    console.log('Generated key file:', keyFilePath);
+    console.log('Executing dig command...');
+
     const command = `dig +time=10 +tries=1 @${server} ${zoneName} AXFR -k "${keyFilePath}" +multiline`;
-    console.log('Executing dig command:', command.replace(keyValue, '[REDACTED]'));
-
+    
     exec(command, { timeout: 15000 }, async (error, stdout, stderr) => {
-      // Clean up key file immediately
-      if (keyFilePath) {
-        await cleanupTempFile(keyFilePath);
+      try {
+        // Clean up key file immediately
+        if (keyFilePath) {
+          await cleanupTempFile(keyFilePath);
+        }
+
+        if (error) {
+          console.error('Dig error:', error);
+          console.error('Dig stderr:', stderr);
+          return res.status(500).json({ 
+            error: true, 
+            message: 'Zone transfer failed',
+            details: error.message
+          });
+        }
+
+        if (stderr) {
+          console.warn('Dig stderr (warning):', stderr);
+        }
+
+        const records = parseDigOutput(stdout);
+        console.log(`Parsed ${records.length} records from zone ${zoneName}`);
+        res.json(records);
+      } catch (cleanupError) {
+        console.error('Error in cleanup:', cleanupError);
+        if (!res.headersSent) {
+          res.status(500).json({ 
+            error: true, 
+            message: 'Error cleaning up temporary files' 
+          });
+        }
       }
-
-      if (error) {
-        console.error('Dig error:', error);
-        console.error('Dig stderr:', stderr);
-        return res.status(500).json({ 
-          error: true, 
-          message: 'Zone transfer failed',
-          details: error.message,
-          stderr 
-        });
-      }
-
-      if (stderr) {
-        console.warn('Dig stderr (warning):', stderr);
-      }
-
-      console.log('Dig stdout:', stdout);
-
-      const records = parseDigOutput(stdout);
-      console.log(`Parsed ${records.length} records from zone ${zoneName}`);
-      res.json(records);
     });
   } catch (error) {
     console.error('AXFR error:', error);

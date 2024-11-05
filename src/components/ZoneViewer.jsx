@@ -67,38 +67,44 @@ function ZoneViewer() {
 
   const loadZoneRecords = useCallback(async () => {
     if (!selectedZone) {
-      console.log('No zone selected');
-      return;
+        console.log('No zone selected, skipping load');
+        return;
     }
     
     console.log('Loading records for zone:', selectedZone);
     const keyConfig = getKeyForZone(selectedZone);
     
     if (!keyConfig) {
-      console.error('No key configuration found for zone:', selectedZone);
-      setError('No key configuration found for this zone');
-      return;
+        console.error('No key configuration found for zone:', selectedZone);
+        setError('No key configuration found for this zone');
+        return;
     }
+
+    console.log('Found key config:', {
+        ...keyConfig,
+        keyValue: '[REDACTED]'
+    });
 
     setLoading(true);
     setError(null);
+    
     try {
-      console.log('Fetching records with key config:', {
-        ...keyConfig,
-        keyValue: '[REDACTED]'
-      });
-      
-      const zoneRecords = await dnsService.getZoneRecords(selectedZone, keyConfig);
-      console.log(`Received ${zoneRecords.length} records`);
-      setRecords(Array.isArray(zoneRecords) ? zoneRecords : []);
+        console.log('Initiating zone transfer request');
+        const zoneRecords = await dnsService.getZoneRecords(selectedZone, keyConfig);
+        console.log(`Received ${zoneRecords.length} records`);
+        setRecords(Array.isArray(zoneRecords) ? zoneRecords : []);
     } catch (err) {
-      console.error('Failed to load zone records:', err);
-      setError(err.message || 'Failed to load zone records');
-      setRecords([]);
+        console.error('Failed to load zone records:', {
+            error: err,
+            message: err.message,
+            zone: selectedZone
+        });
+        setError(err.message || 'Failed to load zone records');
+        setRecords([]);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  }, [selectedZone, getKeyForZone]);
+}, [selectedZone, getKeyForZone]);
 
   useEffect(() => {
     if (selectedZone) {
@@ -133,6 +139,14 @@ function ZoneViewer() {
       SRV: 'secondary'
     };
     return colors[type] || 'default';
+  };
+
+  // Add logging to zone selection
+  const handleZoneChange = (e) => {
+    const newZone = e.target.value;
+    console.log('Zone selected:', newZone);
+    console.log('Available keys:', config.keys);
+    setSelectedZone(newZone);
   };
 
   return (

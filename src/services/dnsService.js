@@ -14,41 +14,52 @@ class DNSService {
     this.baseUrl = window.location.hostname === 'localhost' 
       ? 'http://localhost:3002'
       : `http://${window.location.hostname}:3002`;
+    console.log('DNS Service initialized with baseUrl:', this.baseUrl);
   }
 
   async getZoneRecords(zoneName, keyConfig) {
     try {
-      console.log('Querying DNS server:', keyConfig.server);
+      if (!zoneName || !keyConfig) {
+        console.error('Missing required parameters:', { zoneName, keyConfig });
+        throw new Error('Zone name and key configuration are required');
+      }
 
-      const params = new URLSearchParams({
-        server: keyConfig.server,
-        keyName: keyConfig.keyName,
-        keyValue: keyConfig.keyValue,
-        algorithm: keyConfig.algorithm
+      console.log('Starting zone transfer request for:', zoneName);
+      console.log('Using key config:', {
+        ...keyConfig,
+        keyValue: keyConfig.keyValue ? '[REDACTED]' : 'MISSING'
       });
 
       const url = `${this.baseUrl}/zone/${encodeURIComponent(zoneName)}/axfr`;
       
-      console.log('Making request to backend:', url.replace(keyConfig.keyValue, '[REDACTED]'));
-
-      const response = await fetch(`${url}?${params}`, {
-        method: 'GET',
+      const response = await fetch(url, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+          server: keyConfig.server,
+          keyName: keyConfig.keyName,
+          keyValue: keyConfig.keyValue,
+          algorithm: keyConfig.algorithm
+        })
       });
+      
+      console.log('Response status:', response.status);
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        console.error('Server error response:', errorData);
+        throw new Error(errorData.message || 'Failed to fetch zone records');
       }
       
       const data = await response.json();
+      console.log(`Successfully received ${data.length} records for zone ${zoneName}`);
       return data;
     } catch (error) {
       console.error('DNS service error:', error);
-      throw error;
+      throw new Error('Failed to fetch zone records');
     }
   }
 
