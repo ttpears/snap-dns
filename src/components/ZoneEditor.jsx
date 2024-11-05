@@ -61,6 +61,7 @@ function ZoneEditor() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
+  const [showAddRecord, setShowAddRecord] = useState(false);
   
   // Selection and editing state
   const [selectedRecords, setSelectedRecords] = useState([]);
