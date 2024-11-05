@@ -117,59 +117,95 @@ app.post('/zone/:zoneName/axfr', async (req, res) => {
     console.log('\n=== Zone Transfer Request ===');
     console.log('Time:', new Date().toISOString());
     console.log('Zone:', req.params.zoneName);
-    console.log('Server:', req.body.server);
-    
+    console.log('Request body received:', {
+        server: req.body.server,
+        keyName: req.body.keyName,
+        algorithm: req.body.algorithm,
+        // Don't log keyValue
+    });
+
     const { zoneName } = req.params;
     const { server, keyName, keyValue, algorithm } = req.body;
 
     let keyFilePath;
     try {
+        // Test DNS server reachability first
+        const testCommand = `dig @${server} +time=2 +tries=1`;
+        console.log('Testing DNS server reachability:', testCommand);
+        
+        exec(testCommand, (testError, testStdout, testStderr) => {
+            console.log('DNS server test results:', {
+                error: testError?.message,
+                stdout: testStdout,
+                stderr: testStderr
+            });
+        });
+
         keyFilePath = await generateTempKeyFile({
             keyName,
             keyValue,
             algorithm
         });
 
-        // Test the dig command directly first
-        const testCommand = `dig @${server} ${zoneName} SOA`;
-        console.log('Testing connectivity with:', testCommand);
-        
-        exec(testCommand, { timeout: 5000 }, (testError, testStdout, testStderr) => {
-            console.log('Test dig result:', { testError, testStdout, testStderr });
-        });
-
-        // Now try the AXFR
         const command = `dig +time=10 +tries=1 @${server} ${zoneName} AXFR -k "${keyFilePath}" +multiline`;
-        console.log('Executing AXFR command:', command);
+        console.log('Executing dig command:', command);
 
         exec(command, { timeout: 15000 }, async (error, stdout, stderr) => {
-            if (keyFilePath) {
-                await cleanupTempFile(keyFilePath);
-            }
+            try {
+                // Always clean up the key file first
+                if (keyFilePath) {
+                    await cleanupTempFile(keyFilePath);
+                }
 
-            if (error) {
-                console.error('Dig error:', error);
-                console.error('Stdout:', stdout);
-                console.error('Stderr:', stderr);
-                return res.status(500).json({ 
+                if (error) {
+                    console.error('Dig command failed:', {
+                        error: error.message,
+                        stdout: stdout,
+                        stderr: stderr,
+                        code: error.code
+                    });
+                    
+                    return res.status(500).json({ 
+                        error: true, 
+                        message: 'Zone transfer failed',
+                        details: {
+                            error: error.message,
+                            stdout: stdout,
+                            stderr: stderr,
+                            code: error.code
+                        }
+                    });
+                }
+
+                if (stderr) {
+                    console.warn('Dig warnings:', stderr);
+                }
+
+                console.log('Dig command succeeded');
+                console.log('Raw output:', stdout);
+
+                const records = parseDigOutput(stdout);
+                console.log(`Parsed ${records.length} records`);
+                
+                res.json(records);
+            } catch (err) {
+                console.error('Error processing dig output:', err);
+                res.status(500).json({ 
                     error: true, 
-                    message: 'Zone transfer failed',
-                    details: `${error.message}\nstdout: ${stdout}\nstderr: ${stderr}`
+                    message: 'Error processing zone transfer results',
+                    details: err.message
                 });
             }
-
-            const records = parseDigOutput(stdout);
-            res.json(records);
         });
     } catch (error) {
-        console.error('AXFR error:', error);
+        console.error('AXFR setup error:', error);
         if (keyFilePath) {
             await cleanupTempFile(keyFilePath);
         }
         res.status(500).json({ 
             error: true, 
-            message: 'Failed to fetch zone records',
-            details: error.message 
+            message: 'Failed to setup zone transfer',
+            details: error.stack
         });
     }
 });
