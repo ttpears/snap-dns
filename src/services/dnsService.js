@@ -11,16 +11,14 @@ export const SUPPORTED_ALGORITHMS = {
 
 class DNSService {
   constructor() {
-    this.baseUrl = 'http://172.16.16.140:3002';  // Use the actual IP address instead of 0.0.0.0
+    this.baseUrl = window.location.hostname === 'localhost' 
+      ? 'http://localhost:3002'
+      : `http://${window.location.hostname}:3002`;
   }
 
   async getZoneRecords(zoneName, keyConfig) {
     try {
-      console.log('Fetching zone:', zoneName);
-      console.log('Using key config:', {
-        ...keyConfig,
-        keyValue: '[REDACTED]'
-      });
+      console.log('Querying DNS server:', keyConfig.server);
 
       const params = new URLSearchParams({
         server: keyConfig.server,
@@ -30,15 +28,15 @@ class DNSService {
       });
 
       const url = `${this.baseUrl}/zone/${encodeURIComponent(zoneName)}/axfr`;
-      console.log('Request URL:', url.replace(keyConfig.keyValue, '[REDACTED]'));
+      
+      console.log('Making request to backend:', url.replace(keyConfig.keyValue, '[REDACTED]'));
 
       const response = await fetch(`${url}?${params}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        },
-        mode: 'cors'  // Explicitly enable CORS
+        }
       });
       
       if (!response.ok) {
@@ -47,7 +45,6 @@ class DNSService {
       }
       
       const data = await response.json();
-      console.log(`Received ${data.length} records for zone ${zoneName}`);
       return data;
     } catch (error) {
       console.error('DNS service error:', error);

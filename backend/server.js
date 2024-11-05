@@ -44,25 +44,17 @@ app.get('/zone/:zoneName/axfr', async (req, res) => {
   const { zoneName } = req.params;
   const { server, keyName, keyValue, algorithm } = req.query;
 
-  log('Zone transfer request:', {
+  console.log('AXFR request for:', {
     zone: zoneName,
-    server,
+    dnsServer: server,
     keyName,
-    algorithm,
-    hasKeyValue: !!keyValue
+    algorithm
   });
 
   if (!server || !keyName || !keyValue || !algorithm) {
-    error('Missing required parameters');
     return res.status(400).json({ 
       error: true, 
-      message: 'Missing required TSIG key information',
-      missing: {
-        server: !server,
-        keyName: !keyName,
-        keyValue: !keyValue,
-        algorithm: !algorithm
-      }
+      message: 'Missing required TSIG key information' 
     });
   }
 
@@ -74,21 +66,46 @@ app.get('/zone/:zoneName/axfr', async (req, res) => {
       algorithm
     });
 
+    // Execute dig with verbose output for debugging
     const command = `dig +time=10 +tries=1 @${server} ${zoneName} AXFR -k "${keyFilePath}" +multiline`;
-    log('Executing command:', command.replace(keyValue, '[REDACTED]'));
+    console.log('Executing dig command:', command.replace(keyValue, '[REDACTED]'));
 
     exec(command, { timeout: 15000 }, async (error, stdout, stderr) => {
-      log('Dig output:', stdout);
-      if (stderr) error('Dig stderr:', stderr);
+      // Clean up key file immediately
+      if (keyFilePath) {
+        await cleanupTempFile(keyFilePath);
+      }
 
-      // ... rest of the execution handler
+      if (error) {
+        console.error('Dig error:', error);
+        console.error('Dig stderr:', stderr);
+        return res.status(500).json({ 
+          error: true, 
+          message: 'Zone transfer failed',
+          details: error.message,
+          stderr 
+        });
+      }
+
+      if (stderr) {
+        console.warn('Dig stderr (warning):', stderr);
+      }
+
+      console.log('Dig stdout:', stdout);
+
+      const records = parseDigOutput(stdout);
+      console.log(`Parsed ${records.length} records from zone ${zoneName}`);
+      res.json(records);
     });
-  } catch (err) {
-    error('AXFR error:', err);
+  } catch (error) {
+    console.error('AXFR error:', error);
+    if (keyFilePath) {
+      await cleanupTempFile(keyFilePath);
+    }
     res.status(500).json({ 
       error: true, 
       message: 'Failed to fetch zone records',
-      details: err.message 
+      details: error.message 
     });
   }
 });

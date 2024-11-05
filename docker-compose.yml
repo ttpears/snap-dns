@@ -6,53 +6,29 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     ports:
-      - "172.16.16.140:3001:3001"
+      - "3001:3001"
     environment:
-      - REACT_APP_API_URL=http://172.16.16.140:3002
-      - HOST=172.16.16.140
-      - NODE_ENV=development
-      - REACT_APP_DEBUG=true
-    depends_on:
-      - backend
-    volumes:
-      - ./src:/app/src
-      - /app/node_modules
+      - HOST=0.0.0.0
     networks:
       - snap-dns-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     ports:
-      - "172.16.16.140:3002:3002"
+      - "3002:3002"
     environment:
-      - PORT=3002
-      - HOST=172.16.16.140
-      - NODE_ENV=development
-      - DEBUG=express:*
+      - HOST=0.0.0.0
     volumes:
-      - ./backend:/app
-      - /app/node_modules
       - temp-keys:/tmp/snap-dns
     networks:
       - snap-dns-network
     cap_add:
-      - NET_RAW
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - NET_RAW  # Required for dig
 
 volumes:
   temp-keys:
-    driver: local
 
 networks:
   snap-dns-network:
