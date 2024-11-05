@@ -1,75 +1,66 @@
 class DnsServer {
   constructor() {
-    this.baseUrl = '/api/dns';
+    this.baseUrl = 'http://localhost:3002';
   }
 
   async getRecords(zone, keyConfig) {
-    const response = await fetch(`${this.baseUrl}/zones/${zone}/records`, {
-      method: 'GET',
-      headers: this._getHeaders(keyConfig),
-    });
+    try {
+      const response = await fetch(`${this.baseUrl}/zone/${zone}/axfr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          server: keyConfig.server,
+          keyName: keyConfig.keyName,
+          keyValue: keyConfig.keyValue,
+          algorithm: keyConfig.algorithm
+        })
+      });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch records: ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server response:', errorText);
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('DNS Server error:', error);
+      throw error;
     }
-
-    return await response.json();
   }
 
   async addRecord(zone, record, keyConfig) {
-    const response = await fetch(`${this.baseUrl}/zones/${zone}/records`, {
+    const response = await fetch(`${this.baseUrl}/zone/${zone}/record`, {
       method: 'POST',
-      headers: this._getHeaders(keyConfig),
-      body: JSON.stringify(record),
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        server: keyConfig.server,
+        keyName: keyConfig.keyName,
+        keyValue: keyConfig.keyValue,
+        algorithm: keyConfig.algorithm,
+        record: record
+      })
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to add record: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Failed to add record: ${errorText}`);
     }
 
     return await response.json();
   }
 
   async updateRecord(zone, originalRecord, newRecord, keyConfig) {
-    const response = await fetch(`${this.baseUrl}/zones/${zone}/records`, {
-      method: 'PUT',
-      headers: this._getHeaders(keyConfig),
-      body: JSON.stringify({
-        original: originalRecord,
-        updated: newRecord,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update record: ${response.statusText}`);
-    }
-
-    return await response.json();
+    throw new Error('Update operation not yet implemented in backend');
   }
 
   async deleteRecord(zone, record, keyConfig) {
-    const response = await fetch(`${this.baseUrl}/zones/${zone}/records`, {
-      method: 'DELETE',
-      headers: this._getHeaders(keyConfig),
-      body: JSON.stringify(record),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to delete record: ${response.statusText}`);
-    }
-
-    return await response.json();
-  }
-
-  _getHeaders(keyConfig) {
-    return {
-      'Content-Type': 'application/json',
-      'X-DNS-Key': keyConfig.id,
-      'X-DNS-Server': keyConfig.server,
-      'X-DNS-Key-Name': keyConfig.keyName,
-      'X-DNS-Key-Value': keyConfig.keyValue,
-      'X-DNS-Algorithm': keyConfig.algorithm,
-    };
+    throw new Error('Delete operation not yet implemented in backend');
   }
 }
 
