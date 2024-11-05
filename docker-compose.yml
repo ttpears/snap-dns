@@ -10,6 +10,8 @@ services:
     environment:
       - REACT_APP_API_URL=http://0.0.0.0:3002
       - HOST=0.0.0.0
+      - NODE_ENV=development
+      - REACT_APP_DEBUG=true
     depends_on:
       - backend
     volumes:
@@ -17,6 +19,11 @@ services:
       - /app/node_modules
     networks:
       - snap-dns-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   backend:
     build:
@@ -27,8 +34,8 @@ services:
     environment:
       - PORT=3002
       - HOST=0.0.0.0
-      - DNS_SERVER=${DNS_SERVER:-127.0.0.1}
-      - TEMP_DIR=/tmp/snap-dns
+      - NODE_ENV=development
+      - DEBUG=express:*
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -36,7 +43,12 @@ services:
     networks:
       - snap-dns-network
     cap_add:
-      - NET_RAW  # Required for dig to work properly
+      - NET_RAW
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   temp-keys:
