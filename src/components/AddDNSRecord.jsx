@@ -28,6 +28,7 @@ function AddDNSRecord() {
     ttl: '3600'
   });
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
   // Get available keys from config
   const availableKeys = useMemo(() => {
@@ -46,36 +47,27 @@ function AddDNSRecord() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-
-    if (!selectedKey) {
-      setError('Please select a DNS key');
-      return;
-    }
+    setSuccess(false);
 
     try {
-      const keyConfig = availableKeys.find(k => k.id === selectedKey);
-      await dnsService.addRecord(
-        formData.zone,
-        {
-          name: formData.name,
-          type: formData.type,
-          value: formData.value,
-          ttl: parseInt(formData.ttl, 10)
-        },
-        keyConfig
+      console.log('Submitting record:', {
+        zone: selectedZone,
+        record: newRecord
+      });
+
+      const keyConfig = config.keys.find(key => 
+        key.zones?.includes(selectedZone)
       );
 
-      // Clear form after successful submission
-      setFormData({
-        zone: '',
-        name: '',
-        type: 'A',
-        value: '',
-        ttl: '3600'
-      });
-      
-      // Optionally show success message
+      if (!keyConfig) {
+        throw new Error('No key configuration found for this zone');
+      }
+
+      await dnsService.addRecord(selectedZone, newRecord, keyConfig);
+      setSuccess(true);
+      // Reset form or handle success
     } catch (err) {
+      console.error('Failed to add record:', err);
       setError(err.message);
     }
   };

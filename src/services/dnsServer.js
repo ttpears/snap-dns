@@ -1,14 +1,18 @@
 class DnsServer {
   constructor() {
+    if (!process.env.REACT_APP_API_URL) {
+      console.error('REACT_APP_API_URL is not defined!');
+    }
     this.baseUrl = process.env.REACT_APP_API_URL;
-    console.log('Using backend URL:', this.baseUrl);
+    console.log('API URL configured as:', this.baseUrl);
   }
 
   async getRecords(zone, keyConfig) {
     try {
-      console.log('Making AXFR request to:', `${this.baseUrl}/zone/${zone}/axfr`);
+      const url = `${this.baseUrl}/zone/${zone}/axfr`;
+      console.log('Making AXFR request to:', url);
       
-      const response = await fetch(`${this.baseUrl}/zone/${zone}/axfr`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -36,15 +40,10 @@ class DnsServer {
 
   async addRecord(zone, record, keyConfig) {
     try {
-      console.log('Adding record:', {
-        zone,
-        record,
-        server: keyConfig.server,
-        keyName: keyConfig.keyName,
-        algorithm: keyConfig.algorithm
-      });
-
-      const response = await fetch(`${this.baseUrl}/zone/${zone}/record`, {
+      const url = `${this.baseUrl}/zone/${zone}/record`;
+      console.log('Making add record request to:', url);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

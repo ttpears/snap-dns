@@ -13,10 +13,16 @@ const dnsService = {
 
   async addRecord(zoneName, record, keyConfig) {
     try {
-      await dnsServer.addRecord(zoneName, record, keyConfig);
-      return { success: true };
+      console.log('dnsService adding record:', {
+        zoneName,
+        record,
+        keyConfig: { ...keyConfig, keyValue: '[REDACTED]' }
+      });
+      
+      const result = await dnsServer.addRecord(zoneName, record, keyConfig);
+      return result;
     } catch (error) {
-      console.error('Error adding record:', error);
+      console.error('Error in dnsService.addRecord:', error);
       throw error;
     }
   },
