@@ -5,8 +5,9 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f5f5;
 }
+
+/* Add any additional dark mode specific styles here */
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',

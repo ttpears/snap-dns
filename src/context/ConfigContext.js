@@ -1,99 +1,62 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo } from 'react';
+import { ThemeProvider, createTheme } from '@mui/material';
+import CssBaseline from '@mui/material/CssBaseline';
 import { dnsService } from '../services/dnsService';
 
 const ConfigContext = createContext();
 
-const defaultConfig = {
-  darkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
-  defaultTTL: 3600,
-  defaultResolver: '127.0.0.1',
-  alternateResolvers: ['1.1.1.1', '8.8.8.8'],
-  keys: [
-    {
-      id: 'internal',
-      name: 'Internal DDNS Key',
-      keyName: '',
-      keyValue: '',
-      algorithm: 'hmac-sha512',
-      server: '',
-      zones: []  // zones this key can manage
-    },
-    {
-      id: 'external',
-      name: 'External DDNS Key',
-      keyName: '',
-      keyValue: '',
-      algorithm: 'hmac-sha512',
-      server: '',
-      zones: []
-    }
-  ],
-  savedZones: []  // All zones across all keys
-};
-
 export function ConfigProvider({ children }) {
-  const [config, setConfig] = useState(() => {
-    try {
-      const savedConfig = localStorage.getItem('dnsManagerConfig');
-      return savedConfig 
-        ? { ...defaultConfig, ...JSON.parse(savedConfig) }
-        : defaultConfig;
-    } catch (error) {
-      console.error('Error loading config:', error);
-      return defaultConfig;
-    }
+  const [config, setConfig] = useState({ keys: [] });
+  const [darkMode, setDarkMode] = useState(() => {
+    // Get initial mode from localStorage or default to 'dark'
+    const savedMode = localStorage.getItem('darkMode');
+    return savedMode !== null ? savedMode === 'true' : true;
   });
 
-  const updateConfig = (newConfig) => {
-    setConfig(prev => ({ ...prev, ...newConfig }));
-  };
+  // Create theme based on dark mode preference
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: darkMode ? 'dark' : 'light',
+        },
+      }),
+    [darkMode]
+  );
 
-  const purgeConfig = () => {
-    localStorage.removeItem('dnsManagerConfig');
-    setConfig(defaultConfig);
-  };
-
-  const loadZoneFromServer = async (zoneName) => {
-    try {
-      const records = await dnsService.getZoneRecords(zoneName);
-      const zoneConfig = {
-        name: zoneName,
-        records,
-        lastUpdated: new Date().toISOString()
-      };
-      
-      updateConfig({
-        savedZones: [...config.savedZones.filter(z => z.name !== zoneName), zoneConfig]
-      });
-      
-      return zoneConfig;
-    } catch (error) {
-      console.error('Failed to load zone:', error);
-      throw error;
-    }
-  };
-
-  const removeSavedZone = (zoneName) => {
-    updateConfig({
-      savedZones: config.savedZones.filter(z => z.name !== zoneName)
+  const toggleDarkMode = () => {
+    setDarkMode(prev => {
+      const newMode = !prev;
+      localStorage.setItem('darkMode', newMode.toString());
+      return newMode;
     });
   };
 
-  useEffect(() => {
-    localStorage.setItem('dnsManagerConfig', JSON.stringify(config));
-  }, [config]);
+  const updateConfig = (newConfig) => {
+    setConfig(newConfig);
+  };
+
+  const value = {
+    config,
+    updateConfig,
+    darkMode,
+    toggleDarkMode
+  };
 
   return (
-    <ConfigContext.Provider value={{ 
-      config, 
-      updateConfig, 
-      purgeConfig,
-      loadZoneFromServer,
-      removeSavedZone
-    }}>
-      {children}
+    <ConfigContext.Provider value={value}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        {children}
+      </ThemeProvider>
     </ConfigContext.Provider>
   );
 }
 
-export const useConfig = () => useContext(ConfigContext); 
+export function useConfig() {
+  const context = useContext(ConfigContext);
+  if (context === undefined) {
+    throw new Error('useConfig must be used within a ConfigProvider');
+  }
+  return context;
+} 

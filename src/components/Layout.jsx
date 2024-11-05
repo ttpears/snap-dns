@@ -1,69 +1,60 @@
 import React from 'react';
-import { Outlet, Link as RouterLink, useLocation } from 'react-router-dom';
-import { 
-  AppBar, 
-  Toolbar, 
-  Typography, 
-  Container, 
-  Box,
-  Tabs,
-  Tab
-} from '@mui/material';
+import { Box, Typography, IconButton, useTheme } from '@mui/material';
+import { useLocation } from 'react-router-dom';
+import { Brightness4, Brightness7 } from '@mui/icons-material';
+import Navigation from './Navigation';
+import { useConfig } from '../context/ConfigContext';
 
-function Layout() {
+function Layout({ children }) {
   const location = useLocation();
+  const theme = useTheme();
+  const { toggleDarkMode } = useConfig();
+  
+  const getPageTitle = () => {
+    switch (location.pathname) {
+      case '/':
+        return 'Add DNS Record';
+      case '/zones':
+        return 'Zone Editor';
+      case '/settings':
+        return 'Settings';
+      default:
+        return '';
+    }
+  };
 
   return (
-    <>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Snap DNS Manager
+    <Box sx={{ 
+      display: 'flex', 
+      minHeight: '100vh',
+      bgcolor: 'background.default',
+      color: 'text.primary'
+    }}>
+      <Box sx={{ 
+        width: 240, 
+        flexShrink: 0,
+        borderRight: 1,
+        borderColor: 'divider'
+      }}>
+        <Navigation />
+      </Box>
+      <Box sx={{ flexGrow: 1, p: 3 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          mb: 3
+        }}>
+          <Typography variant="h6">
+            {getPageTitle()}
           </Typography>
-        </Toolbar>
-        <Tabs 
-          value={location.pathname} 
-          textColor="inherit"
-          indicatorColor="secondary"
-        >
-          <Tab 
-            label="DNS Records" 
-            value="/" 
-            component={RouterLink} 
-            to="/" 
-          />
-          <Tab 
-            label="Pending Changes" 
-            value="/pending" 
-            component={RouterLink} 
-            to="/pending" 
-          />
-          <Tab 
-            label="Demo Mode" 
-            value="/demo" 
-            component={RouterLink} 
-            to="/demo" 
-          />
-          <Tab 
-            label="Settings" 
-            value="/settings" 
-            component={RouterLink} 
-            to="/settings" 
-          />
-          <Tab 
-            label="Zone Viewer" 
-            value="/viewer" 
-            component={RouterLink} 
-            to="/viewer" 
-          />
-        </Tabs>
-      </AppBar>
-      <Container maxWidth="lg">
-        <Box sx={{ mt: 4 }}>
-          <Outlet />
+          <IconButton onClick={toggleDarkMode} color="inherit">
+            {theme.palette.mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
+          </IconButton>
         </Box>
-      </Container>
-    </>
+        {children}
+      </Box>
+    </Box>
   );
 }
 

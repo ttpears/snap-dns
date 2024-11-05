@@ -11,7 +11,6 @@ import {
   Typography,
   Alert,
   Paper,
-  Link
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useConfig } from '../context/ConfigContext';
