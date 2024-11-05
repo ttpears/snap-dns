@@ -298,6 +298,84 @@ send
     }
 });
 
+app.post('/zone/:zoneName/record/delete', async (req, res) => {
+    console.log('\n=== Delete DNS Record Request ===');
+    console.log('Time:', new Date().toISOString());
+    console.log('Zone:', req.params.zoneName);
+    console.log('Request body:', {
+        server: req.body.server,
+        keyName: req.body.keyName,
+        algorithm: req.body.algorithm,
+        record: req.body.record
+    });
+    
+    const { zoneName } = req.params;
+    const { server, keyName, keyValue, algorithm, record } = req.body;
+
+    let keyFilePath;
+    try {
+        keyFilePath = await generateTempKeyFile({
+            keyName,
+            keyValue,
+            algorithm
+        });
+
+        // Create nsupdate command file
+        const updateFile = path.join(await ensureTempDir(), `update-${Date.now()}.txt`);
+        const updateContent = `server ${server}
+zone ${zoneName}
+update delete ${record.name} ${record.ttl} ${record.type} ${record.value}
+send
+`;
+
+        await fs.writeFile(updateFile, updateContent, { mode: 0o600 });
+        console.log('Created update file:', updateFile);
+
+        const command = `nsupdate -k "${keyFilePath}" "${updateFile}"`;
+        console.log('Executing command:', command);
+        
+        exec(command, { timeout: 10000 }, async (error, stdout, stderr) => {
+            try {
+                // Clean up files
+                await Promise.all([
+                    cleanupTempFile(keyFilePath),
+                    cleanupTempFile(updateFile)
+                ]);
+
+                if (error) {
+                    console.error('nsupdate error:', error);
+                    console.error('nsupdate stderr:', stderr);
+                    return res.status(500).json({ 
+                        error: true, 
+                        message: 'Failed to delete DNS record',
+                        details: error.message
+                    });
+                }
+
+                res.json({ success: true, message: 'Record deleted successfully' });
+            } catch (cleanupError) {
+                console.error('Error in cleanup:', cleanupError);
+                if (!res.headersSent) {
+                    res.status(500).json({ 
+                        error: true, 
+                        message: 'Error cleaning up temporary files' 
+                    });
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Record deletion error:', error);
+        if (keyFilePath) {
+            await cleanupTempFile(keyFilePath);
+        }
+        res.status(500).json({ 
+            error: true, 
+            message: 'Failed to delete DNS record',
+            details: error.message 
+        });
+    }
+});
+
 // Start server
 const PORT = process.env.PORT || 3002;
 const HOST = process.env.HOST || '0.0.0.0';
