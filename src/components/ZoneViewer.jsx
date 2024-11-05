@@ -112,52 +112,34 @@ function ZoneViewer() {
     }
   }, [selectedZone, loadZoneRecords]);
 
-  const handleCopy = useCallback(async (text) => {
+  const handleCopyRecord = useCallback(async (record) => {
     try {
-      if (!navigator.clipboard) {
-        throw new Error('Clipboard API not available');
-      }
-      await navigator.clipboard.writeText(text);
-      console.log('Copied to clipboard:', text);
+      const recordText = `${record.name} ${record.ttl} ${record.class} ${record.type} ${record.value}`;
+      await navigator.clipboard.writeText(recordText);
+      // Optionally show a success message
     } catch (error) {
-      console.error('Failed to copy:', error);
+      console.error('Failed to copy record:', error);
     }
   }, []);
 
   const renderRecordRow = (record) => (
     <TableRow key={`${record.name}-${record.type}-${record.value}`}>
-      <TableCell>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {record.name}
-          <IconButton
-            size="small"
-            onClick={() => handleCopy(record.name)}
-            sx={{ ml: 1 }}
-          >
-            <Tooltip title="Copy">
-              <CopyIcon fontSize="small" />
-            </Tooltip>
-          </IconButton>
-        </Box>
-      </TableCell>
+      <TableCell>{record.name}</TableCell>
       <TableCell>{record.ttl}</TableCell>
       <TableCell>{record.class}</TableCell>
       <TableCell>
         <Chip label={record.type} size="small" />
       </TableCell>
-      <TableCell>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {record.value}
+      <TableCell>{record.value}</TableCell>
+      <TableCell align="center">
+        <Tooltip title="Copy record">
           <IconButton
             size="small"
-            onClick={() => handleCopy(record.value)}
-            sx={{ ml: 1 }}
+            onClick={() => handleCopyRecord(record)}
           >
-            <Tooltip title="Copy">
-              <CopyIcon fontSize="small" />
-            </Tooltip>
+            <CopyIcon fontSize="small" />
           </IconButton>
-        </Box>
+        </Tooltip>
       </TableCell>
     </TableRow>
   );
@@ -271,11 +253,12 @@ function ZoneViewer() {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Type</TableCell>
               <TableCell>Name</TableCell>
-              <TableCell>Value</TableCell>
               <TableCell>TTL</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell>Class</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell>Value</TableCell>
+              <TableCell align="center">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
