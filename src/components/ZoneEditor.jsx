@@ -308,35 +308,44 @@ function ZoneEditor() {
           if (!destination) return;
           reorderPendingChanges(source.index, destination.index);
         }}>
-          <Droppable droppableId="pending-changes">
-            {(provided) => (
-              <List {...provided.droppableProps} ref={provided.innerRef}>
+          <Droppable droppableId="pending-changes" type="pending-change">
+            {(provided, snapshot) => (
+              <List 
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                sx={{
+                  bgcolor: snapshot.isDraggingOver ? 'action.hover' : 'background.paper'
+                }}
+              >
                 {pendingChanges.map((change, index) => (
                   <Draggable key={change.id} draggableId={change.id} index={index}>
-                    {(provided) => (
+                    {(provided, snapshot) => (
                       <ListItem
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                         divider
+                        sx={{
+                          bgcolor: snapshot.isDragging ? 'action.selected' : 'inherit'
+                        }}
                       >
                         <ListItemText
                           primary={
-                            <Typography color={change.type === 'DELETE' ? 'error' : 'primary'}>
+                            <Box component="span" sx={{ color: change.type === 'DELETE' ? 'error.main' : 'primary.main' }}>
                               {change.type} - {change.originalRecord.name}
-                            </Typography>
+                            </Box>
                           }
                           secondary={
-                            <>
-                              <Typography variant="body2">
+                            <Box component="span">
+                              <Box component="span" display="block">
                                 Type: {change.originalRecord.type}
-                              </Typography>
+                              </Box>
                               {change.type === 'MODIFY' && (
-                                <Typography variant="body2" color="text.secondary">
+                                <Box component="span" display="block" sx={{ color: 'text.secondary' }}>
                                   New Value: {change.newRecord.value}
-                                </Typography>
+                                </Box>
                               )}
-                            </>
+                            </Box>
                           }
                         />
                         <ListItemSecondaryAction>
