@@ -47,6 +47,7 @@ import {
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
+import AddDNSRecord from './AddDNSRecord';
 
 function ZoneEditor() {
   const { config } = useConfig();
@@ -644,6 +645,16 @@ function ZoneEditor() {
       <EditRecordDialog />
       <PendingChangesDrawer />
       <PreviewDialog />
+
+      {showAddRecord && selectedZone && (
+        <AddDNSRecord 
+          zone={selectedZone}
+          onRecordAdded={() => {
+            setShowAddRecord(false);
+            loadZoneRecords();
+          }}
+        />
+      )}
     </Paper>
   );
 }
