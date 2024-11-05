@@ -8,7 +8,11 @@ require('dotenv').config();
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: '*',  // Allow all origins
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 async function ensureTempDir() {
@@ -152,11 +156,11 @@ function parseDigOutput(output) {
 }
 
 const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  ensureTempDir().then(dir => {
-    console.log('Temporary directory:', dir);
-  }).catch(error => {
-    console.error('Failed to create temporary directory:', error);
-  });
+const HOST = process.env.HOST || '0.0.0.0';  // Listen on all interfaces
+
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
+  console.log('Access URLs:');
+  console.log(`- Local: http://localhost:${PORT}`);
+  console.log(`- Network: http://${require('ip').address()}:${PORT}`);
 }); 

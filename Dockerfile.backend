@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install dig and other required tools
 RUN apt-get update && \
-    apt-get install -y dnsutils && \
+    apt-get install -y dnsutils iputils-ping net-tools && \
     rm -rf /var/lib/apt/lists/*
 
 # Install dependencies first (better caching)
@@ -20,7 +20,11 @@ RUN mkdir -p /tmp/snap-dns && \
 
 # Set environment
 ENV PORT=3002
+ENV HOST=0.0.0.0
 ENV TEMP_DIR=/tmp/snap-dns
+
+# Expose port
+EXPOSE 3002
 
 # Start the app
 CMD ["node", "server.js"] 
