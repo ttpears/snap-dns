@@ -489,22 +489,34 @@ function ZoneEditor() {
   const [previewContent, setPreviewContent] = useState('');
 
   const handlePreviewChanges = () => {
+    console.log('All pending changes:', pendingChanges);
+
     const preview = pendingChanges.map(change => {
-      if (change.type === 'ADD') {
-        const fqdn = qualifyDnsName(change.name, change.zone);
-        return `ADD: ${fqdn} ${change.ttl} ${change.recordType} ${change.value}`;
-      } else if (change.type === 'DELETE') {
-        const fqdn = qualifyDnsName(change.record.name, change.zone);
-        return `DELETE: ${fqdn} ${change.record.ttl} ${change.record.class} ${change.record.type} ${change.record.value}`;
-      } else if (change.type === 'MODIFY') {
-        const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
-        return `MODIFY: ${fqdn}\n` +
-               `  FROM: ${change.originalRecord.ttl} ${change.originalRecord.type} ${change.originalRecord.value}\n` +
-               `  TO: ${change.newRecord.ttl} ${change.newRecord.type} ${change.newRecord.value}`;
+      console.log('Processing change:', change);
+
+      if (change.type === 'DELETE') {
+        console.log('Processing DELETE change:', {
+          change,
+          recordData: change.record,
+          zone: change.zone
+        });
+
+        if (!change.record?.name || !change.record?.type || !change.record?.value) {
+          console.error('Invalid DELETE change:', change);
+          return 'ERROR: Invalid DELETE change - missing required fields';
+        }
+
+        // Don't modify the name, use it exactly as stored
+        const displayName = change.record.name;
+        
+        const previewLine = `DELETE: ${displayName} ${change.record.ttl} ${change.record.class || 'IN'} ${change.record.type} ${change.record.value}`;
+        console.log('Generated preview line:', previewLine);
+        return previewLine;
       }
-      return '';
+      // ... rest of the preview handler
     }).join('\n\n');
 
+    console.log('Final preview content:', preview);
     setPreviewContent(preview);
     setShowPreview(true);
   };
@@ -543,17 +555,26 @@ function ZoneEditor() {
 
   // Add this with the other handlers near the top of the ZoneEditor function
   const handleDeleteRecord = useCallback((record) => {
+    console.log('Delete record called with:', {
+      record,
+      selectedZone,
+      fullRecord: record
+    });
+
     if (!selectedZone || !record) {
       setError('Cannot delete record: Missing zone or record data');
       return;
     }
 
-    // Create the delete change with all required fields
+    // Log the record's raw name before any processing
+    console.log('Record name before processing:', record.name);
+    
+    // Ensure we have the complete record data
     const deleteChange = {
       type: 'DELETE',
       zone: selectedZone,
       record: {
-        name: record.name.replace(`.${selectedZone}`, ''), // Remove zone suffix if present
+        name: record.name,  // Keep the full name as stored in the record
         type: record.type,
         value: record.value,
         ttl: record.ttl,
@@ -561,16 +582,16 @@ function ZoneEditor() {
       }
     };
 
-    // Validate all required fields
-    const requiredFields = ['name', 'type', 'value', 'ttl'];
-    const missingFields = requiredFields.filter(field => !deleteChange.record[field]);
-    
-    if (missingFields.length > 0) {
-      setError(`Cannot delete record: Missing required fields: ${missingFields.join(', ')}`);
+    console.log('Created delete change:', deleteChange);
+
+    // Validate the change object
+    if (!deleteChange.record.name || !deleteChange.record.type || 
+        !deleteChange.record.value || !deleteChange.record.ttl) {
+      console.error('Invalid delete change:', deleteChange);
+      setError('Cannot delete record: Missing required fields');
       return;
     }
 
-    console.log('Adding delete change:', deleteChange);
     addPendingChange(deleteChange);
     setShowPendingDrawer(true);
   }, [selectedZone, addPendingChange, setShowPendingDrawer]);
