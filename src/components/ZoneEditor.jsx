@@ -431,7 +431,7 @@ function ZoneEditor() {
           console.log('Processing change:', change);
           
           if (change.type === 'DELETE') {
-            await dnsService.deleteRecord(zone, change.originalRecord, keyConfig);
+            await dnsService.deleteRecord(zone, change.record, keyConfig);
           } else if (change.type === 'MODIFY') {
             await dnsService.updateRecord(
               zone,
