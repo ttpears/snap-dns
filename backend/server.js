@@ -460,6 +460,95 @@ app.post('/zone/:zoneName/restore', async (req, res) => {
     }
 });
 
+app.put('/zone/:zoneName/record', async (req, res) => {
+    console.log('\n=== Modify DNS Record Request ===');
+    console.log('Time:', new Date().toISOString());
+    console.log('Zone:', req.params.zoneName);
+    console.log('Request body:', {
+        server: req.body.server,
+        keyName: req.body.keyName,
+        algorithm: req.body.algorithm,
+        originalRecord: req.body.originalRecord,
+        newRecord: req.body.newRecord
+    });
+    
+    const { zoneName } = req.params;
+    const { server, keyName, keyValue, algorithm, originalRecord, newRecord } = req.body;
+
+    if (!server || !keyName || !keyValue || !algorithm || !originalRecord || !newRecord) {
+        console.error('Missing required parameters');
+        return res.status(400).json({ 
+            error: true, 
+            message: 'Missing required information' 
+        });
+    }
+
+    let keyFilePath;
+    try {
+        keyFilePath = await generateTempKeyFile({
+            keyName,
+            keyValue,
+            algorithm
+        });
+
+        // Create nsupdate command file
+        const updateFile = path.join(await ensureTempDir(), `update-${Date.now()}.txt`);
+        const updateContent = `server ${server}
+zone ${zoneName}
+update delete ${originalRecord.name} ${originalRecord.ttl} ${originalRecord.type} ${originalRecord.value}
+update add ${newRecord.name} ${newRecord.ttl} ${newRecord.type} ${newRecord.value}
+send
+`;
+
+        await fs.writeFile(updateFile, updateContent, { mode: 0o600 });
+        console.log('Created update file:', updateFile);
+        console.log('Update content:', updateContent);
+
+        const command = `nsupdate -k "${keyFilePath}" "${updateFile}"`;
+        console.log('Executing command:', command);
+        
+        exec(command, { timeout: 10000 }, async (error, stdout, stderr) => {
+            try {
+                // Clean up files
+                await Promise.all([
+                    cleanupTempFile(keyFilePath),
+                    cleanupTempFile(updateFile)
+                ]);
+
+                if (error) {
+                    console.error('nsupdate error:', error);
+                    console.error('nsupdate stderr:', stderr);
+                    return res.status(500).json({ 
+                        error: true, 
+                        message: 'Failed to modify DNS record',
+                        details: error.message
+                    });
+                }
+
+                res.json({ success: true, message: 'Record modified successfully' });
+            } catch (cleanupError) {
+                console.error('Error in cleanup:', cleanupError);
+                if (!res.headersSent) {
+                    res.status(500).json({ 
+                        error: true, 
+                        message: 'Error cleaning up temporary files' 
+                    });
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Record modification error:', error);
+        if (keyFilePath) {
+            await cleanupTempFile(keyFilePath);
+        }
+        res.status(500).json({ 
+            error: true, 
+            message: 'Failed to modify DNS record',
+            details: error.message 
+        });
+    }
+});
+
 // Start server
 const PORT = process.env.PORT || 3002;
 const HOST = process.env.HOST || '0.0.0.0';

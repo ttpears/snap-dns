@@ -115,5 +115,29 @@ export const dnsService = {
       console.error('Error restoring zone:', error);
       throw error;
     }
+  },
+
+  updateRecord: async (zone, originalRecord, newRecord, keyConfig) => {
+    const response = await fetch(`/api/zone/${zone}/record`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        server: keyConfig.server,
+        keyName: keyConfig.keyName,
+        keyValue: keyConfig.keyValue,
+        algorithm: keyConfig.algorithm,
+        originalRecord,
+        newRecord
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to modify record');
+    }
+
+    return response.json();
   }
 }; 
