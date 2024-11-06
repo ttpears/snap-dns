@@ -559,6 +559,35 @@ function ZoneEditor() {
     }
   }, [success]);
 
+  // Add this with the other handlers near the top of the ZoneEditor function
+  const handleDeleteRecord = useCallback((record) => {
+    if (!selectedZone || !record) {
+      setError('Cannot delete record: Missing zone or record data');
+      return;
+    }
+
+    // Validate all required fields exist
+    if (!record.name || !record.type || !record.value) {
+      setError('Cannot delete record: Record is missing required fields');
+      return;
+    }
+
+    const deleteChange = {
+      type: 'DELETE',
+      zone: selectedZone,
+      record: {
+        name: record.name,
+        type: record.type,
+        value: record.value,
+        ttl: record.ttl || 3600
+      }
+    };
+
+    console.log('Adding delete change:', deleteChange);
+    addPendingChange(deleteChange);
+    setShowPendingDrawer(true);
+  }, [selectedZone, addPendingChange, setShowPendingDrawer]);
+
   // Main render method
   return (
     <Paper sx={{ p: 3 }}>
