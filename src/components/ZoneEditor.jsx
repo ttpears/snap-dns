@@ -57,12 +57,11 @@ function ZoneEditor() {
   const { config } = useConfig();
   const { 
     pendingChanges, 
-    clearChanges, 
     addPendingChange, 
     removePendingChange, 
+    clearPendingChanges, 
     showPendingDrawer, 
-    setShowPendingDrawer, 
-    setPendingChanges 
+    setShowPendingDrawer 
   } = usePendingChanges();
   
   const [selectedZone, setSelectedZone] = useState('');

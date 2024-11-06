@@ -38,11 +38,11 @@ export function PendingChangesProvider({ children }) {
     setPendingChanges(prev => [...prev, formattedChange]);
   };
 
-  const removePendingChange = (id) => {
-    setPendingChanges(prev => prev.filter(change => change.id !== id));
+  const removePendingChange = (changeId) => {
+    setPendingChanges(prev => prev.filter(change => change.id !== changeId));
   };
 
-  const clearChanges = () => {
+  const clearPendingChanges = () => {
     setPendingChanges([]);
   };
 
@@ -60,7 +60,7 @@ export function PendingChangesProvider({ children }) {
       pendingChanges,
       addPendingChange,
       removePendingChange,
-      clearChanges,
+      clearPendingChanges,
       reorderPendingChanges,
       showPendingDrawer,
       setShowPendingDrawer
