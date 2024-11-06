@@ -404,81 +404,53 @@ function ZoneEditor() {
     setError(null);
     
     try {
-      // Validate all changes before proceeding
-      const invalidChanges = pendingChanges.filter(change => {
-        if (change.type === 'DELETE' && 
-            (!change.record?.name || !change.record?.type || !change.record?.value || !change.zone)) {
-          return true;
-        }
-        return false;
-      });
-
-      if (invalidChanges.length > 0) {
-        throw new Error('Cannot apply changes: Some changes contain invalid or missing data');
+      // Get the key configuration for the selected zone
+      const keyConfig = config.keys.find(key => key.zones.includes(selectedZone));
+      if (!keyConfig) {
+        throw new Error('No key configuration found for this zone');
       }
 
-      // Create automatic backup before applying changes
-      const backup = backupService.createBackup(selectedZone, records, 'auto');
-      console.log('Automatic backup created:', backup.id);
-
-      // Group changes by zone
-      const changesByZone = pendingChanges.reduce((acc, change) => {
-        if (!acc[change.zone]) {
-          acc[change.zone] = [];
-        }
-        acc[change.zone].push(change);
-        return acc;
-      }, {});
-
-      // Process each zone's changes
-      for (const [zone, zoneChanges] of Object.entries(changesByZone)) {
-        const keyConfig = config.keys.find(key => 
-          key.zones?.includes(zone) || 
-          zoneChanges.some(change => change.keyId === key.id)
-        );
-        
-        if (!keyConfig) {
-          throw new Error(`No key configuration found for zone: ${zone}`);
-        }
-
-        console.log(`Applying changes for zone ${zone} with key:`, keyConfig);
-
-        // Apply changes in order for this zone
-        for (const change of zoneChanges) {
-          console.log('Processing change:', change);
-          
-          if (change.type === 'DELETE') {
-            await dnsService.deleteRecord(zone, change.record, keyConfig);
-          } else if (change.type === 'MODIFY') {
-            await dnsService.updateRecord(
-              zone,
-              change.originalRecord,
-              change.newRecord,
-              keyConfig
-            );
-          } else if (change.type === 'ADD') {
-            await dnsService.addRecord(zone, {
+      // Apply each change
+      for (const change of pendingChanges) {
+        switch (change.type) {
+          case 'ADD':
+            await dnsService.addRecord(selectedZone, {
               name: change.name,
               type: change.recordType,
               value: change.value,
               ttl: change.ttl
             }, keyConfig);
-          }
+            break;
+          case 'MODIFY':
+            await dnsService.updateRecord(selectedZone, change.originalRecord, change.newRecord, keyConfig);
+            break;
+          case 'DELETE':
+            await dnsService.deleteRecord(selectedZone, change.record, keyConfig);
+            break;
+          default:
+            console.warn('Unknown change type:', change.type);
         }
       }
 
-      // Send notification about the changes
-      await notificationService.sendNotification(pendingChanges);
+      // Send notification after all changes are applied
+      if (config.webhookUrl) {
+        try {
+          await notificationService.sendNotification(selectedZone, pendingChanges);
+        } catch (notifyError) {
+          console.error('Failed to send notification:', notifyError);
+          // Don't throw here, as the changes were successful
+        }
+      }
 
-      // Clear pending changes and refresh zone data
-      clearChanges();
-      await loadZoneRecords();
+      // Clear pending changes
+      clearPendingChanges();
       setShowPendingDrawer(false);
       
+      // Show success message
       setSuccess('Changes applied successfully');
-    } catch (err) {
-      console.error('Error applying changes:', err);
-      setError(`Failed to apply changes: ${err.message}`);
+    } catch (error) {
+      console.error('Failed to apply changes:', error);
+      setError(`Failed to apply changes: ${error.message}`);
     } finally {
       setLoading(false);
     }
