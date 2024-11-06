@@ -717,7 +717,16 @@ function ZoneEditor() {
                         </IconButton>
                         <IconButton
                           size="small"
-                          onClick={() => addPendingChange('DELETE', [record])}
+                          onClick={() => addPendingChange({
+                            type: 'DELETE',
+                            zone: selectedZone,
+                            record: {
+                              name: record.name,
+                              type: record.type,
+                              value: record.value,
+                              ttl: record.ttl
+                            }
+                          })}
                           color="error"
                         >
                           <DeleteIcon fontSize="small" />
