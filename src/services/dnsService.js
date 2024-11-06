@@ -60,6 +60,8 @@ export const dnsService = {
       name: qualifyDnsName(newRecord.name, zone)
     };
 
+    const API_URL = process.env.REACT_APP_API_URL;
+    
     const response = await fetch(`${API_URL}/zone/${zone}/record`, {
       method: 'PUT',
       headers: {
