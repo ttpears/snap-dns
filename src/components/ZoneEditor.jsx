@@ -513,9 +513,28 @@ function ZoneEditor() {
     );
   };
 
+  // Add success state
+  const [success, setSuccess] = useState(null);
+
+  // Add success alert display
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        setSuccess(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
   // Main render method
   return (
     <Paper sx={{ p: 3 }}>
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {success}
+        </Alert>
+      )}
+      
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Zone Editor</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
