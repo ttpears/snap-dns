@@ -285,8 +285,7 @@ function ZoneEditor() {
       open={showPendingDrawer}
       onClose={() => setShowPendingDrawer(false)}
     >
-      <Box sx={{ width: 400 }}>
-        {/* Header */}
+      <Box sx={{ width: 400, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Box sx={{ 
           p: 2, 
           borderBottom: 1, 
@@ -299,72 +298,84 @@ function ZoneEditor() {
           <Typography variant="h6">Pending Changes</Typography>
         </Box>
 
-        {/* Content */}
-        <Box sx={{ p: 2, mt: 1 }}>
+        <Box sx={{ p: 2, mt: 1, flexGrow: 1, overflowY: 'auto' }}>
           <DragDropContext onDragEnd={onDragEnd}>
             <Droppable droppableId="pending-changes">
               {(provided) => (
                 <div {...provided.droppableProps} ref={provided.innerRef}>
-                  {pendingChanges.map((change, index) => {
-                    console.log('Rendering change:', change); // Debug log
-                    return (
-                      <Draggable
-                        key={change.id}
-                        draggableId={String(change.id)}
-                        index={index}
-                      >
-                        {(provided) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
+                  {pendingChanges.map((change, index) => (
+                    <Draggable
+                      key={change.id}
+                      draggableId={String(change.id)}
+                      index={index}
+                    >
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                        >
+                          <Alert 
+                            severity="info" 
+                            sx={{ mb: 1 }}
+                            action={
+                              <IconButton
+                                size="small"
+                                onClick={() => removePendingChange(change.id)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            }
                           >
-                            <Alert 
-                              severity="info" 
-                              sx={{ mb: 1 }}
-                              action={
-                                <IconButton
-                                  size="small"
-                                  onClick={() => removePendingChange(change.id)}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              }
-                            >
-                              {change.type === 'DELETE' ? (
-                                <>
-                                  DELETE: {change.record?.name}.{change.zone} {' '}
-                                  {change.record?.ttl} {' '}
-                                  {change.record?.type} {' '}
-                                  {change.record?.value}
-                                </>
-                              ) : change.type === 'ADD' ? (
-                                <>
-                                  ADD: {change.name}.{change.zone} {' '}
-                                  {change.ttl} {' '}
-                                  {change.recordType} {' '}
-                                  {change.value}
-                                </>
-                              ) : (
-                                <>
-                                  MODIFY: {change.originalRecord?.name}.{change.zone}
-                                  <br />
-                                  FROM: {change.originalRecord?.type} {change.originalRecord?.value}
-                                  <br />
-                                  TO: {change.newRecord?.type} {change.newRecord?.value}
-                                </>
-                              )}
-                            </Alert>
-                          </div>
-                        )}
-                      </Draggable>
-                    );
-                  })}
+                            {change.type === 'DELETE' && (
+                              `DELETE: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`
+                            )}
+                            {change.type === 'ADD' && (
+                              `ADD: ${change.name} ${change.ttl} ${change.recordType} ${change.value}`
+                            )}
+                            {change.type === 'MODIFY' && (
+                              `MODIFY: ${change.originalRecord.name}\n` +
+                              `FROM: ${change.originalRecord.ttl} ${change.originalRecord.type} ${change.originalRecord.value}\n` +
+                              `TO: ${change.newRecord.ttl} ${change.newRecord.type} ${change.newRecord.value}`
+                            )}
+                          </Alert>
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
                   {provided.placeholder}
                 </div>
               )}
             </Droppable>
           </DragDropContext>
+        </Box>
+
+        <Box sx={{ 
+          p: 2, 
+          borderTop: 1, 
+          borderColor: 'divider',
+          backgroundColor: 'background.paper',
+          position: 'sticky',
+          bottom: 0,
+          zIndex: 1,
+          display: 'flex',
+          justifyContent: 'space-between'
+        }}>
+          <Button 
+            onClick={() => setShowPendingDrawer(false)}
+            variant="outlined"
+          >
+            Close
+          </Button>
+          <Button
+            onClick={applyChanges}
+            variant="contained"
+            color="primary"
+            disabled={pendingChanges.length === 0 || loading}
+            startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
+          >
+            Apply Changes
+          </Button>
         </Box>
       </Box>
     </Drawer>
