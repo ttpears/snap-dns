@@ -117,7 +117,7 @@ function DemoMode() {
                 <Alert key={index} severity="info" sx={{ mb: 1 }}>
                   {change.type === 'ADD' 
                     ? `${qualifyDnsName(change.name, change.zone)} ${change.recordType} ${change.value}`
-                    : `${change.originalRecord.name} ${change.originalRecord.type} ${change.originalRecord.value}`
+                    : `${qualifyDnsName(change.record.name, change.zone)} ${change.record.type} ${change.record.value}`
                   }
                 </Alert>
               ))}
