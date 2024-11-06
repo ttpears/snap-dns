@@ -43,8 +43,8 @@ import {
   Save as SaveIcon,
   Undo as UndoIcon,
   Redo as RedoIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import AddDNSRecord from './AddDNSRecord';
@@ -317,55 +317,37 @@ function ZoneEditor() {
         </Box>
 
         <Box sx={{ p: 2, mt: 1, flexGrow: 1, overflowY: 'auto' }}>
-          <DragDropContext onDragEnd={onDragEnd}>
-            <Droppable droppableId="pending-changes">
-              {(provided) => (
-                <div {...provided.droppableProps} ref={provided.innerRef}>
-                  {pendingChanges.map((change, index) => (
-                    <Draggable
-                      key={change.id}
-                      draggableId={String(change.id)}
-                      index={index}
-                    >
-                      {(provided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                        >
-                          <Alert 
-                            severity="info" 
-                            sx={{ mb: 1 }}
-                            action={
-                              <IconButton
-                                size="small"
-                                onClick={() => removePendingChange(change.id)}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            }
-                          >
-                            {change.type === 'DELETE' && (
-                              `DELETE: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`
-                            )}
-                            {change.type === 'ADD' && (
-                              `ADD: ${change.name} ${change.ttl} ${change.recordType} ${change.value}`
-                            )}
-                            {change.type === 'MODIFY' && (
-                              `MODIFY: ${change.originalRecord.name}\n` +
-                              `FROM: ${change.originalRecord.ttl} ${change.originalRecord.type} ${change.originalRecord.value}\n` +
-                              `TO: ${change.newRecord.ttl} ${change.newRecord.type} ${change.newRecord.value}`
-                            )}
-                          </Alert>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+          >
+            <SortableContext
+              items={pendingChanges}
+              strategy={verticalListSortingStrategy}
+            >
+              {pendingChanges.map((change, index) => (
+                <ListItem
+                  key={change.id}
+                  value={index}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: '1px solid #ccc',
+                    padding: '8px',
+                  }}
+                >
+                  <ListItemText primary={`${change.type}: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`} />
+                  <IconButton
+                    size="small"
+                    onClick={() => removePendingChange(change.id)}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </ListItem>
+              ))}
+            </SortableContext>
+          </DndContext>
         </Box>
 
         <Box sx={{ 
@@ -499,27 +481,6 @@ function ZoneEditor() {
 
     setPreviewContent(preview);
     setShowPreview(true);
-  };
-
-  // Add reorderPendingChanges function
-  const reorderPendingChanges = useCallback((startIndex, endIndex) => {
-    setPendingChanges(prev => {
-      const result = Array.from(prev);
-      const [removed] = result.splice(startIndex, 1);
-      result.splice(endIndex, 0, removed);
-      return result;
-    });
-  }, [setPendingChanges]);
-
-  const onDragEnd = (result) => {
-    if (!result.destination) {
-      return;
-    }
-
-    reorderPendingChanges(
-      result.source.index,
-      result.destination.index
-    );
   };
 
   // Add success state
