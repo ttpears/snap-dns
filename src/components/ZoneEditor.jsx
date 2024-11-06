@@ -566,12 +566,7 @@ function ZoneEditor() {
       return;
     }
 
-    // Validate all required fields exist
-    if (!record.name || !record.type || !record.value) {
-      setError('Cannot delete record: Record is missing required fields');
-      return;
-    }
-
+    // Ensure all required fields are present
     const deleteChange = {
       type: 'DELETE',
       zone: selectedZone,
@@ -579,14 +574,25 @@ function ZoneEditor() {
         name: record.name,
         type: record.type,
         value: record.value,
-        ttl: record.ttl || 3600
-      }
+        ttl: record.ttl || 3600,
+        class: record.class || 'IN'
+      },
+      keyId: config.keys.find(key => key.zones?.includes(selectedZone))?.id
     };
+
+    // Validate all required fields
+    const requiredFields = ['name', 'type', 'value', 'ttl'];
+    const missingFields = requiredFields.filter(field => !deleteChange.record[field]);
+    
+    if (missingFields.length > 0) {
+      setError(`Cannot delete record: Missing required fields: ${missingFields.join(', ')}`);
+      return;
+    }
 
     console.log('Adding delete change:', deleteChange);
     addPendingChange(deleteChange);
     setShowPendingDrawer(true);
-  }, [selectedZone, addPendingChange, setShowPendingDrawer]);
+  }, [selectedZone, config.keys, addPendingChange, setShowPendingDrawer]);
 
   // Main render method
   return (
