@@ -7,6 +7,8 @@ export function PendingChangesProvider({ children }) {
   const [showPendingDrawer, setShowPendingDrawer] = useState(false);
 
   const addPendingChange = (change) => {
+    console.log('Adding pending change:', change);
+
     const formattedChange = {
       id: `change-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: change.type,
@@ -23,9 +25,16 @@ export function PendingChangesProvider({ children }) {
       formattedChange.originalRecord = change.originalRecord;
       formattedChange.newRecord = change.newRecord;
     } else if (change.type === 'DELETE') {
-      formattedChange.record = change.record;
+      formattedChange.record = {
+        name: change.record.name,
+        type: change.record.type,
+        value: change.record.value,
+        ttl: change.record.ttl,
+        class: change.record.class || 'IN'
+      };
     }
 
+    console.log('Formatted change:', formattedChange);
     setPendingChanges(prev => [...prev, formattedChange]);
   };
 
