@@ -30,9 +30,7 @@
       "last 1 safari version"
     ]
   },
-  "devDependencies": {
-    "react-scripts": "^5.0.1"
-  },
+
   "eslintConfig": {
     "extends": [
       "react-app"

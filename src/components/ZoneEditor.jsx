@@ -304,50 +304,57 @@ function ZoneEditor() {
                 }}
               >
                 {pendingChanges.map((change, index) => (
-                  <Draggable key={change.id} draggableId={change.id} index={index}>
-                    {(provided, snapshot) => (
-                      <ListItem
+                  <Draggable 
+                    key={change.id || `change-${index}`} 
+                    draggableId={change.id || `change-${index}`} 
+                    index={index}
+                  >
+                    {(provided) => (
+                      <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
-                        divider
-                        sx={{
-                          bgcolor: snapshot.isDragging ? 'action.selected' : 'inherit'
-                        }}
                       >
-                        <ListItemText
-                          primary={
-                            <Box component="span" sx={{ 
-                              color: change.type === 'DELETE' ? 'error.main' : 
-                                     change.type === 'ADD' ? 'success.main' : 
-                                     'primary.main' 
-                            }}>
-                              {change.type} - {change.name}.{change.zone}
-                            </Box>
-                          }
-                          secondary={
-                            <Box component="span">
-                              <Box component="span" display="block">
-                                Type: {change.recordType}
-                                {change.value && ` - Value: ${change.value}`}
+                        <ListItem
+                          divider
+                          sx={{
+                            bgcolor: snapshot.isDragging ? 'action.selected' : 'inherit'
+                          }}
+                        >
+                          <ListItemText
+                            primary={
+                              <Box component="span" sx={{ 
+                                color: change.type === 'DELETE' ? 'error.main' : 
+                                       change.type === 'ADD' ? 'success.main' : 
+                                       'primary.main' 
+                              }}>
+                                {change.type} - {change.name}.{change.zone}
                               </Box>
-                              {change.type === 'MODIFY' && change.newRecord && (
-                                <Box component="span" display="block" sx={{ color: 'text.secondary' }}>
-                                  New Value: {change.newRecord.value}
+                            }
+                            secondary={
+                              <Box component="span">
+                                <Box component="span" display="block">
+                                  Type: {change.recordType}
+                                  {change.value && ` - Value: ${change.value}`}
                                 </Box>
-                              )}
-                            </Box>
-                          }
-                        />
-                        <ListItemSecondaryAction>
-                          <IconButton 
-                            edge="end" 
-                            onClick={() => removePendingChange(change.id)}
-                          >
-                            <CancelIcon />
-                          </IconButton>
-                        </ListItemSecondaryAction>
-                      </ListItem>
+                                {change.type === 'MODIFY' && change.newRecord && (
+                                  <Box component="span" display="block" sx={{ color: 'text.secondary' }}>
+                                    New Value: {change.newRecord.value}
+                                  </Box>
+                                )}
+                              </Box>
+                            }
+                          />
+                          <ListItemSecondaryAction>
+                            <IconButton 
+                              edge="end" 
+                              onClick={() => removePendingChange(change.id)}
+                            >
+                              <CancelIcon />
+                            </IconButton>
+                          </ListItemSecondaryAction>
+                        </ListItem>
+                      </div>
                     )}
                   </Draggable>
                 ))}
@@ -549,27 +556,27 @@ function ZoneEditor() {
       return;
     }
 
-    // Create the delete change with all required fields
+    // Create a unique string ID for the change
+    const changeId = `delete-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     const deleteChange = {
+      id: changeId, // Add unique string ID for drag-and-drop
       type: 'DELETE',
       zone: selectedZone,
       record: {
-        name: record.name,  // Keep the full name as stored in the record
+        name: record.name,
         type: record.type,
         value: record.value,
-        ttl: record.ttl || 3600,  // Default TTL if not provided
-        class: record.class || 'IN' // Default class if not provided
+        ttl: record.ttl,
+        class: record.class || 'IN'
       }
     };
 
-    // Validate the change object
-    const requiredFields = ['name', 'type', 'value', 'ttl'];
-    const missingFields = requiredFields.filter(field => !deleteChange.record[field]);
-    
-    if (missingFields.length > 0) {
-      setError(`Cannot delete record: Missing required fields: ${missingFields.join(', ')}`);
-      return;
-    }
+    // Debug log
+    console.log('Creating delete change:', {
+      originalRecord: record,
+      change: deleteChange
+    });
 
     addPendingChange(deleteChange);
     setShowPendingDrawer(true);
