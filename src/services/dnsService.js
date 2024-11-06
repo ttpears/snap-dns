@@ -13,26 +13,23 @@ export const dnsService = {
 
   async addRecord(zone, record, keyConfig) {
     console.log('Adding DNS record:', { zone, record, keyConfig });
-    const response = await fetch(`/api/dns/${zone}/records`, {
+    const response = await fetch(`/zone/${zone}/record`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        record,
-        key: keyConfig
+        server: keyConfig.server,
+        keyName: keyConfig.keyName,
+        keyValue: keyConfig.keyValue,
+        algorithm: keyConfig.algorithm,
+        record: record
       }),
     });
 
-    const contentType = response.headers.get('content-type');
     if (!response.ok) {
-      if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to add record');
-      } else {
-        const text = await response.text();
-        throw new Error(`Failed to add record: ${response.status} ${text.substring(0, 100)}`);
-      }
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to add record');
     }
 
     return response.json();
@@ -68,26 +65,23 @@ export const dnsService = {
 
   async deleteRecord(zone, record, keyConfig) {
     console.log('Deleting DNS record:', { zone, record, keyConfig });
-    const response = await fetch(`/api/dns/${zone}/records/${record.id}`, {
-      method: 'DELETE',
+    const response = await fetch(`/zone/${zone}/record/delete`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        record,
-        key: keyConfig
+        server: keyConfig.server,
+        keyName: keyConfig.keyName,
+        keyValue: keyConfig.keyValue,
+        algorithm: keyConfig.algorithm,
+        record: record
       }),
     });
 
-    const contentType = response.headers.get('content-type');
     if (!response.ok) {
-      if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to delete record');
-      } else {
-        const text = await response.text();
-        throw new Error(`Failed to delete record: ${response.status} ${text.substring(0, 100)}`);
-      }
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to delete record');
     }
 
     return response.json();
