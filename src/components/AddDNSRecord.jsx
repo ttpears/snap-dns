@@ -14,6 +14,7 @@ import {
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import { usePendingChanges } from '../context/PendingChangesContext';
+import { qualifyDnsName } from '../utils/dnsUtils';
 
 function AddDNSRecord() {
   const { config } = useConfig();
@@ -45,9 +46,7 @@ function AddDNSRecord() {
       const zone = useManualZone ? manualZone : selectedZone;
       
       // Create the pending change with fully qualified name
-      const fullyQualifiedName = newRecord.name.endsWith(zone) 
-        ? newRecord.name 
-        : `${newRecord.name}.${zone}`;
+      const fullyQualifiedName = qualifyDnsName(newRecord.name, zone);
 
       const change = {
         type: 'ADD',

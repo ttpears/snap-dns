@@ -49,6 +49,17 @@ export const dnsService = {
 
   async updateRecord(zone, originalRecord, newRecord, keyConfig) {
     console.log('Updating DNS record:', { zone, originalRecord, newRecord, keyConfig });
+    
+    const qualifiedOriginal = {
+      ...originalRecord,
+      name: qualifyDnsName(originalRecord.name, zone)
+    };
+    
+    const qualifiedNew = {
+      ...newRecord,
+      name: qualifyDnsName(newRecord.name, zone)
+    };
+
     const response = await fetch(`${API_URL}/zone/${zone}/record/update`, {
       method: 'POST',
       headers: {
@@ -59,8 +70,8 @@ export const dnsService = {
         keyName: keyConfig.keyName,
         keyValue: keyConfig.keyValue,
         algorithm: keyConfig.algorithm,
-        originalRecord,
-        newRecord
+        originalRecord: qualifiedOriginal,
+        newRecord: qualifiedNew
       }),
     });
 
