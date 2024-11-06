@@ -461,7 +461,9 @@ function ZoneEditor() {
     >
       <DialogTitle>Preview Changes</DialogTitle>
       <DialogContent>
-        {/* Preview content */}
+        <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+          {previewContent || 'No changes to preview'}
+        </Typography>
       </DialogContent>
       <DialogActions>
         <Button onClick={() => setShowPreview(false)}>Close</Button>
@@ -471,14 +473,42 @@ function ZoneEditor() {
 
   const [previewContent, setPreviewContent] = useState('');
 
+  const getFullyQualifiedName = (name, zone) => {
+    if (name.endsWith(zone)) {
+      // Already includes zone, just ensure it ends with period
+      return name.endsWith('.') ? name : `${name}.`;
+    } else if (name.includes('.')) {
+      // Contains dots but doesn't end with zone - check if it's a subdomain
+      const nameParts = name.split('.');
+      const zoneParts = zone.split('.');
+      
+      // Check if the end parts match the zone
+      const endsWithZone = zoneParts.every((part, index) => 
+        nameParts[nameParts.length - zoneParts.length + index] === part
+      );
+      
+      if (endsWithZone) {
+        return name.endsWith('.') ? name : `${name}.`;
+      } else {
+        return `${name}.${zone}.`;
+      }
+    } else {
+      // Simple name, append zone
+      return `${name}.${zone}.`;
+    }
+  };
+
   const handlePreviewChanges = () => {
     const preview = pendingChanges.map(change => {
       if (change.type === 'ADD') {
-        return `ADD: ${change.name}.${change.zone} ${change.recordType} ${change.value} (TTL: ${change.ttl})`;
+        const fqdn = getFullyQualifiedName(change.name, change.zone);
+        return `ADD: ${fqdn} ${change.recordType} ${change.value} (TTL: ${change.ttl})`;
       } else if (change.type === 'DELETE') {
-        return `DELETE: ${change.originalRecord.name}.${change.zone} ${change.originalRecord.type} ${change.originalRecord.value}`;
+        const fqdn = getFullyQualifiedName(change.originalRecord.name, change.zone);
+        return `DELETE: ${fqdn} ${change.originalRecord.type} ${change.originalRecord.value}`;
       } else if (change.type === 'MODIFY') {
-        return `MODIFY: ${change.originalRecord.name}.${change.zone}\n` +
+        const fqdn = getFullyQualifiedName(change.originalRecord.name, change.zone);
+        return `MODIFY: ${fqdn}\n` +
                `  FROM: ${change.originalRecord.type} ${change.originalRecord.value}\n` +
                `  TO: ${change.newRecord.type} ${change.newRecord.value}`;
       }
