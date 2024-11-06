@@ -24,9 +24,15 @@ export const dnsService = {
       }),
     });
 
+    const contentType = response.headers.get('content-type');
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to add record');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to add record');
+      } else {
+        const text = await response.text();
+        throw new Error(`Failed to add record: ${response.status} ${text.substring(0, 100)}`);
+      }
     }
 
     return response.json();
@@ -46,9 +52,15 @@ export const dnsService = {
       }),
     });
 
+    const contentType = response.headers.get('content-type');
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update record');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update record');
+      } else {
+        const text = await response.text();
+        throw new Error(`Failed to update record: ${response.status} ${text.substring(0, 100)}`);
+      }
     }
 
     return response.json();
@@ -67,9 +79,15 @@ export const dnsService = {
       }),
     });
 
+    const contentType = response.headers.get('content-type');
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to delete record');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete record');
+      } else {
+        const text = await response.text();
+        throw new Error(`Failed to delete record: ${response.status} ${text.substring(0, 100)}`);
+      }
     }
 
     return response.json();
