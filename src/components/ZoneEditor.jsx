@@ -482,7 +482,7 @@ function ZoneEditor() {
         return `ADD: ${fqdn} ${change.recordType} ${change.value} (TTL: ${change.ttl})`;
       } else if (change.type === 'DELETE') {
         const fqdn = qualifyDnsName(change.record.name, change.zone);
-        return `DELETE: ${fqdn} ${change.record.type} ${change.record.value}`;
+        return `DELETE: ${fqdn} ${change.record.type} ${change.record.value} (TTL: ${change.record.ttl})`;
       } else if (change.type === 'MODIFY') {
         const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
         return `MODIFY: ${fqdn}\n` +
