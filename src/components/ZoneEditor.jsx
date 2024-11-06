@@ -490,19 +490,18 @@ function ZoneEditor() {
 
   const handlePreviewChanges = () => {
     const preview = pendingChanges.map(change => {
-      console.log('Processing change for preview:', change);
-
       if (change.type === 'ADD') {
         const fqdn = qualifyDnsName(change.name, change.zone);
-        return `ADD: ${fqdn} ${change.ttl} IN ${change.recordType} ${change.value}`;
+        return `ADD: ${fqdn} ${change.ttl} ${change.recordType} ${change.value}`;
       } else if (change.type === 'DELETE') {
-        // For delete operations, the record should already have the full name
-        return `DELETE: ${change.record.name} ${change.record.ttl} ${change.record.class || 'IN'} ${change.record.type} ${change.record.value}`;
+        // Use the record's full name and ensure all fields are included
+        const fqdn = qualifyDnsName(change.record.name, change.zone);
+        return `DELETE: ${fqdn} ${change.record.ttl} ${change.record.class || 'IN'} ${change.record.type} ${change.record.value}`;
       } else if (change.type === 'MODIFY') {
         const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
         return `MODIFY: ${fqdn}\n` +
-               `  FROM: ${change.originalRecord.ttl} IN ${change.originalRecord.type} ${change.originalRecord.value}\n` +
-               `  TO: ${change.newRecord.ttl} IN ${change.newRecord.type} ${change.newRecord.value}`;
+               `  FROM: ${change.originalRecord.ttl} ${change.originalRecord.type} ${change.originalRecord.value}\n` +
+               `  TO: ${change.newRecord.ttl} ${change.newRecord.type} ${change.newRecord.value}`;
       }
       return '';
     }).join('\n\n');
@@ -545,21 +544,12 @@ function ZoneEditor() {
 
   // Add this with the other handlers near the top of the ZoneEditor function
   const handleDeleteRecord = useCallback((record) => {
-    console.log('Delete record called with:', {
-      record,
-      selectedZone,
-      fullRecord: record
-    });
-
     if (!selectedZone || !record) {
       setError('Cannot delete record: Missing zone or record data');
       return;
     }
 
-    // Log the record's raw name before any processing
-    console.log('Record name before processing:', record.name);
-    
-    // Ensure we have the complete record data
+    // Create the delete change with all required fields
     const deleteChange = {
       type: 'DELETE',
       zone: selectedZone,
@@ -567,18 +557,17 @@ function ZoneEditor() {
         name: record.name,  // Keep the full name as stored in the record
         type: record.type,
         value: record.value,
-        ttl: record.ttl,
-        class: record.class || 'IN'
+        ttl: record.ttl || 3600,  // Default TTL if not provided
+        class: record.class || 'IN' // Default class if not provided
       }
     };
 
-    console.log('Created delete change:', deleteChange);
-
     // Validate the change object
-    if (!deleteChange.record.name || !deleteChange.record.type || 
-        !deleteChange.record.value || !deleteChange.record.ttl) {
-      console.error('Invalid delete change:', deleteChange);
-      setError('Cannot delete record: Missing required fields');
+    const requiredFields = ['name', 'type', 'value', 'ttl'];
+    const missingFields = requiredFields.filter(field => !deleteChange.record[field]);
+    
+    if (missingFields.length > 0) {
+      setError(`Cannot delete record: Missing required fields: ${missingFields.join(', ')}`);
       return;
     }
 
