@@ -52,6 +52,7 @@ function AddDNSRecord() {
         recordType: newRecord.type,
         value: newRecord.value,
         ttl: newRecord.ttl,
+        keyId: selectedKey,
         newRecord: {
           ...newRecord,
           zone: zone

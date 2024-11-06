@@ -388,66 +388,54 @@ function ZoneEditor() {
       const backup = backupService.createBackup(selectedZone, records, 'auto');
       console.log('Automatic backup created:', backup.id);
 
-      const keyConfig = config.keys.find(key => 
-        key.zones?.includes(selectedZone)
-      );
-      
-      if (!keyConfig) {
-        throw new Error('No key configuration found for this zone');
-      }
+      // Group changes by zone
+      const changesByZone = pendingChanges.reduce((acc, change) => {
+        if (!acc[change.zone]) {
+          acc[change.zone] = [];
+        }
+        acc[change.zone].push(change);
+        return acc;
+      }, {});
 
-      // Save current state to history before applying changes
-      saveToHistory({
-        records: [...records],
-        timestamp: new Date().toISOString()
-      });
-
-      console.log('Applying changes:', pendingChanges);
-
-      // Apply changes in order
-      for (const change of pendingChanges) {
-        console.log('Processing change:', change);
+      // Process each zone's changes
+      for (const [zone, zoneChanges] of Object.entries(changesByZone)) {
+        const keyConfig = config.keys.find(key => 
+          key.zones?.includes(zone) || 
+          zoneChanges.some(change => change.keyId === key.id)
+        );
         
-        if (change.type === 'DELETE') {
-          await dnsService.deleteRecord(
-            change.zone,
-            change.originalRecord,
-            keyConfig
-          );
-        } else if (change.type === 'MODIFY') {
-          await dnsService.updateRecord(
-            change.zone,
-            change.originalRecord,
-            change.newRecord,
-            keyConfig
-          );
-        } else if (change.type === 'ADD') {
-          console.log('Adding record:', {
-            zone: change.zone,
-            record: {
-              name: change.name,
-              type: change.recordType,
-              value: change.value,
-              ttl: change.ttl
-            },
-            keyConfig
-          });
+        if (!keyConfig) {
+          throw new Error(`No key configuration found for zone: ${zone}`);
+        }
+
+        console.log(`Applying changes for zone ${zone} with key:`, keyConfig);
+
+        // Apply changes in order for this zone
+        for (const change of zoneChanges) {
+          console.log('Processing change:', change);
           
-          await dnsService.addRecord(
-            change.zone,
-            {
+          if (change.type === 'DELETE') {
+            await dnsService.deleteRecord(zone, change.originalRecord, keyConfig);
+          } else if (change.type === 'MODIFY') {
+            await dnsService.updateRecord(
+              zone,
+              change.originalRecord,
+              change.newRecord,
+              keyConfig
+            );
+          } else if (change.type === 'ADD') {
+            await dnsService.addRecord(zone, {
               name: change.name,
               type: change.recordType,
               value: change.value,
               ttl: change.ttl
-            },
-            keyConfig
-          );
+            }, keyConfig);
+          }
         }
       }
 
       // Send notification about the changes
-      await notificationService.sendNotification(pendingChanges, selectedZone);
+      await notificationService.sendNotification(pendingChanges);
 
       // Clear pending changes and refresh zone data
       clearChanges();
