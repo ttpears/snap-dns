@@ -15,13 +15,13 @@ import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { qualifyDnsName } from '../utils/dnsUtils';
+import { useZone } from '../context/ZoneContext';
+import { Badge } from '@mui/material';
+import { Edit as EditIcon } from '@mui/icons-material';
 
 function AddDNSRecord() {
   const { config } = useConfig();
   const [selectedKey, setSelectedKey] = useState('');
-  const [selectedZone, setSelectedZone] = useState('');
-  const [manualZone, setManualZone] = useState('');
-  const [useManualZone, setUseManualZone] = useState(false);
   const [newRecord, setNewRecord] = useState({
     name: '',
     ttl: 3600,
@@ -31,6 +31,8 @@ function AddDNSRecord() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const { addPendingChange, setShowPendingDrawer } = usePendingChanges();
+  const { selectedZone } = useZone();
+  const { pendingChanges } = usePendingChanges();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,7 +45,7 @@ function AddDNSRecord() {
         throw new Error('No key configuration found');
       }
 
-      const zone = useManualZone ? manualZone : selectedZone;
+      const zone = selectedZone;
       
       // Store the unqualified name in the pending change
       const change = {
@@ -74,9 +76,25 @@ function AddDNSRecord() {
 
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Add DNS Record
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h6">Add DNS Record</Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => setShowPendingDrawer(true)}
+          startIcon={
+            pendingChanges.length > 0 ? (
+              <Badge badgeContent={pendingChanges.length} color="error">
+                <EditIcon />
+              </Badge>
+            ) : (
+              <EditIcon />
+            )
+          }
+        >
+          Pending Changes
+        </Button>
+      </Box>
 
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
         {/* Key Selection */}
@@ -95,44 +113,6 @@ function AddDNSRecord() {
             ))}
           </Select>
         </FormControl>
-
-        {/* Zone Selection */}
-        <Box sx={{ mb: 2 }}>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => setUseManualZone(!useManualZone)}
-            sx={{ mb: 1 }}
-          >
-            {useManualZone ? 'Select from Managed Zones' : 'Enter Zone Manually'}
-          </Button>
-
-          {useManualZone ? (
-            <TextField
-              fullWidth
-              label="Enter Zone"
-              value={manualZone}
-              onChange={(e) => setManualZone(e.target.value)}
-              required
-            />
-          ) : (
-            <FormControl fullWidth>
-              <InputLabel>Select Zone</InputLabel>
-              <Select
-                value={selectedZone}
-                onChange={(e) => setSelectedZone(e.target.value)}
-                label="Select Zone"
-                required
-              >
-                {selectedKey && config.keys.find(k => k.id === selectedKey)?.zones.map((zone) => (
-                  <MenuItem key={zone} value={zone}>
-                    {zone}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-        </Box>
 
         {/* Record Details */}
         <TextField

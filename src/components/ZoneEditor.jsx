@@ -52,6 +52,7 @@ import { backupService } from '../services/backupService';
 import { notificationService } from '../services/notificationService';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { qualifyDnsName } from '../utils/dnsUtils';
+import { useZone } from '../context/ZoneContext';
 
 function ZoneEditor() {
   const { config } = useConfig();
@@ -65,7 +66,7 @@ function ZoneEditor() {
     setPendingChanges 
   } = usePendingChanges();
   
-  const [selectedZone, setSelectedZone] = useState('');
+  const { selectedZone, setSelectedZone } = useZone();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { ConfigProvider } from './context/ConfigContext';
 import { PendingChangesProvider } from './context/PendingChangesContext';
+import { ZoneProvider } from './context/ZoneContext';
 import AppContent from './components/AppContent';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -36,11 +37,13 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <ConfigProvider>
-        <PendingChangesProvider>
-          <BrowserRouter>
-            <AppContent drawerWidth={240} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
-          </BrowserRouter>
-        </PendingChangesProvider>
+        <ZoneProvider>
+          <PendingChangesProvider>
+            <BrowserRouter>
+              <AppContent drawerWidth={240} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+            </BrowserRouter>
+          </PendingChangesProvider>
+        </ZoneProvider>
       </ConfigProvider>
     </ThemeProvider>
   );
