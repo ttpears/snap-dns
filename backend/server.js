@@ -558,6 +558,33 @@ send
     }
 });
 
+app.post('/webhook/mattermost', async (req, res) => {
+    const { webhookUrl, payload } = req.body;
+    
+    try {
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Webhook error:', error);
+        res.status(500).json({ 
+            error: true, 
+            message: 'Failed to send webhook notification',
+            details: error.message 
+        });
+    }
+});
+
 // Start server
 const PORT = process.env.PORT || 3002;
 const HOST = process.env.HOST || '0.0.0.0';

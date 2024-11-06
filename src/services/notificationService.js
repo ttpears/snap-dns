@@ -1,6 +1,7 @@
 class NotificationService {
   constructor() {
     this.webhookUrl = null;
+    this.apiUrl = process.env.REACT_APP_API_URL;
   }
 
   setWebhookUrl(url) {
@@ -35,22 +36,26 @@ class NotificationService {
         icon_emoji: ':pencil:'
       };
 
-      const response = await fetch(this.webhookUrl, {
+      const response = await fetch(`${this.apiUrl}/webhook/mattermost`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          webhookUrl: this.webhookUrl,
+          payload: payload
+        })
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to send notification');
       }
 
       console.log('Notification sent successfully');
     } catch (error) {
       console.error('Failed to send webhook notification:', error);
-      throw error; // Re-throw to handle in the calling component
+      throw error;
     }
   }
 
@@ -127,16 +132,20 @@ ${changesSummary}
         icon_emoji: ':floppy_disk:'
       };
 
-      const response = await fetch(this.webhookUrl, {
+      const response = await fetch(`${this.apiUrl}/webhook/mattermost`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          webhookUrl: this.webhookUrl,
+          payload: payload
+        })
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to send backup notification');
       }
     } catch (error) {
       console.error('Failed to send backup notification:', error);
