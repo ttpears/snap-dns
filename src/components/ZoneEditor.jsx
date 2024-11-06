@@ -402,24 +402,47 @@ function ZoneEditor() {
         timestamp: new Date().toISOString()
       });
 
+      console.log('Applying changes:', pendingChanges);
+
       // Apply changes in order
       for (const change of pendingChanges) {
+        console.log('Processing change:', change);
+        
         if (change.type === 'DELETE') {
-          await dnsService.deleteRecord(selectedZone, change.originalRecord, keyConfig);
+          await dnsService.deleteRecord(
+            change.zone,
+            change.originalRecord,
+            keyConfig
+          );
         } else if (change.type === 'MODIFY') {
           await dnsService.updateRecord(
-            selectedZone, 
-            change.originalRecord, 
-            change.newRecord, 
+            change.zone,
+            change.originalRecord,
+            change.newRecord,
             keyConfig
           );
         } else if (change.type === 'ADD') {
-          await dnsService.addRecord(selectedZone, {
-            name: change.name,
-            type: change.recordType,
-            value: change.value,
-            ttl: change.ttl
-          }, keyConfig);
+          console.log('Adding record:', {
+            zone: change.zone,
+            record: {
+              name: change.name,
+              type: change.recordType,
+              value: change.value,
+              ttl: change.ttl
+            },
+            keyConfig
+          });
+          
+          await dnsService.addRecord(
+            change.zone,
+            {
+              name: change.name,
+              type: change.recordType,
+              value: change.value,
+              ttl: change.ttl
+            },
+            keyConfig
+          );
         }
       }
 
@@ -430,7 +453,10 @@ function ZoneEditor() {
       clearChanges();
       await loadZoneRecords();
       setShowPendingDrawer(false);
+      
+      setSuccess('Changes applied successfully');
     } catch (err) {
+      console.error('Error applying changes:', err);
       setError(`Failed to apply changes: ${err.message}`);
     } finally {
       setLoading(false);

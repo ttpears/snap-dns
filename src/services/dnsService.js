@@ -1,6 +1,6 @@
 import { dnsServer } from './dnsServer';
 
-const dnsService = {
+export const dnsService = {
   async fetchZoneRecords(zoneName, keyConfig) {
     try {
       const records = await dnsServer.getRecords(zoneName, keyConfig);
@@ -11,40 +11,68 @@ const dnsService = {
     }
   },
 
-  async addRecord(zoneName, record, keyConfig) {
-    try {
-      console.log('dnsService adding record:', {
-        zoneName,
+  async addRecord(zone, record, keyConfig) {
+    console.log('Adding DNS record:', { zone, record, keyConfig });
+    const response = await fetch(`/api/dns/${zone}/records`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         record,
-        keyConfig: { ...keyConfig, keyValue: '[REDACTED]' }
-      });
-      
-      const result = await dnsServer.addRecord(zoneName, record, keyConfig);
-      return result;
-    } catch (error) {
-      console.error('Error in dnsService.addRecord:', error);
-      throw error;
+        key: keyConfig
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to add record');
     }
+
+    return response.json();
   },
 
-  async updateRecord(zoneName, originalRecord, newRecord, keyConfig) {
-    try {
-      await dnsServer.updateRecord(zoneName, originalRecord, newRecord, keyConfig);
-      return { success: true };
-    } catch (error) {
-      console.error('Error updating record:', error);
-      throw error;
+  async updateRecord(zone, originalRecord, newRecord, keyConfig) {
+    console.log('Updating DNS record:', { zone, originalRecord, newRecord, keyConfig });
+    const response = await fetch(`/api/dns/${zone}/records/${originalRecord.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        originalRecord,
+        newRecord,
+        key: keyConfig
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to update record');
     }
+
+    return response.json();
   },
 
-  async deleteRecord(zoneName, record, keyConfig) {
-    try {
-      await dnsServer.deleteRecord(zoneName, record, keyConfig);
-      return { success: true };
-    } catch (error) {
-      console.error('Error deleting record:', error);
-      throw error;
+  async deleteRecord(zone, record, keyConfig) {
+    console.log('Deleting DNS record:', { zone, record, keyConfig });
+    const response = await fetch(`/api/dns/${zone}/records/${record.id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        record,
+        key: keyConfig
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to delete record');
     }
+
+    return response.json();
   },
 
   async restoreZone(zoneName, records, keyConfig) {
@@ -56,6 +84,4 @@ const dnsService = {
       throw error;
     }
   }
-};
-
-export { dnsService }; 
+}; 
