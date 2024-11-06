@@ -51,6 +51,7 @@ import AddDNSRecord from './AddDNSRecord';
 import { backupService } from '../services/backupService';
 import { notificationService } from '../services/notificationService';
 import { usePendingChanges } from '../context/PendingChangesContext';
+import { qualifyDnsName } from '../utils/dnsUtils';
 
 function ZoneEditor() {
   const { config } = useConfig();
@@ -473,41 +474,16 @@ function ZoneEditor() {
 
   const [previewContent, setPreviewContent] = useState('');
 
-  const getFullyQualifiedName = (name, zone) => {
-    if (name.endsWith(zone)) {
-      // Already includes zone, just ensure it ends with period
-      return name.endsWith('.') ? name : `${name}.`;
-    } else if (name.includes('.')) {
-      // Contains dots but doesn't end with zone - check if it's a subdomain
-      const nameParts = name.split('.');
-      const zoneParts = zone.split('.');
-      
-      // Check if the end parts match the zone
-      const endsWithZone = zoneParts.every((part, index) => 
-        nameParts[nameParts.length - zoneParts.length + index] === part
-      );
-      
-      if (endsWithZone) {
-        return name.endsWith('.') ? name : `${name}.`;
-      } else {
-        return `${name}.${zone}.`;
-      }
-    } else {
-      // Simple name, append zone
-      return `${name}.${zone}.`;
-    }
-  };
-
   const handlePreviewChanges = () => {
     const preview = pendingChanges.map(change => {
       if (change.type === 'ADD') {
-        const fqdn = getFullyQualifiedName(change.name, change.zone);
+        const fqdn = qualifyDnsName(change.name, change.zone);
         return `ADD: ${fqdn} ${change.recordType} ${change.value} (TTL: ${change.ttl})`;
       } else if (change.type === 'DELETE') {
-        const fqdn = getFullyQualifiedName(change.originalRecord.name, change.zone);
+        const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
         return `DELETE: ${fqdn} ${change.originalRecord.type} ${change.originalRecord.value}`;
       } else if (change.type === 'MODIFY') {
-        const fqdn = getFullyQualifiedName(change.originalRecord.name, change.zone);
+        const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
         return `MODIFY: ${fqdn}\n` +
                `  FROM: ${change.originalRecord.type} ${change.originalRecord.value}\n` +
                `  TO: ${change.newRecord.type} ${change.newRecord.value}`;
