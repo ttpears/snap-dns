@@ -13,6 +13,7 @@ import {
   MenuItem,
 } from '@mui/material';
 import { usePendingChanges } from '../context/PendingChangesContext';
+import { qualifyDnsName } from '../utils/utils';
 
 function DemoMode() {
   const [activeStep, setActiveStep] = useState(0);
@@ -114,7 +115,10 @@ function DemoMode() {
             <Box sx={{ mt: 2 }}>
               {pendingChanges.map((change, index) => (
                 <Alert key={index} severity="info" sx={{ mb: 1 }}>
-                  {`${change.name}.${change.zone} ${change.recordType} ${change.value}`}
+                  {change.type === 'ADD' 
+                    ? `${qualifyDnsName(change.name, change.zone)} ${change.recordType} ${change.value}`
+                    : `${change.originalRecord.name} ${change.originalRecord.type} ${change.originalRecord.value}`
+                  }
                 </Alert>
               ))}
             </Box>

@@ -45,22 +45,15 @@ function AddDNSRecord() {
 
       const zone = useManualZone ? manualZone : selectedZone;
       
-      // Create the pending change with fully qualified name
-      const fullyQualifiedName = qualifyDnsName(newRecord.name, zone);
-
+      // Store the unqualified name in the pending change
       const change = {
         type: 'ADD',
         zone: zone,
-        name: fullyQualifiedName,
+        name: newRecord.name, // Store original unqualified name
         recordType: newRecord.type,
         value: newRecord.value,
         ttl: newRecord.ttl,
-        keyId: selectedKey,
-        newRecord: {
-          ...newRecord,
-          name: fullyQualifiedName,
-          zone: zone
-        }
+        keyId: selectedKey
       };
 
       addPendingChange(change);
