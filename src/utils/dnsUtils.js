@@ -25,13 +25,48 @@ export const qualifyDnsName = (name, zone) => {
 };
 
 export function isMultilineRecord(record) {
-  return record.type === 'SOA' || (record.value && record.value.includes('\n'));
+  // SOA records are always multiline
+  if (record.type === 'SOA') return true;
+  
+  // TXT records with quotes or exceeding certain length
+  if (record.type === 'TXT' && (
+    record.value.includes('"') || 
+    record.value.includes('\n') || 
+    record.value.length > 255
+  )) return true;
+  
+  // MX records with preferences
+  if (record.type === 'MX' && record.value.includes('\n')) return true;
+  
+  // SRV records are typically multiline
+  if (record.type === 'SRV') return true;
+  
+  return false;
 }
 
-export function formatMultilineValue(value) {
-  if (!value) return '';
-  return value.split('\n')
-    .map(line => line.trim())
-    .filter(line => line)
-    .join('\n');
+export function formatMultilineValue(record) {
+  if (!record || !record.value) return '';
+  
+  switch (record.type) {
+    case 'SOA':
+      // Format: primary-ns admin-mailbox serial refresh retry expire minimum
+      const [primary, admin, serial, refresh, retry, expire, minimum] = record.value.split(/\s+/);
+      return `${primary}\n${admin}\n${serial}\n${refresh}\n${retry}\n${expire}\n${minimum}`;
+    
+    case 'TXT':
+      // Handle quoted strings and long TXT records
+      return record.value.split(/(?<="})\s+(?=")/).join('\n');
+    
+    case 'MX':
+      // Format: preference exchange
+      return record.value.split(/\s+(?=\d+\s)/).join('\n');
+    
+    case 'SRV':
+      // Format: priority weight port target
+      const [priority, weight, port, target] = record.value.split(/\s+/);
+      return `${priority} ${weight}\n${port} ${target}`;
+    
+    default:
+      return record.value;
+  }
 } 
