@@ -44,6 +44,7 @@ function BackupImport() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [recordFilter, setRecordFilter] = useState('');
   const [selectedTypes, setSelectedTypes] = useState([]);
+  const [confirmFullRestore, setConfirmFullRestore] = useState(false);
 
   useEffect(() => {
     setStoredBackups(backupService.getBackups());

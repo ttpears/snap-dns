@@ -42,39 +42,36 @@ function AddDNSRecord() {
         throw new Error('No key configuration found');
       }
 
-      const zoneToUse = useManualZone ? manualZone : selectedZone;
-      if (!zoneToUse) {
-        throw new Error('Please select or enter a zone');
-      }
-
-      console.log('Adding record for zone:', zoneToUse);
-      console.log('Using key:', keyConfig.name);
-      console.log('Record details:', newRecord);
-
+      const zone = useManualZone ? manualZone : selectedZone;
+      
+      // Create the pending change
       const change = {
         type: 'ADD',
+        zone: zone,
+        name: newRecord.name,
+        recordType: newRecord.type,
+        value: newRecord.value,
+        ttl: newRecord.ttl,
         newRecord: {
           ...newRecord,
-          zone: zoneToUse
+          zone: zone
         }
       };
 
+      // Add to pending changes
       addPendingChange(change);
       setSuccess(true);
+      setShowPendingDrawer(true);
       
       // Reset form
       setNewRecord({
         name: '',
-        ttl: 3600,
+        ttl: config.defaultTTL || 3600,
         type: 'A',
         value: ''
       });
-
-      // Show pending changes drawer
-      setShowPendingDrawer(true);
-    } catch (err) {
-      console.error('Failed to add record:', err);
-      setError(err.message);
+    } catch (error) {
+      setError(error.message);
     }
   };
 

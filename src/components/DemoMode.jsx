@@ -16,7 +16,7 @@ import { usePendingChanges } from '../context/PendingChangesContext';
 
 function DemoMode() {
   const [activeStep, setActiveStep] = useState(0);
-  const { addChange, pendingChanges, clearChanges } = usePendingChanges();
+  const { addPendingChange, pendingChanges, clearChanges } = usePendingChanges();
   const [demoInput, setDemoInput] = useState({
     zone: 'example.com',
     recordType: 'A',
@@ -91,7 +91,7 @@ function DemoMode() {
             <Button
               variant="contained"
               onClick={() => {
-                addChange({
+                addPendingChange({
                   ...demoInput,
                   command: `update add ${demoInput.name}.${demoInput.zone} ${demoInput.ttl} ${demoInput.recordType} ${demoInput.value}`
                 });

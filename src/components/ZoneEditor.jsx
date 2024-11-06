@@ -57,6 +57,8 @@ function ZoneEditor() {
   const { 
     pendingChanges, 
     clearChanges, 
+    addPendingChange, 
+    removePendingChange, 
     showPendingDrawer, 
     setShowPendingDrawer 
   } = usePendingChanges();
@@ -313,16 +315,21 @@ function ZoneEditor() {
                       >
                         <ListItemText
                           primary={
-                            <Box component="span" sx={{ color: change.type === 'DELETE' ? 'error.main' : 'primary.main' }}>
-                              {change.type} - {change.originalRecord.name}
+                            <Box component="span" sx={{ 
+                              color: change.type === 'DELETE' ? 'error.main' : 
+                                     change.type === 'ADD' ? 'success.main' : 
+                                     'primary.main' 
+                            }}>
+                              {change.type} - {change.name}.{change.zone}
                             </Box>
                           }
                           secondary={
                             <Box component="span">
                               <Box component="span" display="block">
-                                Type: {change.originalRecord.type}
+                                Type: {change.recordType}
+                                {change.value && ` - Value: ${change.value}`}
                               </Box>
-                              {change.type === 'MODIFY' && (
+                              {change.type === 'MODIFY' && change.newRecord && (
                                 <Box component="span" display="block" sx={{ color: 'text.secondary' }}>
                                   New Value: {change.newRecord.value}
                                 </Box>
@@ -406,6 +413,13 @@ function ZoneEditor() {
             change.newRecord, 
             keyConfig
           );
+        } else if (change.type === 'ADD') {
+          await dnsService.addRecord(selectedZone, {
+            name: change.name,
+            type: change.recordType,
+            value: change.value,
+            ttl: change.ttl
+          }, keyConfig);
         }
       }
 
