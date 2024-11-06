@@ -16,14 +16,29 @@ export const dnsService = {
   async addRecord(zone, record, keyConfig) {
     console.log('Adding DNS record:', { zone, record, keyConfig });
     
-    // Ensure the record name is fully qualified and ends with a period
-    let fullyQualifiedName = record.name.endsWith(zone) 
-      ? record.name 
-      : `${record.name}.${zone}`;
-
-    // Add trailing period if not present
-    if (!fullyQualifiedName.endsWith('.')) {
-      fullyQualifiedName += '.';
+    // Properly handle domain qualification
+    let fullyQualifiedName;
+    if (record.name.endsWith(zone)) {
+      // Already includes zone, just ensure it ends with period
+      fullyQualifiedName = record.name.endsWith('.') ? record.name : `${record.name}.`;
+    } else if (record.name.includes('.')) {
+      // Contains dots but doesn't end with zone - check if it's a subdomain
+      const nameParts = record.name.split('.');
+      const zoneParts = zone.split('.');
+      
+      // Check if the end parts match the zone
+      const endsWithZone = zoneParts.every((part, index) => 
+        nameParts[nameParts.length - zoneParts.length + index] === part
+      );
+      
+      if (endsWithZone) {
+        fullyQualifiedName = record.name.endsWith('.') ? record.name : `${record.name}.`;
+      } else {
+        fullyQualifiedName = `${record.name}.${zone}.`;
+      }
+    } else {
+      // Simple name, append zone
+      fullyQualifiedName = `${record.name}.${zone}.`;
     }
 
     console.log('Using fully qualified name:', fullyQualifiedName);
