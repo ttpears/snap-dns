@@ -120,7 +120,7 @@ export const dnsService = {
   },
 
   updateRecord: async (zone, originalRecord, newRecord, keyConfig) => {
-    const response = await fetch(`/api/zone/${zone}/record`, {
+    const response = await fetch(`${API_URL}/zone/${zone}/record`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
