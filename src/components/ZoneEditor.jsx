@@ -469,6 +469,26 @@ function ZoneEditor() {
     </Dialog>
   );
 
+  const [previewContent, setPreviewContent] = useState('');
+
+  const handlePreviewChanges = () => {
+    const preview = pendingChanges.map(change => {
+      if (change.type === 'ADD') {
+        return `ADD: ${change.name}.${change.zone} ${change.recordType} ${change.value} (TTL: ${change.ttl})`;
+      } else if (change.type === 'DELETE') {
+        return `DELETE: ${change.originalRecord.name}.${change.zone} ${change.originalRecord.type} ${change.originalRecord.value}`;
+      } else if (change.type === 'MODIFY') {
+        return `MODIFY: ${change.originalRecord.name}.${change.zone}\n` +
+               `  FROM: ${change.originalRecord.type} ${change.originalRecord.value}\n` +
+               `  TO: ${change.newRecord.type} ${change.newRecord.value}`;
+      }
+      return '';
+    }).join('\n\n');
+
+    setPreviewContent(preview);
+    setShowPreview(true);
+  };
+
   // Main render method
   return (
     <Paper sx={{ p: 3 }}>
@@ -494,7 +514,7 @@ function ZoneEditor() {
           <Button
             variant="outlined"
             startIcon={<PreviewIcon />}
-            onClick={() => setShowPreview(true)}
+            onClick={handlePreviewChanges}
             disabled={pendingChanges.length === 0}
           >
             Preview Changes

@@ -23,7 +23,12 @@ export const dnsService = {
         keyName: keyConfig.keyName,
         keyValue: keyConfig.keyValue,
         algorithm: keyConfig.algorithm,
-        record: record
+        record: {
+          name: record.name,
+          type: record.type,
+          value: record.value,
+          ttl: record.ttl
+        }
       }),
     });
 
