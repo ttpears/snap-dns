@@ -76,44 +76,6 @@ function AppContent({ drawerWidth, darkMode, toggleDarkMode }) {
         <Navigation />
       </Drawer>
 
-      {/* Pending Changes Drawer */}
-      <Drawer
-        anchor="top"
-        open={showPendingDrawer && pendingChanges.length > 0}
-        onClose={() => setShowPendingDrawer(false)}
-        PaperProps={{
-          sx: {
-            mt: 8, // Leave space for AppBar
-            maxHeight: '30%'
-          }
-        }}
-      >
-        <Box sx={{ p: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Pending Changes ({pendingChanges.length})
-          </Typography>
-          <List>
-            {pendingChanges.map((change, index) => (
-              <ListItem key={index}>
-                <ListItemText
-                  primary={`${change.type}: ${change.name}.${change.zone} ${change.recordType} ${change.value}`}
-                />
-                <ListItemSecondaryAction>
-                  <IconButton edge="end" onClick={() => removePendingChange(change.id)}>
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
-          </List>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-            <Button onClick={() => setShowPendingDrawer(false)}>
-              Close
-            </Button>
-          </Box>
-        </Box>
-      </Drawer>
-
       <Box
         component="main"
         sx={{
