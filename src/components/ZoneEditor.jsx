@@ -285,56 +285,87 @@ function ZoneEditor() {
       open={showPendingDrawer}
       onClose={() => setShowPendingDrawer(false)}
     >
-      <Box sx={{ width: 400, p: 2 }}>
-        <DragDropContext onDragEnd={onDragEnd}>
-          <Droppable droppableId="pending-changes">
-            {(provided) => (
-              <div {...provided.droppableProps} ref={provided.innerRef}>
-                {pendingChanges.map((change, index) => (
-                  <Draggable
-                    key={change.id}
-                    draggableId={String(change.id)}
-                    index={index}
-                  >
-                    {(provided) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
+      <Box sx={{ width: 400 }}>
+        {/* Header */}
+        <Box sx={{ 
+          p: 2, 
+          borderBottom: 1, 
+          borderColor: 'divider',
+          backgroundColor: 'background.paper',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1
+        }}>
+          <Typography variant="h6">Pending Changes</Typography>
+        </Box>
+
+        {/* Content */}
+        <Box sx={{ p: 2, mt: 1 }}>
+          <DragDropContext onDragEnd={onDragEnd}>
+            <Droppable droppableId="pending-changes">
+              {(provided) => (
+                <div {...provided.droppableProps} ref={provided.innerRef}>
+                  {pendingChanges.map((change, index) => {
+                    console.log('Rendering change:', change); // Debug log
+                    return (
+                      <Draggable
+                        key={change.id}
+                        draggableId={String(change.id)}
+                        index={index}
                       >
-                        <Alert 
-                          severity="info" 
-                          sx={{ mb: 1 }}
-                          action={
-                            <IconButton
-                              size="small"
-                              onClick={() => removePendingChange(change.id)}
+                        {(provided) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                          >
+                            <Alert 
+                              severity="info" 
+                              sx={{ mb: 1 }}
+                              action={
+                                <IconButton
+                                  size="small"
+                                  onClick={() => removePendingChange(change.id)}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              }
                             >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          }
-                        >
-                          {change.type === 'ADD' && (
-                            `ADD: ${qualifyDnsName(change.name, change.zone)} ${change.ttl} ${change.recordType} ${change.value}`
-                          )}
-                          {change.type === 'DELETE' && (
-                            `DELETE: ${qualifyDnsName(change.record.name, change.zone)} ${change.record.ttl} ${change.record.type} ${change.record.value}`
-                          )}
-                          {change.type === 'MODIFY' && (
-                            `MODIFY: ${qualifyDnsName(change.originalRecord.name, change.zone)}\n` +
-                            `  FROM: ${change.originalRecord.type} ${change.originalRecord.value}\n` +
-                            `  TO: ${change.newRecord.type} ${change.newRecord.value}`
-                          )}
-                        </Alert>
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
+                              {change.type === 'DELETE' ? (
+                                <>
+                                  DELETE: {change.record?.name}.{change.zone} {' '}
+                                  {change.record?.ttl} {' '}
+                                  {change.record?.type} {' '}
+                                  {change.record?.value}
+                                </>
+                              ) : change.type === 'ADD' ? (
+                                <>
+                                  ADD: {change.name}.{change.zone} {' '}
+                                  {change.ttl} {' '}
+                                  {change.recordType} {' '}
+                                  {change.value}
+                                </>
+                              ) : (
+                                <>
+                                  MODIFY: {change.originalRecord?.name}.{change.zone}
+                                  <br />
+                                  FROM: {change.originalRecord?.type} {change.originalRecord?.value}
+                                  <br />
+                                  TO: {change.newRecord?.type} {change.newRecord?.value}
+                                </>
+                              )}
+                            </Alert>
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+        </Box>
       </Box>
     </Drawer>
   );
