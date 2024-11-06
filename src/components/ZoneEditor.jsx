@@ -477,13 +477,22 @@ function ZoneEditor() {
   const handlePreviewChanges = () => {
     const preview = pendingChanges.map(change => {
       if (change.type === 'ADD') {
-        const fqdn = qualifyDnsName(change.name, change.zone);
+        // Don't add zone suffix if name already contains it
+        const name = change.name.endsWith(change.zone) 
+          ? change.name 
+          : change.name.includes('.') 
+            ? `${change.name}` 
+            : `${change.name}.${change.zone}`;
+        
+        const fqdn = name.endsWith('.') ? name : `${name}.`;
         return `ADD: ${fqdn} ${change.recordType} ${change.value} (TTL: ${change.ttl})`;
       } else if (change.type === 'DELETE') {
-        const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
+        const name = change.originalRecord.name;
+        const fqdn = name.endsWith('.') ? name : `${name}.`;
         return `DELETE: ${fqdn} ${change.originalRecord.type} ${change.originalRecord.value}`;
       } else if (change.type === 'MODIFY') {
-        const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
+        const name = change.originalRecord.name;
+        const fqdn = name.endsWith('.') ? name : `${name}.`;
         return `MODIFY: ${fqdn}\n` +
                `  FROM: ${change.originalRecord.type} ${change.originalRecord.value}\n` +
                `  TO: ${change.newRecord.type} ${change.newRecord.value}`;
