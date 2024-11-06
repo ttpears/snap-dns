@@ -110,6 +110,43 @@ class DnsServer {
       throw error;
     }
   }
+
+  async restoreZone(zone, records, keyConfig) {
+    try {
+      console.log('Restoring records:', {
+        zone,
+        recordCount: records.length,
+        server: keyConfig.server,
+        keyName: keyConfig.keyName,
+        algorithm: keyConfig.algorithm
+      });
+
+      const response = await fetch(`${this.baseUrl}/zone/${zone}/restore`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          server: keyConfig.server,
+          keyName: keyConfig.keyName,
+          keyValue: keyConfig.keyValue,
+          algorithm: keyConfig.algorithm,
+          records: records
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server response:', errorText);
+        throw new Error(`Failed to restore records: ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error restoring records:', error);
+      throw error;
+    }
+  }
 }
 
 export const dnsServer = new DnsServer(); 

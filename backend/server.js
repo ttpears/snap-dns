@@ -377,12 +377,26 @@ send
 });
 
 app.post('/zone/:zoneName/restore', async (req, res) => {
-    console.log('\n=== Restore Zone Request ===');
+    console.log('\n=== Restore DNS Records Request ===');
     console.log('Time:', new Date().toISOString());
     console.log('Zone:', req.params.zoneName);
+    console.log('Request body:', {
+        server: req.body.server,
+        keyName: req.body.keyName,
+        algorithm: req.body.algorithm,
+        recordCount: req.body.records.length
+    });
     
     const { zoneName } = req.params;
     const { server, keyName, keyValue, algorithm, records } = req.body;
+
+    if (!server || !keyName || !keyValue || !algorithm || !records) {
+        console.error('Missing required parameters');
+        return res.status(400).json({ 
+            error: true, 
+            message: 'Missing required information' 
+        });
+    }
 
     let keyFilePath;
     try {
@@ -395,30 +409,22 @@ app.post('/zone/:zoneName/restore', async (req, res) => {
         // Create nsupdate command file
         const updateFile = path.join(await ensureTempDir(), `restore-${Date.now()}.txt`);
         let updateContent = `server ${server}\nzone ${zoneName}\n`;
-
-        // First, clear the zone (except SOA and NS records)
-        updateContent += `update delete ${zoneName} A\n`;
-        updateContent += `update delete ${zoneName} AAAA\n`;
-        updateContent += `update delete ${zoneName} CNAME\n`;
-        updateContent += `update delete ${zoneName} MX\n`;
-        updateContent += `update delete ${zoneName} TXT\n`;
-        updateContent += `send\n`;
-
-        // Then add all records from backup
+        
+        // Add each record
         records.forEach(record => {
-            if (record.type !== 'SOA') {  // Skip SOA records
-                updateContent += `update add ${record.name} ${record.ttl} ${record.type} ${record.value}\n`;
-            }
+            updateContent += `update add ${record.name} ${record.ttl} ${record.type} ${record.value}\n`;
         });
+        
         updateContent += 'send\n';
 
         await fs.writeFile(updateFile, updateContent, { mode: 0o600 });
         console.log('Created restore file:', updateFile);
+        console.log('Update content:', updateContent);
 
         const command = `nsupdate -k "${keyFilePath}" "${updateFile}"`;
         console.log('Executing command:', command);
         
-        exec(command, { timeout: 30000 }, async (error, stdout, stderr) => {
+        exec(command, { timeout: 10000 }, async (error, stdout, stderr) => {
             try {
                 // Clean up files
                 await Promise.all([
@@ -431,12 +437,15 @@ app.post('/zone/:zoneName/restore', async (req, res) => {
                     console.error('nsupdate stderr:', stderr);
                     return res.status(500).json({ 
                         error: true, 
-                        message: 'Failed to restore zone',
+                        message: 'Failed to restore DNS records',
                         details: error.message
                     });
                 }
 
-                res.json({ success: true, message: 'Zone restored successfully' });
+                res.json({ 
+                    success: true, 
+                    message: `Successfully restored ${records.length} records` 
+                });
             } catch (cleanupError) {
                 console.error('Error in cleanup:', cleanupError);
                 if (!res.headersSent) {
@@ -448,13 +457,13 @@ app.post('/zone/:zoneName/restore', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Zone restore error:', error);
+        console.error('Record restore error:', error);
         if (keyFilePath) {
             await cleanupTempFile(keyFilePath);
         }
         res.status(500).json({ 
             error: true, 
-            message: 'Failed to restore zone',
+            message: 'Failed to restore DNS records',
             details: error.message 
         });
     }
