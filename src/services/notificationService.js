@@ -7,21 +7,18 @@ class NotificationService {
     this.webhookUrl = url;
   }
 
-  async sendNotification(changes, zone) {
-    if (!this.webhookUrl) {
-      console.log('No webhook URL configured, skipping notification');
-      return;
-    }
+  async sendNotification(zone, changes) {
+    if (!this.webhookUrl) return;
 
     try {
-      // Format changes into a readable message
+      const timestamp = Date.now();
       const changesSummary = this.formatChangesSummary(changes);
-      const timestamp = new Date().toISOString();
+      const message = this.formatMattermostMessage(zone, changesSummary, timestamp);
 
       const payload = {
-        text: this.formatMattermostMessage(zone, changesSummary, timestamp),
+        text: message,
         username: 'DNS Manager',
-        icon_emoji: ':dns:'
+        icon_emoji: ':pencil:'
       };
 
       const response = await fetch(this.webhookUrl, {
@@ -33,26 +30,26 @@ class NotificationService {
       });
 
       if (!response.ok) {
-        throw new Error(`Webhook notification failed: ${response.statusText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-      console.log('Webhook notification sent successfully');
     } catch (error) {
       console.error('Failed to send webhook notification:', error);
-      // Don't throw the error - we don't want to interrupt DNS operations
-      // if notifications fail
     }
   }
 
   formatChangesSummary(changes) {
     return changes.map(change => {
+      console.log('Formatting change:', change);
+      
       switch (change.type) {
         case 'DELETE':
-          return `- Deleted: ${change.originalRecord.name} ${change.originalRecord.type} ${change.originalRecord.value}`;
+          return `- Deleted: ${change.record.name} ${change.record.type} ${change.record.value}`;
         case 'MODIFY':
-          return `- Modified: ${change.originalRecord.name} ${change.originalRecord.type}\n  From: ${change.originalRecord.value}\n  To: ${change.newRecord.value}`;
+          return `- Modified: ${change.originalRecord.name} ${change.originalRecord.type}
+  From: ${change.originalRecord.value}
+  To: ${change.newRecord.value}`;
         case 'ADD':
-          return `- Added: ${change.newRecord.name} ${change.newRecord.type} ${change.newRecord.value}`;
+          return `- Added: ${change.name} ${change.recordType} ${change.value}`;
         default:
           return `- Unknown change type: ${change.type}`;
       }
