@@ -61,7 +61,8 @@ function ZoneEditor() {
     removePendingChange, 
     clearPendingChanges, 
     showPendingDrawer, 
-    setShowPendingDrawer 
+    setShowPendingDrawer,
+    setPendingChanges 
   } = usePendingChanges();
   
   const [selectedZone, setSelectedZone] = useState('');

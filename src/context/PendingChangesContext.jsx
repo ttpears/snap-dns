@@ -63,7 +63,8 @@ export function PendingChangesProvider({ children }) {
       clearPendingChanges,
       reorderPendingChanges,
       showPendingDrawer,
-      setShowPendingDrawer
+      setShowPendingDrawer,
+      setPendingChanges
     }}>
       {children}
     </PendingChangesContext.Provider>
