@@ -46,6 +46,36 @@ import { usePendingChanges } from '../context/PendingChangesContext';
 import { qualifyDnsName } from '../utils/dnsUtils';
 import { useZone } from '../context/ZoneContext';
 import { PendingChangesDrawer } from './PendingChangesDrawer';
+import { isMultilineRecord } from '../utils/dnsUtils';
+
+function MultilineRecordDialog({ record, open, onClose }) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>{record.type} Record Details</DialogTitle>
+      <DialogContent>
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="subtitle2">Name:</Typography>
+          <Typography>{record.name}</Typography>
+          
+          <Typography variant="subtitle2" sx={{ mt: 2 }}>TTL:</Typography>
+          <Typography>{record.ttl}</Typography>
+          
+          <Typography variant="subtitle2" sx={{ mt: 2 }}>Value:</Typography>
+          <pre style={{ 
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            fontFamily: 'monospace'
+          }}>
+            {record.value}
+          </pre>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
 
 function ZoneEditor() {
   const { config } = useConfig();
@@ -60,6 +90,8 @@ function ZoneEditor() {
   } = usePendingChanges();
   
   const { selectedZone, setSelectedZone } = useZone();
+
+  // All state declarations in one place
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -68,18 +100,15 @@ function ZoneEditor() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedTypes, setSelectedTypes] = useState([]);
-
-  // Basic state
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [showAddRecord, setShowAddRecord] = useState(false);
-  
-  // Selection and editing state
   const [selectedRecords, setSelectedRecords] = useState([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [currentEditRecord, setCurrentEditRecord] = useState(null);
-  
-  // History state
+  const [multilineRecord, setMultilineRecord] = useState(null);
+
+  // Add undo/redo history state
   const [changeHistory, setChangeHistory] = useState([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
 
@@ -546,7 +575,18 @@ function ZoneEditor() {
                       <TableCell>
                         <Chip label={record.type} size="small" />
                       </TableCell>
-                      <TableCell>{record.value}</TableCell>
+                      <TableCell>
+                        {isMultilineRecord(record) ? (
+                          <Button 
+                            size="small" 
+                            onClick={() => setMultilineRecord(record)}
+                          >
+                            View Full Record
+                          </Button>
+                        ) : (
+                          record.value
+                        )}
+                      </TableCell>
                       <TableCell align="right">
                         <IconButton
                           size="small"
@@ -594,6 +634,14 @@ function ZoneEditor() {
             setShowAddRecord(false);
             loadZoneRecords();
           }}
+        />
+      )}
+
+      {multilineRecord && (
+        <MultilineRecordDialog
+          record={multilineRecord}
+          open={!!multilineRecord}
+          onClose={() => setMultilineRecord(null)}
         />
       )}
     </Paper>

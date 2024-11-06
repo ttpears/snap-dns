@@ -22,4 +22,16 @@ export const qualifyDnsName = (name, zone) => {
 
   // Simple name or subdomain, just append zone
   return `${cleanName}.${cleanZone}.`;
-}; 
+};
+
+export function isMultilineRecord(record) {
+  return record.type === 'SOA' || (record.value && record.value.includes('\n'));
+}
+
+export function formatMultilineValue(value) {
+  if (!value) return '';
+  return value.split('\n')
+    .map(line => line.trim())
+    .filter(line => line)
+    .join('\n');
+} 
