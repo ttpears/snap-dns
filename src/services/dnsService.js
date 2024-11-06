@@ -45,6 +45,16 @@ const dnsService = {
       console.error('Error deleting record:', error);
       throw error;
     }
+  },
+
+  async restoreZone(zoneName, records, keyConfig) {
+    try {
+      const response = await dnsServer.restoreZone(zoneName, records, keyConfig);
+      return response;
+    } catch (error) {
+      console.error('Error restoring zone:', error);
+      throw error;
+    }
   }
 };
 

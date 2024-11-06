@@ -48,26 +48,36 @@ import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import AddDNSRecord from './AddDNSRecord';
+import { backupService } from '../services/backupService';
+import { notificationService } from '../services/notificationService';
+import { usePendingChanges } from '../context/PendingChangesContext';
 
 function ZoneEditor() {
   const { config } = useConfig();
+  const { 
+    pendingChanges, 
+    clearChanges, 
+    showPendingDrawer, 
+    setShowPendingDrawer 
+  } = usePendingChanges();
   
-  // Basic state
   const [selectedZone, setSelectedZone] = useState('');
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [filter, setFilter] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [selectedTypes, setSelectedTypes] = useState([]);
+
+  // Basic state
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [showAddRecord, setShowAddRecord] = useState(false);
   
   // Selection and editing state
   const [selectedRecords, setSelectedRecords] = useState([]);
-  const [pendingChanges, setPendingChanges] = useState([]);
-  const [showPendingDrawer, setShowPendingDrawer] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [currentEditRecord, setCurrentEditRecord] = useState(null);
   
@@ -166,34 +176,6 @@ function ZoneEditor() {
       setSelectedRecords([]);
     }
   }, [filteredRecords]);
-
-  // Pending changes handlers
-  const addPendingChange = useCallback((type, records, newData = null) => {
-    setPendingChanges(prev => [
-      ...prev,
-      ...records.map(record => ({
-        id: `change-${Date.now()}-${Math.random()}`,
-        type,
-        originalRecord: record,
-        newRecord: newData || record,
-        timestamp: Date.now()
-      }))
-    ]);
-    setSelectedRecords([]);
-  }, []);
-
-  const removePendingChange = useCallback((changeId) => {
-    setPendingChanges(prev => prev.filter(change => change.id !== changeId));
-  }, []);
-
-  const reorderPendingChanges = useCallback((startIndex, endIndex) => {
-    setPendingChanges(prev => {
-      const result = Array.from(prev);
-      const [removed] = result.splice(startIndex, 1);
-      result.splice(endIndex, 0, removed);
-      return result;
-    });
-  }, []);
 
   // History handlers
   const saveToHistory = useCallback((zoneData) => {
@@ -395,6 +377,10 @@ function ZoneEditor() {
     setError(null);
     
     try {
+      // Create automatic backup before applying changes
+      const backup = backupService.createBackup(selectedZone, records, 'auto');
+      console.log('Automatic backup created:', backup.id);
+
       const keyConfig = config.keys.find(key => 
         key.zones?.includes(selectedZone)
       );
@@ -423,8 +409,11 @@ function ZoneEditor() {
         }
       }
 
+      // Send notification about the changes
+      await notificationService.sendNotification(pendingChanges, selectedZone);
+
       // Clear pending changes and refresh zone data
-      setPendingChanges([]);
+      clearChanges();
       await loadZoneRecords();
       setShowPendingDrawer(false);
     } catch (err) {

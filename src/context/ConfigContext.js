@@ -1,72 +1,63 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material';
-import CssBaseline from '@mui/material/CssBaseline';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const ConfigContext = createContext();
 
-const STORAGE_KEY = 'dnsConfig';
-const DARK_MODE_KEY = 'darkMode';
-
 export function ConfigProvider({ children }) {
-  // Initialize config from localStorage
-  const [config, setConfig] = useState(() => {
-    const savedConfig = localStorage.getItem(STORAGE_KEY);
-    return savedConfig ? JSON.parse(savedConfig) : { keys: [] };
+  const [config, setConfig] = useState({
+    keys: [],
+    defaultTTL: 3600,
+    webhookUrl: null
   });
 
-  const [darkMode, setDarkMode] = useState(() => {
-    const savedMode = localStorage.getItem(DARK_MODE_KEY);
-    return savedMode !== null ? savedMode === 'true' : true;
-  });
+  const loadConfig = async () => {
+    try {
+      // In production, this would load from your config file or API
+      const response = await fetch('/config.json');
+      const data = await response.json();
+      setConfig(data);
+    } catch (error) {
+      console.error('Failed to load config:', error);
+      // Load fallback/default config
+      setConfig({
+        keys: [],
+        defaultTTL: 3600,
+        webhookUrl: null
+      });
+    }
+  };
 
-  // Save config to localStorage whenever it changes
+  const updateConfig = async (newConfig) => {
+    try {
+      // In production, this would save to your config file or API
+      setConfig(newConfig);
+      localStorage.setItem('dns_manager_config', JSON.stringify(newConfig));
+      return true;
+    } catch (error) {
+      console.error('Failed to update config:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  }, [config]);
-
-  // Save dark mode preference whenever it changes
-  useEffect(() => {
-    localStorage.setItem(DARK_MODE_KEY, darkMode.toString());
-  }, [darkMode]);
-
-  const theme = useMemo(
-    () =>
-      createTheme({
-        palette: {
-          mode: darkMode ? 'dark' : 'light',
-        },
-      }),
-    [darkMode]
-  );
-
-  const toggleDarkMode = () => {
-    setDarkMode(prev => !prev);
-  };
-
-  const updateConfig = (newConfig) => {
-    setConfig(newConfig);
-  };
-
-  const value = {
-    config,
-    updateConfig,
-    darkMode,
-    toggleDarkMode
-  };
+    // Try to load from localStorage first
+    const savedConfig = localStorage.getItem('dns_manager_config');
+    if (savedConfig) {
+      setConfig(JSON.parse(savedConfig));
+    } else {
+      loadConfig();
+    }
+  }, []);
 
   return (
-    <ConfigContext.Provider value={value}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        {children}
-      </ThemeProvider>
+    <ConfigContext.Provider value={{ config, updateConfig }}>
+      {children}
     </ConfigContext.Provider>
   );
 }
 
 export function useConfig() {
   const context = useContext(ConfigContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useConfig must be used within a ConfigProvider');
   }
   return context;

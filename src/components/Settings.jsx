@@ -12,279 +12,102 @@ import {
   InputLabel,
   Chip,
   Stack,
-  IconButton
+  IconButton,
+  CircularProgress,
+  FormControlLabel,
+  Switch,
+  FormHelperText
 } from '@mui/material';
-import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon, Save as SaveIcon } from '@mui/icons-material';
 import { useConfig } from '../context/ConfigContext';
+import { notificationService } from '../services/notificationService';
+import KeyManagement from './KeyManagement';
 
 function Settings() {
   const { config, updateConfig } = useConfig();
-  const [editingKey, setEditingKey] = useState(null);
-  const [newKey, setNewKey] = useState({
-    id: '',
-    name: '',
-    server: '',
-    keyName: '',
-    keyValue: '',
-    algorithm: 'hmac-sha512',
-    zones: [],
-    type: 'internal'
-  });
-  const [currentZone, setCurrentZone] = useState('');
+  const [defaultTTL, setDefaultTTL] = useState(config.defaultTTL || 3600);
+  const [webhookUrl, setWebhookUrl] = useState(config.webhookUrl || '');
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(null);
   const [error, setError] = useState(null);
 
-  const resetForm = () => {
-    setNewKey({
-      id: '',
-      name: '',
-      server: '',
-      keyName: '',
-      keyValue: '',
-      algorithm: 'hmac-sha512',
-      zones: [],
-      type: 'internal'
-    });
-    setEditingKey(null);
-    setCurrentZone('');
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewKey(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleAddZone = () => {
-    if (currentZone && !newKey.zones.includes(currentZone)) {
-      setNewKey(prev => ({
-        ...prev,
-        zones: [...prev.zones, currentZone]
-      }));
-      setCurrentZone('');
-    }
-  };
-
-  const handleRemoveZone = (zoneToRemove) => {
-    setNewKey(prev => ({
-      ...prev,
-      zones: prev.zones.filter(zone => zone !== zoneToRemove)
-    }));
-  };
-
-  const handleEditKey = (key) => {
-    setNewKey({ ...key });
-    setEditingKey(key.id);
-  };
-
-  const handleDeleteKey = (keyId) => {
-    const updatedKeys = config.keys.filter(key => key.id !== keyId);
-    updateConfig({ ...config, keys: updatedKeys });
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSave = async () => {
+    setSaving(true);
     setError(null);
+    setSuccess(null);
 
     try {
-      let updatedKeys;
-      if (editingKey) {
-        // Update existing key
-        updatedKeys = config.keys.map(key => 
-          key.id === editingKey ? { ...newKey } : key
-        );
-      } else {
-        // Add new key
-        const keyToSave = {
-          ...newKey,
-          id: `key-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-        };
-        updatedKeys = [...(config.keys || []), keyToSave];
-      }
-
-      updateConfig({ ...config, keys: updatedKeys });
-      resetForm();
-    } catch (err) {
-      setError(err.message);
+      await updateConfig({
+        ...config,
+        defaultTTL,
+        webhookUrl: webhookUrl.trim() || null
+      });
+      
+      // Update notification service with new webhook URL
+      notificationService.setWebhookUrl(webhookUrl.trim() || null);
+      
+      setSuccess('Settings saved successfully');
+    } catch (error) {
+      setError(`Failed to save settings: ${error.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <Box>
-      <Paper sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
+    <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+      <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h5" gutterBottom>
-          {editingKey ? 'Edit DNS Key' : 'Add DNS Key'}
+          Application Settings
         </Typography>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
-        <Box component="form" onSubmit={handleSubmit}>
-          <TextField
-            name="name"
-            label="Key Name"
-            value={newKey.name}
-            onChange={handleInputChange}
-            fullWidth
-            margin="normal"
-            required
-          />
-
-          <TextField
-            name="server"
-            label="DNS Server"
-            value={newKey.server}
-            onChange={handleInputChange}
-            fullWidth
-            margin="normal"
-            required
-          />
-
-          <TextField
-            name="keyName"
-            label="TSIG Key Name"
-            value={newKey.keyName}
-            onChange={handleInputChange}
-            fullWidth
-            margin="normal"
-            required
-          />
-
-          <TextField
-            name="keyValue"
-            label="TSIG Key Value"
-            value={newKey.keyValue}
-            onChange={handleInputChange}
-            fullWidth
-            margin="normal"
-            required
-          />
-
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Algorithm</InputLabel>
+        
+        <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <FormControl>
+            <InputLabel>Default TTL</InputLabel>
             <Select
-              name="algorithm"
-              value={newKey.algorithm}
-              onChange={handleInputChange}
-              required
+              value={defaultTTL}
+              onChange={(e) => setDefaultTTL(e.target.value)}
+              label="Default TTL"
             >
-              <MenuItem value="hmac-sha512">HMAC-SHA512</MenuItem>
-              <MenuItem value="hmac-sha384">HMAC-SHA384</MenuItem>
-              <MenuItem value="hmac-sha256">HMAC-SHA256</MenuItem>
-              <MenuItem value="hmac-sha224">HMAC-SHA224</MenuItem>
-              <MenuItem value="hmac-sha1">HMAC-SHA1</MenuItem>
-              <MenuItem value="hmac-md5">HMAC-MD5</MenuItem>
+              <MenuItem value={300}>5 minutes</MenuItem>
+              <MenuItem value={3600}>1 hour</MenuItem>
+              <MenuItem value={86400}>24 hours</MenuItem>
             </Select>
+            <FormHelperText>Default Time-To-Live for new records</FormHelperText>
           </FormControl>
 
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Type</InputLabel>
-            <Select
-              name="type"
-              value={newKey.type}
-              onChange={handleInputChange}
-              required
-            >
-              <MenuItem value="internal">Internal</MenuItem>
-              <MenuItem value="external">External</MenuItem>
-            </Select>
-          </FormControl>
+          <TextField
+            label="Mattermost Webhook URL"
+            value={webhookUrl}
+            onChange={(e) => setWebhookUrl(e.target.value)}
+            helperText="Receive notifications when DNS changes are applied"
+            fullWidth
+          />
 
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Managed Zones
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-              {newKey.zones.map((zone) => (
-                <Chip
-                  key={zone}
-                  label={zone}
-                  onDelete={() => handleRemoveZone(zone)}
-                />
-              ))}
-            </Stack>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField
-                value={currentZone}
-                onChange={(e) => setCurrentZone(e.target.value)}
-                label="Add Zone"
-                size="small"
-                fullWidth
-              />
-              <Button
-                onClick={handleAddZone}
-                variant="outlined"
-                disabled={!currentZone}
-              >
-                Add
-              </Button>
-            </Box>
-          </Box>
+          {error && (
+            <Alert severity="error" onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
 
-          <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              fullWidth
-            >
-              {editingKey ? 'Update Key' : 'Add Key'}
-            </Button>
-            {editingKey && (
-              <Button
-                variant="outlined"
-                color="secondary"
-                fullWidth
-                onClick={resetForm}
-              >
-                Cancel Edit
-              </Button>
-            )}
-          </Box>
+          {success && (
+            <Alert severity="success" onClose={() => setSuccess(null)}>
+              {success}
+            </Alert>
+          )}
+
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={saving}
+            startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
+          >
+            Save Settings
+          </Button>
         </Box>
       </Paper>
 
-      {config.keys?.length > 0 && (
-        <Box sx={{ mt: 4, maxWidth: 600, mx: 'auto' }}>
-          <Typography variant="h6" gutterBottom>
-            Existing Keys
-          </Typography>
-          {config.keys.map((key) => (
-            <Paper key={key.id} sx={{ p: 2, mb: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Box>
-                  <Typography variant="subtitle1">{key.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Server: {key.server}
-                  </Typography>
-                  <Box sx={{ mt: 1 }}>
-                    {key.zones.map((zone) => (
-                      <Chip
-                        key={zone}
-                        label={zone}
-                        size="small"
-                        sx={{ mr: 1, mb: 1 }}
-                      />
-                    ))}
-                  </Box>
-                </Box>
-                <Box>
-                  <IconButton onClick={() => handleEditKey(key)} size="small">
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDeleteKey(key.id)} size="small" color="error">
-                    <DeleteIcon />
-                  </IconButton>
-                </Box>
-              </Box>
-            </Paper>
-          ))}
-        </Box>
-      )}
+      <KeyManagement />
     </Box>
   );
 }

@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
+import { usePendingChanges } from '../context/PendingChangesContext';
 
 function AddDNSRecord() {
   const { config } = useConfig();
@@ -28,6 +29,7 @@ function AddDNSRecord() {
   });
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const { addPendingChange, setShowPendingDrawer } = usePendingChanges();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,7 +39,7 @@ function AddDNSRecord() {
     try {
       const keyConfig = config.keys.find(key => key.id === selectedKey);
       if (!keyConfig) {
-        throw new Error('Please select a valid key');
+        throw new Error('No key configuration found');
       }
 
       const zoneToUse = useManualZone ? manualZone : selectedZone;
@@ -49,7 +51,15 @@ function AddDNSRecord() {
       console.log('Using key:', keyConfig.name);
       console.log('Record details:', newRecord);
 
-      await dnsService.addRecord(zoneToUse, newRecord, keyConfig);
+      const change = {
+        type: 'ADD',
+        newRecord: {
+          ...newRecord,
+          zone: zoneToUse
+        }
+      };
+
+      addPendingChange(change);
       setSuccess(true);
       
       // Reset form
@@ -59,6 +69,9 @@ function AddDNSRecord() {
         type: 'A',
         value: ''
       });
+
+      // Show pending changes drawer
+      setShowPendingDrawer(true);
     } catch (err) {
       console.error('Failed to add record:', err);
       setError(err.message);

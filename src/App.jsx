@@ -1,24 +1,48 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Layout from './components/Layout';
-import Settings from './components/Settings';
-import AddDNSRecord from './components/AddDNSRecord';
-import ZoneEditor from './components/ZoneEditor';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter } from 'react-router-dom';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { ConfigProvider } from './context/ConfigContext';
+import { PendingChangesProvider } from './context/PendingChangesContext';
+import AppContent from './components/AppContent';
+import useMediaQuery from '@mui/material/useMediaQuery';
 
 function App() {
+  const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('snapdns_theme');
+    return saved ? saved === 'dark' : prefersDarkMode;
+  });
+
+  const theme = React.useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: darkMode ? 'dark' : 'light',
+        },
+      }),
+    [darkMode]
+  );
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
+
+  const toggleDarkMode = () => {
+    const newMode = !darkMode;
+    setDarkMode(newMode);
+    localStorage.setItem('snapdns_theme', newMode ? 'dark' : 'light');
+  };
+
   return (
-    <ConfigProvider>
-      <Router>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<AddDNSRecord />} />
-            <Route path="/zones" element={<ZoneEditor />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </Layout>
-      </Router>
-    </ConfigProvider>
+    <ThemeProvider theme={theme}>
+      <ConfigProvider>
+        <PendingChangesProvider>
+          <BrowserRouter>
+            <AppContent drawerWidth={240} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+          </BrowserRouter>
+        </PendingChangesProvider>
+      </ConfigProvider>
+    </ThemeProvider>
   );
 }
 

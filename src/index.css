@@ -1,3 +1,15 @@
+:root {
+  --background-color: #ffffff;
+  --text-color: #000000;
+  --paper-background: #ffffff;
+}
+
+[data-theme='dark'] {
+  --background-color: #121212;
+  --text-color: #ffffff;
+  --paper-background: #1e1e1e;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -5,6 +17,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--background-color);
+  color: var(--text-color);
 }
 
 /* Add any additional dark mode specific styles here */

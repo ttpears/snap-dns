@@ -7,11 +7,11 @@ export function PendingChangesProvider({ children }) {
   const [showPendingDrawer, setShowPendingDrawer] = useState(false);
 
   const addPendingChange = (change) => {
-    setPendingChanges(prev => [...prev, { ...change, id: Date.now() }]);
+    setPendingChanges(prev => [...prev, change]);
   };
 
-  const removePendingChange = (id) => {
-    setPendingChanges(prev => prev.filter(change => change.id !== id));
+  const removePendingChange = (index) => {
+    setPendingChanges(prev => prev.filter((_, i) => i !== index));
   };
 
   const clearChanges = () => {
@@ -32,4 +32,10 @@ export function PendingChangesProvider({ children }) {
   );
 }
 
-export const usePendingChanges = () => useContext(PendingChangesContext); 
+export function usePendingChanges() {
+  const context = useContext(PendingChangesContext);
+  if (!context) {
+    throw new Error('usePendingChanges must be used within a PendingChangesProvider');
+  }
+  return context;
+} 

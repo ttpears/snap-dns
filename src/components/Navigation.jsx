@@ -1,55 +1,45 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { List, ListItem, ListItemIcon, ListItemText } from '@mui/material';
-import { Add as AddIcon, Storage as StorageIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import {
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+} from '@mui/material';
+import {
+  Edit as EditIcon,
+  Backup as BackupIcon,
+  Settings as SettingsIcon,
+  Add as AddIcon,
+} from '@mui/icons-material';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 function Navigation() {
+  const navigate = useNavigate();
   const location = useLocation();
+
+  const menuItems = [
+    { path: '/zones', label: 'Zone Editor', icon: <EditIcon /> },
+    { path: '/add', label: 'Add DNS Record', icon: <AddIcon /> },
+    { path: '/backup', label: 'Backup & Import', icon: <BackupIcon /> },
+    { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
+  ];
 
   return (
     <List>
-      <ListItem 
-        component={Link} 
-        to="/"
-        selected={location.pathname === '/'}
-        sx={{ 
-          textDecoration: 'none',
-          color: 'inherit'
-        }}
-      >
-        <ListItemIcon>
-          <AddIcon />
-        </ListItemIcon>
-        <ListItemText primary="Add DNS Record" />
-      </ListItem>
-      <ListItem 
-        component={Link} 
-        to="/zones"
-        selected={location.pathname === '/zones'}
-        sx={{ 
-          textDecoration: 'none',
-          color: 'inherit'
-        }}
-      >
-        <ListItemIcon>
-          <StorageIcon />
-        </ListItemIcon>
-        <ListItemText primary="Zone Editor" />
-      </ListItem>
-      <ListItem 
-        component={Link} 
-        to="/settings"
-        selected={location.pathname === '/settings'}
-        sx={{ 
-          textDecoration: 'none',
-          color: 'inherit'
-        }}
-      >
-        <ListItemIcon>
-          <SettingsIcon />
-        </ListItemIcon>
-        <ListItemText primary="Settings" />
-      </ListItem>
+      {menuItems.map((item, index) => (
+        <React.Fragment key={item.path}>
+          {index > 0 && <Divider />}
+          <ListItem
+            button
+            selected={location.pathname === item.path}
+            onClick={() => navigate(item.path)}
+          >
+            <ListItemIcon>{item.icon}</ListItemIcon>
+            <ListItemText primary={item.label} />
+          </ListItem>
+        </React.Fragment>
+      ))}
     </List>
   );
 }
