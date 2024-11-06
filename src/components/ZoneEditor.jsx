@@ -1,49 +1,25 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Paper,
-  Typography,
-  TextField,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
-  IconButton,
   Box,
-  Chip,
-  InputAdornment,
-  CircularProgress,
-  Alert,
-  Select,
-  MenuItem,
-  Tooltip,
-  Checkbox,
+  Typography,
   Button,
-  Drawer,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
+  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Badge,
+  TextField,
+  Badge
 } from '@mui/material';
 import {
-  Search as SearchIcon,
-  Refresh as RefreshIcon,
+  Add as AddIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
-  DragHandle as DragHandleIcon,
   Preview as PreviewIcon,
-  Cancel as CancelIcon,
   Save as SaveIcon,
   Undo as UndoIcon,
   Redo as RedoIcon,
-  Add as AddIcon,
 } from '@mui/icons-material';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
@@ -53,6 +29,7 @@ import { notificationService } from '../services/notificationService';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { qualifyDnsName } from '../utils/dnsUtils';
 import { useZone } from '../context/ZoneContext';
+import { PendingChangesDrawer } from './PendingChangesDrawer';
 
 function ZoneEditor() {
   const { config } = useConfig();
@@ -297,149 +274,6 @@ function ZoneEditor() {
     );
   };
 
-  const PendingChangesDrawer = () => (
-    <Drawer
-      anchor="right"
-      open={showPendingDrawer}
-      onClose={() => setShowPendingDrawer(false)}
-    >
-      <Box sx={{ width: 400, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Box sx={{ 
-          p: 2, 
-          borderBottom: 1, 
-          borderColor: 'divider',
-          backgroundColor: 'background.paper',
-          position: 'sticky',
-          top: 0,
-          zIndex: 1
-        }}>
-          <Typography variant="h6">Pending Changes</Typography>
-        </Box>
-
-        <Box sx={{ p: 2, mt: 1, flexGrow: 1, overflowY: 'auto' }}>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-          >
-            <SortableContext
-              items={pendingChanges}
-              strategy={verticalListSortingStrategy}
-            >
-              {pendingChanges.map((change, index) => (
-                <ListItem
-                  key={change.id}
-                  value={index}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    borderBottom: '1px solid #ccc',
-                    padding: '8px',
-                  }}
-                >
-                  <ListItemText primary={`${change.type}: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`} />
-                  <IconButton
-                    size="small"
-                    onClick={() => removePendingChange(change.id)}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </ListItem>
-              ))}
-            </SortableContext>
-          </DndContext>
-        </Box>
-
-        <Box sx={{ 
-          p: 2, 
-          borderTop: 1, 
-          borderColor: 'divider',
-          backgroundColor: 'background.paper',
-          position: 'sticky',
-          bottom: 0,
-          zIndex: 1,
-          display: 'flex',
-          justifyContent: 'space-between'
-        }}>
-          <Button 
-            onClick={() => setShowPendingDrawer(false)}
-            variant="outlined"
-          >
-            Close
-          </Button>
-          <Button
-            onClick={applyChanges}
-            variant="contained"
-            color="primary"
-            disabled={pendingChanges.length === 0 || loading}
-            startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
-          >
-            Apply Changes
-          </Button>
-        </Box>
-      </Box>
-    </Drawer>
-  );
-
-  // Add the applyChanges function
-  const applyChanges = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      // Get the key configuration for the selected zone
-      const keyConfig = config.keys.find(key => key.zones.includes(selectedZone));
-      if (!keyConfig) {
-        throw new Error('No key configuration found for this zone');
-      }
-
-      // Apply each change
-      for (const change of pendingChanges) {
-        switch (change.type) {
-          case 'ADD':
-            await dnsService.addRecord(selectedZone, {
-              name: change.name,
-              type: change.recordType,
-              value: change.value,
-              ttl: change.ttl
-            }, keyConfig);
-            break;
-          case 'MODIFY':
-            await dnsService.updateRecord(selectedZone, change.originalRecord, change.newRecord, keyConfig);
-            break;
-          case 'DELETE':
-            await dnsService.deleteRecord(selectedZone, change.record, keyConfig);
-            break;
-          default:
-            console.warn('Unknown change type:', change.type);
-        }
-      }
-
-      // Send notification after all changes are applied
-      if (config.webhookUrl) {
-        try {
-          await notificationService.sendNotification(selectedZone, pendingChanges);
-        } catch (notifyError) {
-          console.error('Failed to send notification:', notifyError);
-          // Don't throw here, as the changes were successful
-        }
-      }
-
-      // Clear pending changes
-      clearPendingChanges();
-      setShowPendingDrawer(false);
-      
-      // Show success message
-      setSuccess('Changes applied successfully');
-    } catch (error) {
-      console.error('Failed to apply changes:', error);
-      setError(`Failed to apply changes: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Add PreviewDialog component
   const PreviewDialog = () => (
     <Dialog
       open={showPreview}
@@ -735,7 +569,6 @@ function ZoneEditor() {
       )}
 
       <EditRecordDialog />
-      <PendingChangesDrawer />
       <PreviewDialog />
 
       {showAddRecord && selectedZone && (
