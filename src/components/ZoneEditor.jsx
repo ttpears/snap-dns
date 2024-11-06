@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Paper,
   Box,
@@ -10,7 +10,21 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Badge
+  Badge,
+  Select,
+  MenuItem,
+  InputAdornment,
+  IconButton,
+  CircularProgress,
+  TableContainer,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TablePagination,
+  Checkbox,
+  Chip
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -20,6 +34,8 @@ import {
   Save as SaveIcon,
   Undo as UndoIcon,
   Redo as RedoIcon,
+  Search as SearchIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
