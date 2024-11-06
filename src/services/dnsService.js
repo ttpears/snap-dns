@@ -1,5 +1,7 @@
 import { dnsServer } from './dnsServer';
 
+const API_URL = process.env.REACT_APP_API_URL || '';
+
 export const dnsService = {
   async fetchZoneRecords(zoneName, keyConfig) {
     try {
@@ -13,7 +15,7 @@ export const dnsService = {
 
   async addRecord(zone, record, keyConfig) {
     console.log('Adding DNS record:', { zone, record, keyConfig });
-    const response = await fetch(`/zone/${zone}/record`, {
+    const response = await fetch(`${API_URL}/zone/${zone}/record`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -42,27 +44,24 @@ export const dnsService = {
 
   async updateRecord(zone, originalRecord, newRecord, keyConfig) {
     console.log('Updating DNS record:', { zone, originalRecord, newRecord, keyConfig });
-    const response = await fetch(`/api/dns/${zone}/records/${originalRecord.id}`, {
-      method: 'PUT',
+    const response = await fetch(`${API_URL}/zone/${zone}/record/update`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        server: keyConfig.server,
+        keyName: keyConfig.keyName,
+        keyValue: keyConfig.keyValue,
+        algorithm: keyConfig.algorithm,
         originalRecord,
-        newRecord,
-        key: keyConfig
+        newRecord
       }),
     });
 
-    const contentType = response.headers.get('content-type');
     if (!response.ok) {
-      if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to update record');
-      } else {
-        const text = await response.text();
-        throw new Error(`Failed to update record: ${response.status} ${text.substring(0, 100)}`);
-      }
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to update record');
     }
 
     return response.json();
@@ -70,7 +69,7 @@ export const dnsService = {
 
   async deleteRecord(zone, record, keyConfig) {
     console.log('Deleting DNS record:', { zone, record, keyConfig });
-    const response = await fetch(`/zone/${zone}/record/delete`, {
+    const response = await fetch(`${API_URL}/zone/${zone}/record/delete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
