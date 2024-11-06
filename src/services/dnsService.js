@@ -60,8 +60,8 @@ export const dnsService = {
       name: qualifyDnsName(newRecord.name, zone)
     };
 
-    const response = await fetch(`${API_URL}/zone/${zone}/record/update`, {
-      method: 'POST',
+    const response = await fetch(`${API_URL}/zone/${zone}/record`, {
+      method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
