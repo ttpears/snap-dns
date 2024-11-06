@@ -30,7 +30,7 @@ import BackupImport from './BackupImport';
 import Settings from './Settings';
 import AddDNSRecord from './AddDNSRecord';
 import { notificationService } from '../services/notificationService';
-import PendingChangesDrawer from './PendingChangesDrawer';
+import { PendingChangesDrawer } from './PendingChangesDrawer';
 
 function AppContent({ drawerWidth, darkMode, toggleDarkMode }) {
   const { config } = useConfig();

@@ -24,6 +24,7 @@ import { Edit as EditIcon } from '@mui/icons-material';
 function AddDNSRecord() {
   const { config } = useConfig();
   const { selectedZone: contextZone, setSelectedZone: setContextZone } = useZone();
+  const [selectedKey, setSelectedKey] = useState('');
   const [localSelectedZone, setLocalSelectedZone] = useState(contextZone || '');
   const [manualZone, setManualZone] = useState('');
   const [useManualZone, setUseManualZone] = useState(false);
@@ -155,16 +156,15 @@ function AddDNSRecord() {
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
         {/* Key Selection */}
         <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Select Key</InputLabel>
+          <InputLabel>Key</InputLabel>
           <Select
             value={selectedKey}
             onChange={(e) => setSelectedKey(e.target.value)}
-            label="Select Key"
-            required
+            label="Key"
           >
-            {config.keys.map((key) => (
+            {config.keys.map(key => (
               <MenuItem key={key.id} value={key.id}>
-                {key.name} ({key.server})
+                {key.name || key.id}
               </MenuItem>
             ))}
           </Select>
