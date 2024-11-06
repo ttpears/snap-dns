@@ -30,15 +30,11 @@ import BackupImport from './BackupImport';
 import Settings from './Settings';
 import AddDNSRecord from './AddDNSRecord';
 import { notificationService } from '../services/notificationService';
+import PendingChangesDrawer from './PendingChangesDrawer';
 
 function AppContent({ drawerWidth, darkMode, toggleDarkMode }) {
   const { config } = useConfig();
-  const { 
-    pendingChanges, 
-    removePendingChange, 
-    showPendingDrawer, 
-    setShowPendingDrawer 
-  } = usePendingChanges();
+  const { pendingChanges, showPendingDrawer, setShowPendingDrawer } = usePendingChanges();
 
   useEffect(() => {
     notificationService.setWebhookUrl(config.webhookUrl || null);
@@ -95,6 +91,8 @@ function AppContent({ drawerWidth, darkMode, toggleDarkMode }) {
           </Routes>
         </Container>
       </Box>
+
+      <PendingChangesDrawer />
     </Box>
   );
 }

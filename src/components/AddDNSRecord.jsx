@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   TextField,
@@ -9,7 +9,9 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
@@ -21,7 +23,10 @@ import { Edit as EditIcon } from '@mui/icons-material';
 
 function AddDNSRecord() {
   const { config } = useConfig();
-  const [selectedKey, setSelectedKey] = useState('');
+  const { selectedZone: contextZone, setSelectedZone: setContextZone } = useZone();
+  const [localSelectedZone, setLocalSelectedZone] = useState(contextZone || '');
+  const [manualZone, setManualZone] = useState('');
+  const [useManualZone, setUseManualZone] = useState(false);
   const [newRecord, setNewRecord] = useState({
     name: '',
     ttl: 3600,
@@ -30,9 +35,20 @@ function AddDNSRecord() {
   });
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  const { addPendingChange, setShowPendingDrawer } = usePendingChanges();
-  const { selectedZone } = useZone();
-  const { pendingChanges } = usePendingChanges();
+  const { addPendingChange, setShowPendingDrawer, pendingChanges } = usePendingChanges();
+
+  // Update local zone when context zone changes
+  useEffect(() => {
+    if (contextZone && !localSelectedZone) {
+      setLocalSelectedZone(contextZone);
+    }
+  }, [contextZone]);
+
+  const handleZoneChange = (e) => {
+    const newZone = e.target.value;
+    setLocalSelectedZone(newZone);
+    setContextZone(newZone); // Update the shared context
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,13 +61,12 @@ function AddDNSRecord() {
         throw new Error('No key configuration found');
       }
 
-      const zone = selectedZone;
+      const zone = useManualZone ? manualZone : localSelectedZone;
       
-      // Store the unqualified name in the pending change
       const change = {
         type: 'ADD',
         zone: zone,
-        name: newRecord.name, // Store raw name without qualification
+        name: newRecord.name,
         recordType: newRecord.type,
         value: newRecord.value,
         ttl: newRecord.ttl,
@@ -75,7 +90,7 @@ function AddDNSRecord() {
   };
 
   return (
-    <Paper sx={{ p: 3, mb: 3 }}>
+    <Paper sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h6">Add DNS Record</Typography>
         <Button
@@ -92,9 +107,50 @@ function AddDNSRecord() {
             )
           }
         >
-          Pending Changes
+          Pending Changes ({pendingChanges.length})
         </Button>
       </Box>
+
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={useManualZone}
+              onChange={(e) => setUseManualZone(e.target.checked)}
+            />
+          }
+          label="Manual Zone Entry"
+        />
+      </FormControl>
+
+      {useManualZone ? (
+        <TextField
+          fullWidth
+          label="Zone"
+          value={manualZone}
+          onChange={(e) => setManualZone(e.target.value)}
+          sx={{ mb: 2 }}
+        />
+      ) : (
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel>Zone</InputLabel>
+          <Select
+            value={localSelectedZone}
+            onChange={handleZoneChange}
+            label="Zone"
+          >
+            {config.keys.flatMap(key => 
+              key.zones?.map(zone => (
+                <MenuItem key={zone} value={zone}>
+                  {zone}
+                </MenuItem>
+              )) || []
+            ).filter((zone, index, self) => 
+              self.findIndex(z => z.props.value === zone.props.value) === index
+            )}
+          </Select>
+        </FormControl>
+      )}
 
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
         {/* Key Selection */}
