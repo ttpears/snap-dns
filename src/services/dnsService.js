@@ -3,6 +3,98 @@ import { qualifyDnsName } from '../utils/dnsUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
+function isMultilineType(type) {
+  return ['SOA', 'TXT', 'MX', 'SRV', 'CAA'].includes(type);
+}
+
+function formatRecordValue(type, lines) {
+  switch (type) {
+    case 'SOA':
+      return lines
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .replace(/[\(\)]/g, '')
+        .trim();
+    
+    case 'TXT':
+      return lines
+        .join(' ')
+        .replace(/"\s+"/g, '')
+        .trim();
+    
+    case 'MX':
+      return lines
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    
+    case 'SRV':
+      return lines
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    
+    case 'CAA':
+      return lines
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    
+    default:
+      return lines.join(' ').trim();
+  }
+}
+
+export async function parseZoneRecords(zoneData) {
+  const records = [];
+  let currentRecord = null;
+  let recordLines = [];
+
+  const lines = zoneData.split('\n').map(line => line.trim()).filter(line => line);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    if (line.includes('key "') || line.includes('TSIG')) {
+      continue;
+    }
+
+    const [name, ttl, recordClass, type, ...valueParts] = line.split(/\s+/);
+    const value = valueParts.join(' ');
+
+    if (type) {
+      if (currentRecord) {
+        currentRecord.value = formatRecordValue(currentRecord.type, recordLines);
+        records.push(currentRecord);
+      }
+
+      currentRecord = {
+        name,
+        ttl: parseInt(ttl),
+        class: recordClass,
+        type,
+        value
+      };
+      recordLines = [value];
+      
+      if (!isMultilineType(type)) {
+        records.push(currentRecord);
+        currentRecord = null;
+        recordLines = [];
+      }
+    } else if (currentRecord && line.trim()) {
+      recordLines.push(line.trim());
+    }
+  }
+
+  if (currentRecord) {
+    currentRecord.value = formatRecordValue(currentRecord.type, recordLines);
+    records.push(currentRecord);
+  }
+
+  return records;
+}
+
 export const dnsService = {
   async fetchZoneRecords(zoneName, keyConfig) {
     try {

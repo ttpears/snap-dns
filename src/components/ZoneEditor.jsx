@@ -49,6 +49,29 @@ import { PendingChangesDrawer } from './PendingChangesDrawer';
 import { isMultilineRecord } from '../utils/dnsUtils';
 
 function MultilineRecordDialog({ record, open, onClose }) {
+  const formattedValue = useMemo(() => {
+    if (record.type === 'SOA') {
+      const [
+        primaryNS,
+        adminMailbox,
+        serial,
+        refresh,
+        retry,
+        expire,
+        minimum
+      ] = record.value.split(/\s+/);
+
+      return `Primary NS: ${primaryNS}
+Admin Mailbox: ${adminMailbox}
+Serial: ${serial}
+Refresh: ${refresh}
+Retry: ${retry}
+Expire: ${expire}
+Minimum: ${minimum}`;
+    }
+    return record.value;
+  }, [record]);
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>{record.type} Record Details</DialogTitle>
@@ -64,9 +87,12 @@ function MultilineRecordDialog({ record, open, onClose }) {
           <pre style={{ 
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
-            fontFamily: 'monospace'
+            fontFamily: 'monospace',
+            backgroundColor: '#f5f5f5',
+            padding: '16px',
+            borderRadius: '4px'
           }}>
-            {record.value}
+            {formattedValue}
           </pre>
         </Box>
       </DialogContent>
