@@ -489,34 +489,24 @@ function ZoneEditor() {
   const [previewContent, setPreviewContent] = useState('');
 
   const handlePreviewChanges = () => {
-    console.log('All pending changes:', pendingChanges);
-
     const preview = pendingChanges.map(change => {
-      console.log('Processing change:', change);
+      console.log('Processing change for preview:', change);
 
-      if (change.type === 'DELETE') {
-        console.log('Processing DELETE change:', {
-          change,
-          recordData: change.record,
-          zone: change.zone
-        });
-
-        if (!change.record?.name || !change.record?.type || !change.record?.value) {
-          console.error('Invalid DELETE change:', change);
-          return 'ERROR: Invalid DELETE change - missing required fields';
-        }
-
-        // Don't modify the name, use it exactly as stored
-        const displayName = change.record.name;
-        
-        const previewLine = `DELETE: ${displayName} ${change.record.ttl} ${change.record.class || 'IN'} ${change.record.type} ${change.record.value}`;
-        console.log('Generated preview line:', previewLine);
-        return previewLine;
+      if (change.type === 'ADD') {
+        const fqdn = qualifyDnsName(change.name, change.zone);
+        return `ADD: ${fqdn} ${change.ttl} IN ${change.recordType} ${change.value}`;
+      } else if (change.type === 'DELETE') {
+        // For delete operations, the record should already have the full name
+        return `DELETE: ${change.record.name} ${change.record.ttl} ${change.record.class || 'IN'} ${change.record.type} ${change.record.value}`;
+      } else if (change.type === 'MODIFY') {
+        const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
+        return `MODIFY: ${fqdn}\n` +
+               `  FROM: ${change.originalRecord.ttl} IN ${change.originalRecord.type} ${change.originalRecord.value}\n` +
+               `  TO: ${change.newRecord.ttl} IN ${change.newRecord.type} ${change.newRecord.value}`;
       }
-      // ... rest of the preview handler
+      return '';
     }).join('\n\n');
 
-    console.log('Final preview content:', preview);
     setPreviewContent(preview);
     setShowPreview(true);
   };
