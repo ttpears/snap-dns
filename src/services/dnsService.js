@@ -15,6 +15,19 @@ export const dnsService = {
 
   async addRecord(zone, record, keyConfig) {
     console.log('Adding DNS record:', { zone, record, keyConfig });
+    
+    // Ensure the record name is fully qualified and ends with a period
+    let fullyQualifiedName = record.name.endsWith(zone) 
+      ? record.name 
+      : `${record.name}.${zone}`;
+
+    // Add trailing period if not present
+    if (!fullyQualifiedName.endsWith('.')) {
+      fullyQualifiedName += '.';
+    }
+
+    console.log('Using fully qualified name:', fullyQualifiedName);
+
     const response = await fetch(`${API_URL}/zone/${zone}/record`, {
       method: 'POST',
       headers: {
@@ -26,7 +39,7 @@ export const dnsService = {
         keyValue: keyConfig.keyValue,
         algorithm: keyConfig.algorithm,
         record: {
-          name: record.name,
+          name: fullyQualifiedName,
           type: record.type,
           value: record.value,
           ttl: record.ttl

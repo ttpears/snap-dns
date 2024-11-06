@@ -44,22 +44,26 @@ function AddDNSRecord() {
 
       const zone = useManualZone ? manualZone : selectedZone;
       
-      // Create the pending change
+      // Create the pending change with fully qualified name
+      const fullyQualifiedName = newRecord.name.endsWith(zone) 
+        ? newRecord.name 
+        : `${newRecord.name}.${zone}`;
+
       const change = {
         type: 'ADD',
         zone: zone,
-        name: newRecord.name,
+        name: fullyQualifiedName,
         recordType: newRecord.type,
         value: newRecord.value,
         ttl: newRecord.ttl,
         keyId: selectedKey,
         newRecord: {
           ...newRecord,
+          name: fullyQualifiedName,
           zone: zone
         }
       };
 
-      // Add to pending changes
       addPendingChange(change);
       setSuccess(true);
       setShowPendingDrawer(true);
