@@ -224,60 +224,77 @@ function ZoneEditor() {
   }, [canRedo, changeHistory, currentHistoryIndex]);
 
   // UI Components
-  const EditRecordDialog = () => (
-    <Dialog 
-      open={editDialogOpen} 
-      onClose={() => setEditDialogOpen(false)}
-      maxWidth="md"
-      fullWidth
-    >
-      <DialogTitle>Edit DNS Record</DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <TextField
-            label="Name"
-            value={currentEditRecord?.name || ''}
-            onChange={(e) => setCurrentEditRecord(prev => ({
-              ...prev,
-              name: e.target.value
-            }))}
-            fullWidth
-          />
-          <TextField
-            label="TTL"
-            type="number"
-            value={currentEditRecord?.ttl || ''}
-            onChange={(e) => setCurrentEditRecord(prev => ({
-              ...prev,
-              ttl: parseInt(e.target.value)
-            }))}
-            fullWidth
-          />
-          <TextField
-            label="Value"
-            value={currentEditRecord?.value || ''}
-            onChange={(e) => setCurrentEditRecord(prev => ({
-              ...prev,
-              value: e.target.value
-            }))}
-            fullWidth
-          />
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-        <Button 
-          onClick={() => {
-            addPendingChange('MODIFY', [currentEditRecord], currentEditRecord);
-            setEditDialogOpen(false);
-          }}
-          color="primary"
-        >
-          Queue Changes
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
+  const EditRecordDialog = () => {
+    const [editedRecord, setEditedRecord] = useState(currentEditRecord);
+
+    useEffect(() => {
+      setEditedRecord(currentEditRecord);
+    }, [currentEditRecord]);
+
+    const handleSubmit = () => {
+      const change = {
+        type: 'MODIFY',
+        zone: selectedZone,
+        originalRecord: currentEditRecord,
+        newRecord: editedRecord
+      };
+      
+      addPendingChange(change);
+      setEditDialogOpen(false);
+    };
+
+    return (
+      <Dialog 
+        open={editDialogOpen} 
+        onClose={() => setEditDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Edit DNS Record</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <TextField
+              label="Name"
+              value={editedRecord?.name || ''}
+              onChange={(e) => setEditedRecord(prev => ({
+                ...prev,
+                name: e.target.value
+              }))}
+              fullWidth
+            />
+            <TextField
+              label="TTL"
+              type="number"
+              value={editedRecord?.ttl || ''}
+              onChange={(e) => setEditedRecord(prev => ({
+                ...prev,
+                ttl: parseInt(e.target.value)
+              }))}
+              fullWidth
+            />
+            <TextField
+              label="Value"
+              value={editedRecord?.value || ''}
+              onChange={(e) => setEditedRecord(prev => ({
+                ...prev,
+                value: e.target.value
+              }))}
+              fullWidth
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={handleSubmit}
+            color="primary"
+          >
+            Queue Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  };
 
   const PendingChangesDrawer = () => (
     <Drawer
