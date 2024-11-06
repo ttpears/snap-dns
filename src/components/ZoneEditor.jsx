@@ -490,37 +490,19 @@ function ZoneEditor() {
 
   const handlePreviewChanges = () => {
     const preview = pendingChanges.map(change => {
-      if (!change.zone) {
-        console.error('Change missing zone:', change);
-        return 'ERROR: Invalid change - missing zone';
-      }
-
       if (change.type === 'ADD') {
-        if (!change.name || !change.recordType || !change.value) {
-          console.error('Invalid ADD change:', change);
-          return 'ERROR: Invalid ADD change - missing required fields';
-        }
         const fqdn = qualifyDnsName(change.name, change.zone);
-        return `ADD: ${fqdn} ${change.recordType} ${change.value} (TTL: ${change.ttl || 3600})`;
+        return `ADD: ${fqdn} ${change.ttl} ${change.recordType} ${change.value}`;
       } else if (change.type === 'DELETE') {
-        if (!change.record?.name || !change.record?.type || !change.record?.value) {
-          console.error('Invalid DELETE change:', change);
-          return 'ERROR: Invalid DELETE change - missing required fields';
-        }
         const fqdn = qualifyDnsName(change.record.name, change.zone);
-        return `DELETE: ${fqdn} ${change.record.type} ${change.record.value} (TTL: ${change.record.ttl || 3600})`;
+        return `DELETE: ${fqdn} ${change.record.ttl} ${change.record.class} ${change.record.type} ${change.record.value}`;
       } else if (change.type === 'MODIFY') {
-        if (!change.originalRecord?.name || !change.originalRecord?.type || !change.originalRecord?.value ||
-            !change.newRecord?.name || !change.newRecord?.type || !change.newRecord?.value) {
-          console.error('Invalid MODIFY change:', change);
-          return 'ERROR: Invalid MODIFY change - missing required fields';
-        }
         const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
         return `MODIFY: ${fqdn}\n` +
-               `  FROM: ${change.originalRecord.type} ${change.originalRecord.value}\n` +
-               `  TO: ${change.newRecord.type} ${change.newRecord.value}`;
+               `  FROM: ${change.originalRecord.ttl} ${change.originalRecord.type} ${change.originalRecord.value}\n` +
+               `  TO: ${change.newRecord.ttl} ${change.newRecord.type} ${change.newRecord.value}`;
       }
-      return 'ERROR: Unknown change type';
+      return '';
     }).join('\n\n');
 
     setPreviewContent(preview);
@@ -566,18 +548,17 @@ function ZoneEditor() {
       return;
     }
 
-    // Ensure all required fields are present
+    // Create the delete change with all required fields
     const deleteChange = {
       type: 'DELETE',
       zone: selectedZone,
       record: {
-        name: record.name,
+        name: record.name.replace(`.${selectedZone}`, ''), // Remove zone suffix if present
         type: record.type,
         value: record.value,
-        ttl: record.ttl || 3600,
+        ttl: record.ttl,
         class: record.class || 'IN'
-      },
-      keyId: config.keys.find(key => key.zones?.includes(selectedZone))?.id
+      }
     };
 
     // Validate all required fields
@@ -592,7 +573,7 @@ function ZoneEditor() {
     console.log('Adding delete change:', deleteChange);
     addPendingChange(deleteChange);
     setShowPendingDrawer(true);
-  }, [selectedZone, config.keys, addPendingChange, setShowPendingDrawer]);
+  }, [selectedZone, addPendingChange, setShowPendingDrawer]);
 
   // Main render method
   return (
