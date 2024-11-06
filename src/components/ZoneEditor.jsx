@@ -279,80 +279,65 @@ function ZoneEditor() {
     </Dialog>
   );
 
-  const PendingChangesDrawer = () => {
-    const onBeforeCapture = useCallback(() => {
-      // Add any pre-drag capture logic here
-    }, []);
-
-    const onBeforeDragStart = useCallback(() => {
-      // Add any pre-drag start logic here
-    }, []);
-
-    return (
-      <Drawer
-        anchor="right"
-        open={showPendingDrawer}
-        onClose={() => setShowPendingDrawer(false)}
-      >
-        <Box sx={{ width: 400, p: 2 }}>
-          <DragDropContext 
-            onDragEnd={onDragEnd}
-            onBeforeCapture={onBeforeCapture}
-            onBeforeDragStart={onBeforeDragStart}
-          >
-            <Droppable droppableId="pending-changes" type="PENDING_CHANGE">
-              {(provided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                >
-                  {pendingChanges.map((change, index) => (
-                    <Draggable
-                      key={change.id}
-                      draggableId={String(change.id)}
-                      index={index}
-                      type="PENDING_CHANGE"
-                    >
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          style={{
-                            ...provided.draggableProps.style,
-                            opacity: snapshot.isDragging ? 0.8 : 1
-                          }}
+  const PendingChangesDrawer = () => (
+    <Drawer
+      anchor="right"
+      open={showPendingDrawer}
+      onClose={() => setShowPendingDrawer(false)}
+    >
+      <Box sx={{ width: 400, p: 2 }}>
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId="pending-changes">
+            {(provided) => (
+              <div {...provided.droppableProps} ref={provided.innerRef}>
+                {pendingChanges.map((change, index) => (
+                  <Draggable
+                    key={change.id}
+                    draggableId={String(change.id)}
+                    index={index}
+                  >
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                      >
+                        <Alert 
+                          severity="info" 
+                          sx={{ mb: 1 }}
+                          action={
+                            <IconButton
+                              size="small"
+                              onClick={() => removePendingChange(change.id)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          }
                         >
-                          <Alert 
-                            severity="info" 
-                            sx={{ mb: 1 }}
-                            action={
-                              <IconButton
-                                size="small"
-                                onClick={() => removePendingChange(change.id)}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            }
-                          >
-                            {change.type === 'ADD' 
-                              ? `${qualifyDnsName(change.name, change.zone)} ${change.recordType} ${change.value}`
-                              : `${qualifyDnsName(change.record.name, change.zone)} ${change.record.type} ${change.record.value}`
-                            }
-                          </Alert>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
-        </Box>
-      </Drawer>
-    );
-  };
+                          {change.type === 'ADD' && (
+                            `ADD: ${qualifyDnsName(change.name, change.zone)} ${change.ttl} ${change.recordType} ${change.value}`
+                          )}
+                          {change.type === 'DELETE' && (
+                            `DELETE: ${qualifyDnsName(change.record.name, change.zone)} ${change.record.ttl} ${change.record.type} ${change.record.value}`
+                          )}
+                          {change.type === 'MODIFY' && (
+                            `MODIFY: ${qualifyDnsName(change.originalRecord.name, change.zone)}\n` +
+                            `  FROM: ${change.originalRecord.type} ${change.originalRecord.value}\n` +
+                            `  TO: ${change.newRecord.type} ${change.newRecord.value}`
+                          )}
+                        </Alert>
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
+      </Box>
+    </Drawer>
+  );
 
   // Add the applyChanges function
   const applyChanges = async () => {
