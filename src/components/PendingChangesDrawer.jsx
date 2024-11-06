@@ -5,20 +5,35 @@ import {
   Typography, 
   Button, 
   Alert,
-  IconButton 
+  IconButton,
+  CircularProgress 
 } from '@mui/material';
-import { Delete as DeleteIcon } from '@mui/icons-material';
+import { 
+  Delete as DeleteIcon,
+  Save as SaveIcon 
+} from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { usePendingChanges } from '../context/PendingChangesContext';
+import { useZone } from '../context/ZoneContext';
+import { useState } from 'react';
+import { useConfig } from '../context/ConfigContext';
+import { dnsService } from '../services/dnsService';
+import { notificationService } from '../services/notificationService';
 
 export function PendingChangesDrawer() {
+  const { selectedZone } = useZone();
   const { 
     pendingChanges, 
     removePendingChange, 
     showPendingDrawer, 
     setShowPendingDrawer,
-    setPendingChanges 
+    setPendingChanges,
+    clearPendingChanges 
   } = usePendingChanges();
+  const [loading, setLoading] = useState(false);
+  const { config } = useConfig();
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   const onDragEnd = (result) => {
     if (!result.destination) return;
@@ -28,6 +43,57 @@ export function PendingChangesDrawer() {
     items.splice(result.destination.index, 0, reorderedItem);
 
     setPendingChanges(items);
+  };
+
+  const applyChanges = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const keyConfig = config.keys.find(key => key.zones.includes(selectedZone));
+      if (!keyConfig) {
+        throw new Error('No key configuration found for this zone');
+      }
+
+      for (const change of pendingChanges) {
+        switch (change.type) {
+          case 'ADD':
+            await dnsService.addRecord(selectedZone, {
+              name: change.name,
+              type: change.recordType,
+              value: change.value,
+              ttl: change.ttl
+            }, keyConfig);
+            break;
+          case 'MODIFY':
+            await dnsService.updateRecord(selectedZone, change.originalRecord, change.newRecord, keyConfig);
+            break;
+          case 'DELETE':
+            await dnsService.deleteRecord(selectedZone, change.record, keyConfig);
+            break;
+          default:
+            console.warn('Unknown change type:', change.type);
+        }
+      }
+
+      if (config.webhookUrl) {
+        try {
+          await notificationService.sendNotification(selectedZone, pendingChanges);
+        } catch (notifyError) {
+          console.error('Failed to send notification:', notifyError);
+        }
+      }
+
+      clearPendingChanges();
+      setShowPendingDrawer(false);
+      
+      setSuccess('Changes applied successfully');
+    } catch (error) {
+      console.error('Failed to apply changes:', error);
+      setError(`Failed to apply changes: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -108,14 +174,25 @@ export function PendingChangesDrawer() {
           backgroundColor: 'background.paper',
           position: 'sticky',
           bottom: 0,
-          zIndex: 1
+          zIndex: 1,
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 2
         }}>
           <Button 
             onClick={() => setShowPendingDrawer(false)}
-            fullWidth
-            variant="contained"
+            variant="outlined"
           >
             Close
+          </Button>
+          <Button
+            onClick={applyChanges}
+            variant="contained"
+            color="primary"
+            disabled={pendingChanges.length === 0 || loading}
+            startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
+          >
+            Apply Changes
           </Button>
         </Box>
       </Box>
