@@ -49,7 +49,7 @@ function AddDNSRecord() {
       const change = {
         type: 'ADD',
         zone: zone,
-        name: newRecord.name, // Store original unqualified name
+        name: newRecord.name, // Store raw name without qualification
         recordType: newRecord.type,
         value: newRecord.value,
         ttl: newRecord.ttl,

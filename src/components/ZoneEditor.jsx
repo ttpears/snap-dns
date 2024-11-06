@@ -493,6 +493,25 @@ function ZoneEditor() {
     setShowPreview(true);
   };
 
+  // Add reorderPendingChanges function
+  const reorderPendingChanges = useCallback((startIndex, endIndex) => {
+    const result = Array.from(pendingChanges);
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    setPendingChanges(result);
+  }, [pendingChanges, setPendingChanges]);
+
+  const onDragEnd = (result) => {
+    if (!result.destination) {
+      return;
+    }
+
+    reorderPendingChanges(
+      result.source.index,
+      result.destination.index
+    );
+  };
+
   // Main render method
   return (
     <Paper sx={{ p: 3 }}>

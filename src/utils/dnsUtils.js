@@ -14,26 +14,12 @@ export const qualifyDnsName = (name, zone) => {
     return `${cleanZone}.`;
   }
 
-  // If name already ends with the zone
+  // If name already contains the zone, strip it first
   if (cleanName.endsWith(cleanZone)) {
-    return `${cleanName}.`;
+    const nameWithoutZone = cleanName.slice(0, -cleanZone.length - 1);
+    return `${nameWithoutZone}.${cleanZone}.`;
   }
 
-  // If name contains dots, check if it's a valid subdomain
-  if (cleanName.includes('.')) {
-    const nameParts = cleanName.split('.');
-    const zoneParts = cleanZone.split('.');
-    
-    // Check if the name ends with the zone
-    const endsWithZone = zoneParts.every((part, index) => 
-      nameParts[nameParts.length - zoneParts.length + index] === part
-    );
-    
-    if (endsWithZone) {
-      return `${cleanName}.`;
-    }
-  }
-
-  // Simple name, prepend to zone
+  // Simple name or subdomain, just append zone
   return `${cleanName}.${cleanZone}.`;
 }; 
