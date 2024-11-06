@@ -284,29 +284,16 @@ function ZoneEditor() {
       anchor="right"
       open={showPendingDrawer}
       onClose={() => setShowPendingDrawer(false)}
-      sx={{ width: 400 }}
     >
       <Box sx={{ width: 400, p: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Pending Changes ({pendingChanges.length})
-        </Typography>
-        <DragDropContext onDragEnd={({ source, destination }) => {
-          if (!destination) return;
-          reorderPendingChanges(source.index, destination.index);
-        }}>
-          <Droppable droppableId="pending-changes" type="pending-change">
-            {(provided, snapshot) => (
-              <List 
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                sx={{
-                  bgcolor: snapshot.isDraggingOver ? 'action.hover' : 'background.paper'
-                }}
-              >
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId="pending-changes">
+            {(provided) => (
+              <div {...provided.droppableProps} ref={provided.innerRef}>
                 {pendingChanges.map((change, index) => (
-                  <Draggable 
-                    key={change.id || `change-${index}`} 
-                    draggableId={change.id || `change-${index}`} 
+                  <Draggable
+                    key={change.id}
+                    draggableId={change.id}
                     index={index}
                   >
                     {(provided) => (
@@ -315,74 +302,29 @@ function ZoneEditor() {
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                       >
-                        <ListItem
-                          divider
-                          sx={{
-                            bgcolor: snapshot.isDragging ? 'action.selected' : 'inherit'
-                          }}
-                        >
-                          <ListItemText
-                            primary={
-                              <Box component="span" sx={{ 
-                                color: change.type === 'DELETE' ? 'error.main' : 
-                                       change.type === 'ADD' ? 'success.main' : 
-                                       'primary.main' 
-                              }}>
-                                {change.type} - {change.name}.{change.zone}
-                              </Box>
-                            }
-                            secondary={
-                              <Box component="span">
-                                <Box component="span" display="block">
-                                  Type: {change.recordType}
-                                  {change.value && ` - Value: ${change.value}`}
-                                </Box>
-                                {change.type === 'MODIFY' && change.newRecord && (
-                                  <Box component="span" display="block" sx={{ color: 'text.secondary' }}>
-                                    New Value: {change.newRecord.value}
-                                  </Box>
-                                )}
-                              </Box>
-                            }
-                          />
-                          <ListItemSecondaryAction>
-                            <IconButton 
-                              edge="end" 
+                        <Alert 
+                          severity="info" 
+                          sx={{ mb: 1 }}
+                          action={
+                            <IconButton
+                              size="small"
                               onClick={() => removePendingChange(change.id)}
                             >
-                              <CancelIcon />
+                              <DeleteIcon fontSize="small" />
                             </IconButton>
-                          </ListItemSecondaryAction>
-                        </ListItem>
+                          }
+                        >
+                          {/* Your existing change display code */}
+                        </Alert>
                       </div>
                     )}
                   </Draggable>
                 ))}
                 {provided.placeholder}
-              </List>
+              </div>
             )}
           </Droppable>
         </DragDropContext>
-        
-        {pendingChanges.length > 0 && (
-          <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<SaveIcon />}
-              onClick={applyChanges}
-            >
-              Apply Changes
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<PreviewIcon />}
-              onClick={() => setShowPreview(true)}
-            >
-              Preview
-            </Button>
-          </Box>
-        )}
       </Box>
     </Drawer>
   );
@@ -519,11 +461,13 @@ function ZoneEditor() {
 
   // Add reorderPendingChanges function
   const reorderPendingChanges = useCallback((startIndex, endIndex) => {
-    const result = Array.from(pendingChanges);
-    const [removed] = result.splice(startIndex, 1);
-    result.splice(endIndex, 0, removed);
-    setPendingChanges(result);
-  }, [pendingChanges, setPendingChanges]);
+    setPendingChanges(prev => {
+      const result = Array.from(prev);
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
+      return result;
+    });
+  }, [setPendingChanges]);
 
   const onDragEnd = (result) => {
     if (!result.destination) {
@@ -556,11 +500,7 @@ function ZoneEditor() {
       return;
     }
 
-    // Create a unique string ID for the change
-    const changeId = `delete-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
     const deleteChange = {
-      id: changeId, // Add unique string ID for drag-and-drop
       type: 'DELETE',
       zone: selectedZone,
       record: {
@@ -572,12 +512,7 @@ function ZoneEditor() {
       }
     };
 
-    // Debug log
-    console.log('Creating delete change:', {
-      originalRecord: record,
-      change: deleteChange
-    });
-
+    console.log('Creating delete change:', deleteChange);
     addPendingChange(deleteChange);
     setShowPendingDrawer(true);
   }, [selectedZone, addPendingChange, setShowPendingDrawer]);

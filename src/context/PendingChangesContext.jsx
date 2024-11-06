@@ -8,21 +8,22 @@ export function PendingChangesProvider({ children }) {
 
   const addPendingChange = (change) => {
     const formattedChange = {
-      id: Date.now(),
+      id: `change-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: change.type,
-      zone: change.zone,
-      name: change.name,
-      recordType: change.recordType,
-      value: change.value,
-      ttl: change.ttl
+      zone: change.zone
     };
 
     // Add type-specific properties
-    if (change.type === 'MODIFY') {
+    if (change.type === 'ADD') {
+      formattedChange.name = change.name;
+      formattedChange.recordType = change.recordType;
+      formattedChange.value = change.value;
+      formattedChange.ttl = change.ttl;
+    } else if (change.type === 'MODIFY') {
       formattedChange.originalRecord = change.originalRecord;
       formattedChange.newRecord = change.newRecord;
     } else if (change.type === 'DELETE') {
-      formattedChange.originalRecord = change.originalRecord;
+      formattedChange.record = change.record;
     }
 
     setPendingChanges(prev => [...prev, formattedChange]);
