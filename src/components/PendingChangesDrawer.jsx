@@ -10,15 +10,86 @@ import {
 } from '@mui/material';
 import { 
   Delete as DeleteIcon,
-  Save as SaveIcon 
+  Save as SaveIcon,
+  DragIndicator as DragIndicatorIcon
 } from '@mui/icons-material';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { useZone } from '../context/ZoneContext';
 import { useState } from 'react';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import { notificationService } from '../services/notificationService';
+
+function SortableChange({ change, onRemove }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: change.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Alert 
+        severity="info" 
+        sx={{ 
+          mb: 1,
+          display: 'flex',
+          alignItems: 'center'
+        }}
+        icon={
+          <DragIndicatorIcon
+            {...attributes}
+            {...listeners}
+            sx={{ cursor: 'grab' }}
+          />
+        }
+        action={
+          <IconButton
+            size="small"
+            onClick={() => onRemove(change.id)}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        }
+      >
+        {change.type === 'DELETE' && (
+          `DELETE: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`
+        )}
+        {change.type === 'ADD' && (
+          `ADD: ${change.name} ${change.ttl} ${change.recordType} ${change.value}`
+        )}
+        {change.type === 'MODIFY' && (
+          `MODIFY: ${change.originalRecord.name}\n` +
+          `FROM: ${change.originalRecord.ttl} ${change.originalRecord.type} ${change.originalRecord.value}\n` +
+          `TO: ${change.newRecord.ttl} ${change.newRecord.type} ${change.newRecord.value}`
+        )}
+      </Alert>
+    </div>
+  );
+}
 
 export function PendingChangesDrawer() {
   const { selectedZone } = useZone();
@@ -35,14 +106,23 @@ export function PendingChangesDrawer() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  const onDragEnd = (result) => {
-    if (!result.destination) return;
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-    const items = Array.from(pendingChanges);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
 
-    setPendingChanges(items);
+    if (active.id !== over.id) {
+      setPendingChanges((items) => {
+        const oldIndex = items.findIndex(item => item.id === active.id);
+        const newIndex = items.findIndex(item => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
   };
 
   const applyChanges = async () => {
@@ -116,55 +196,24 @@ export function PendingChangesDrawer() {
         </Box>
 
         <Box sx={{ p: 2, mt: 1, flexGrow: 1, overflowY: 'auto' }}>
-          <DragDropContext onDragEnd={onDragEnd}>
-            <Droppable droppableId="pending-changes">
-              {(provided) => (
-                <div {...provided.droppableProps} ref={provided.innerRef}>
-                  {pendingChanges.map((change, index) => (
-                    <Draggable
-                      key={change.id}
-                      draggableId={String(change.id)}
-                      index={index}
-                    >
-                      {(provided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                        >
-                          <Alert 
-                            severity="info" 
-                            sx={{ mb: 1 }}
-                            action={
-                              <IconButton
-                                size="small"
-                                onClick={() => removePendingChange(change.id)}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            }
-                          >
-                            {change.type === 'DELETE' && (
-                              `DELETE: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`
-                            )}
-                            {change.type === 'ADD' && (
-                              `ADD: ${change.name} ${change.ttl} ${change.recordType} ${change.value}`
-                            )}
-                            {change.type === 'MODIFY' && (
-                              `MODIFY: ${change.originalRecord.name}\n` +
-                              `FROM: ${change.originalRecord.ttl} ${change.originalRecord.type} ${change.originalRecord.value}\n` +
-                              `TO: ${change.newRecord.ttl} ${change.newRecord.type} ${change.newRecord.value}`
-                            )}
-                          </Alert>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={pendingChanges.map(change => change.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {pendingChanges.map((change) => (
+                <SortableChange
+                  key={change.id}
+                  change={change}
+                  onRemove={removePendingChange}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </Box>
 
         <Box sx={{ 

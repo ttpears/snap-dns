@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@dnd-kit/core": "^6.1.0",
+    "@dnd-kit/sortable": "^8.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@emotion/react": "^11.11.0",
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.11.16",
     "@mui/material": "^5.13.0",
     "react": "^18.2.0",
-    "react-beautiful-dnd": "^13.1.1",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.11.1"
   },
@@ -30,7 +32,6 @@
       "last 1 safari version"
     ]
   },
-
   "eslintConfig": {
     "extends": [
       "react-app"
@@ -38,8 +39,8 @@
     "root": true
   },
   "devDependencies": {
-    "react-scripts": "^5.0.1",
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "eslint-config-react-app": "^7.0.1",
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11"
-  }  
+    "react-scripts": "^5.0.1"
+  }
 }
