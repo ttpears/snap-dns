@@ -10,11 +10,25 @@ function isMultilineType(type) {
 function formatRecordValue(type, lines) {
   switch (type) {
     case 'SOA':
-      return lines
+      const soaString = lines
         .join(' ')
+        .replace(/[()]/g, '')
         .replace(/\s+/g, ' ')
-        .replace(/[\(\)]/g, '')
         .trim();
+
+      const soaParts = soaString.split(/\s+/);
+      if (soaParts.length >= 7) {
+        return {
+          primaryNS: soaParts[0],
+          adminMailbox: soaParts[1],
+          serial: soaParts[2],
+          refresh: soaParts[3],
+          retry: soaParts[4],
+          expire: soaParts[5],
+          minimum: soaParts[6]
+        };
+      }
+      return soaString;
     
     case 'TXT':
       return lines

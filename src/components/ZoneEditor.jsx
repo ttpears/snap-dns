@@ -52,27 +52,18 @@ function MultilineRecordDialog({ record, open, onClose }) {
   const formattedValue = useMemo(() => {
     if (!record) return '';
     
-    switch (record.type) {
-      case 'SOA':
-        const [
-          primaryNS,
-          adminMailbox,
-          serial,
-          refresh,
-          retry,
-          expire,
-          minimum
-        ] = record.value.split(/\s+/);
-        return `Primary NS: ${primaryNS}
-Admin Mailbox: ${adminMailbox}
-Serial: ${serial}
-Refresh: ${refresh}
-Retry: ${retry}
-Expire: ${expire}
-Minimum: ${minimum}`;
-      default:
-        return record.value;
+    if (record.type === 'SOA') {
+      const soa = typeof record.value === 'object' ? record.value : {};
+      return `Primary NS: ${soa.primaryNS || 'N/A'}
+Admin Mailbox: ${soa.adminMailbox || 'N/A'}
+Serial: ${soa.serial || 'N/A'}
+Refresh: ${soa.refresh || 'N/A'}
+Retry: ${soa.retry || 'N/A'}
+Expire: ${soa.expire || 'N/A'}
+Minimum: ${soa.minimum || 'N/A'}`;
     }
+    
+    return record.value;
   }, [record]);
 
   return (
