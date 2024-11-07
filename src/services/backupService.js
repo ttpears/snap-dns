@@ -54,6 +54,18 @@ class BackupService {
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
   }
+
+  deleteBackup(timestamp) {
+    try {
+      const backups = this.getBackups();
+      const updatedBackups = backups.filter(backup => backup.timestamp !== timestamp);
+      localStorage.setItem('dnsBackups', JSON.stringify(updatedBackups));
+      return true;
+    } catch (error) {
+      console.error('Failed to delete backup:', error);
+      return false;
+    }
+  }
 }
 
 export const backupService = new BackupService(); 

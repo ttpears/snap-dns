@@ -19,11 +19,13 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   IconButton,
+  Grid,
 } from '@mui/material';
 import {
   Backup as BackupIcon,
   Restore as RestoreIcon,
   Download as DownloadIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
@@ -205,6 +207,22 @@ function BackupImport() {
     }
   };
 
+  const handleDeleteBackup = (timestamp) => {
+    if (window.confirm('Are you sure you want to delete this backup?')) {
+      const success = backupService.deleteBackup(timestamp);
+      if (success) {
+        setStoredBackups(backupService.getBackups());
+        setSuccess('Backup deleted successfully');
+      } else {
+        setError('Failed to delete backup');
+      }
+    }
+  };
+
+  const formatDate = (timestamp) => {
+    return new Date(timestamp).toLocaleString();
+  };
+
   return (
     <Paper sx={{ p: 3 }}>
       <Typography variant="h5" gutterBottom>
@@ -272,81 +290,59 @@ function BackupImport() {
         </Alert>
       )}
 
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          Stored Backups
-        </Typography>
-        <List>
-          {storedBackups.map((backup) => (
-            <ListItem
-              key={backup.id}
-              button
-              selected={selectedBackup?.id === backup.id}
-              onClick={() => handleRestoreSelection(backup)}
-            >
-              <ListItemText
-                primary={`${backup.zone} - ${new Date(backup.timestamp).toLocaleString()}`}
-                secondary={`${backup.records.length} records - ${backup.type} backup`}
-              />
-              <ListItemSecondaryAction>
-                <IconButton onClick={() => backupService.downloadBackup(backup)}>
-                  <DownloadIcon />
-                </IconButton>
-              </ListItemSecondaryAction>
-            </ListItem>
-          ))}
-        </List>
-      </Box>
-
-      {selectedBackup && (
-        <Dialog
-          open={true}
-          onClose={() => setSelectedBackup(null)}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle>
-            Select Records to Restore
-          </DialogTitle>
-          <DialogContent>
-            <List>
-              {filteredRecords.map((record, index) => (
-                <ListItem
-                  key={index}
-                  button
-                  onClick={() => handleRecordSelection(record)}
-                  selected={selectedRecords.some(r => 
-                    r.name === record.name && 
-                    r.type === record.type && 
-                    r.value === record.value
-                  )}
+      {storedBackups.length > 0 && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h6" gutterBottom>
+            Stored Backups
+          </Typography>
+          <Grid container spacing={2}>
+            {storedBackups.map((backup) => (
+              <Grid item xs={12} md={6} key={backup.timestamp}>
+                <Paper 
+                  elevation={2} 
+                  sx={{ 
+                    p: 2,
+                    backgroundColor: 'background.default',
+                    '&:hover': {
+                      backgroundColor: 'action.hover',
+                    }
+                  }}
                 >
-                  <ListItemText
-                    primary={`${record.name} ${record.type}`}
-                    secondary={record.value}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setSelectedBackup(null)}>Cancel</Button>
-            <Button
-              onClick={() => setSelectedRecords(filteredRecords)}
-              color="primary"
-            >
-              Select All
-            </Button>
-            <Button
-              onClick={handleRestore}
-              color="primary"
-              variant="contained"
-              disabled={!selectedRecords.length}
-            >
-              Restore Selected
-            </Button>
-          </DialogActions>
-        </Dialog>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box>
+                      <Typography variant="subtitle1" color="primary">
+                        {backup.zone}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Created: {formatDate(backup.timestamp)}
+                      </Typography>
+                      <Typography variant="body2">
+                        Records: {backup.records.length}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleImportBackup(backup)}
+                        title="Restore this backup"
+                      >
+                        <RestoreIcon />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteBackup(backup.timestamp)}
+                        color="error"
+                        title="Delete backup"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
       )}
     </Paper>
   );
