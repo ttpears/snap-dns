@@ -29,13 +29,20 @@ export const backupService = {
   async deleteBackup(timestamp) {
     try {
       const backups = this.getBackups();
-      const timestampNum = parseInt(timestamp); // Convert to number in case it's a string
-      const updatedBackups = backups.filter(backup => backup.timestamp !== timestampNum);
       
       // Debug logs
-      console.log('Current backups:', backups);
-      console.log('Timestamp to delete:', timestampNum);
-      console.log('Updated backups:', updatedBackups);
+      console.log('Deleting backup with timestamp:', timestamp);
+      console.log('Current backups:', backups.map(b => ({ 
+        timestamp: b.timestamp,
+        zone: b.zone 
+      })));
+      
+      const updatedBackups = backups.filter(backup => backup.timestamp !== timestamp);
+      
+      console.log('Updated backups:', updatedBackups.map(b => ({ 
+        timestamp: b.timestamp,
+        zone: b.zone 
+      })));
       
       // Clear and reset localStorage
       localStorage.removeItem('dnsBackups');

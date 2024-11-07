@@ -215,7 +215,7 @@ function BackupImport() {
   const handleDeleteBackup = async (timestamp) => {
     if (window.confirm('Are you sure you want to delete this backup?')) {
       try {
-        await backupService.deleteBackup(timestamp);
+        await backupService.deleteBackup(Number(timestamp));
         loadBackups(); // Reload the backups list
         setSuccess('Backup deleted successfully');
       } catch (error) {
