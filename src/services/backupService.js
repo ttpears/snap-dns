@@ -14,6 +14,7 @@ export const backupService = {
       const backups = this.getBackups();
       const newBackup = {
         timestamp: Date.now(),
+        id: Date.now().toString(),
         zone,
         records
       };

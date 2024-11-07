@@ -212,10 +212,11 @@ function BackupImport() {
     }
   };
 
-  const handleDeleteBackup = async (timestamp) => {
+  const handleDeleteBackup = async (backup) => {
     if (window.confirm('Are you sure you want to delete this backup?')) {
       try {
-        await backupService.deleteBackup(Number(timestamp));
+        // Pass the entire backup object
+        await backupService.deleteBackup(backup.timestamp);
         loadBackups(); // Reload the backups list
         setSuccess('Backup deleted successfully');
       } catch (error) {
@@ -330,7 +331,7 @@ function BackupImport() {
                       </IconButton>
                       <IconButton
                         size="small"
-                        onClick={() => handleDeleteBackup(backup.timestamp)}
+                        onClick={() => handleDeleteBackup(backup)}
                         color="error"
                         title="Delete backup"
                       >
