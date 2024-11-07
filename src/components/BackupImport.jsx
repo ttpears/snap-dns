@@ -49,8 +49,13 @@ function BackupImport() {
   const [confirmFullRestore, setConfirmFullRestore] = useState(false);
 
   useEffect(() => {
-    setStoredBackups(backupService.getBackups());
+    loadBackups();
   }, []);
+
+  const loadBackups = () => {
+    const backups = backupService.getBackups();
+    setStoredBackups(backups);
+  };
 
   // Get available zones from config
   const availableZones = React.useMemo(() => {
@@ -207,16 +212,23 @@ function BackupImport() {
     }
   };
 
-  const handleDeleteBackup = (timestamp) => {
+  const handleDeleteBackup = async (timestamp) => {
     if (window.confirm('Are you sure you want to delete this backup?')) {
-      const success = backupService.deleteBackup(timestamp);
-      if (success) {
-        setStoredBackups(backupService.getBackups());
+      try {
+        await backupService.deleteBackup(timestamp);
+        loadBackups(); // Reload the backups list
         setSuccess('Backup deleted successfully');
-      } else {
+      } catch (error) {
         setError('Failed to delete backup');
+        console.error('Delete backup error:', error);
       }
     }
+  };
+
+  const handleImportBackup = (backup) => {
+    setSelectedBackup(backup);
+    setSelectedRecords([]);
+    setConfirmDialogOpen(true);
   };
 
   const formatDate = (timestamp) => {
@@ -278,18 +290,6 @@ function BackupImport() {
         </Box>
       )}
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {success}
-        </Alert>
-      )}
-
       {storedBackups.length > 0 && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" gutterBottom>
@@ -314,7 +314,7 @@ function BackupImport() {
                         {backup.zone}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Created: {formatDate(backup.timestamp)}
+                        Created: {new Date(backup.timestamp).toLocaleString()}
                       </Typography>
                       <Typography variant="body2">
                         Records: {backup.records.length}
@@ -343,6 +343,17 @@ function BackupImport() {
             ))}
           </Grid>
         </Box>
+      )}
+
+      {error && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert severity="success" sx={{ mt: 2 }}>
+          {success}
+        </Alert>
       )}
     </Paper>
   );

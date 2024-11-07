@@ -55,7 +55,7 @@ class BackupService {
     document.body.removeChild(a);
   }
 
-  deleteBackup(timestamp) {
+  async deleteBackup(timestamp) {
     try {
       const backups = this.getBackups();
       const updatedBackups = backups.filter(backup => backup.timestamp !== timestamp);
@@ -63,7 +63,7 @@ class BackupService {
       return true;
     } catch (error) {
       console.error('Failed to delete backup:', error);
-      return false;
+      throw error;
     }
   }
 }
