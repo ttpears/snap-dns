@@ -49,6 +49,7 @@ export async function parseZoneRecords(zoneData) {
   const records = [];
   let currentRecord = null;
   let recordLines = [];
+  let isPartOfMultiline = false;
 
   const lines = zoneData.split('\n').map(line => line.trim()).filter(line => line);
 
@@ -59,8 +60,21 @@ export async function parseZoneRecords(zoneData) {
       continue;
     }
 
-    const [name, ttl, recordClass, type, ...valueParts] = line.split(/\s+/);
-    const value = valueParts.join(' ');
+    const match = line.match(/^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)(?:\s+(.*))?$/);
+    if (!match) {
+      if (currentRecord && line.trim()) {
+        recordLines.push(line.trim());
+        records.push({
+          ...currentRecord,
+          value: line.trim(),
+          isPartOfMultiline: true,
+          parentRecord: currentRecord.id
+        });
+      }
+      continue;
+    }
+
+    const [, name, ttl, recordClass, type, value = ''] = match;
 
     if (type) {
       if (currentRecord) {
@@ -68,12 +82,16 @@ export async function parseZoneRecords(zoneData) {
         records.push(currentRecord);
       }
 
+      const recordId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       currentRecord = {
+        id: recordId,
         name,
         ttl: parseInt(ttl),
         class: recordClass,
         type,
-        value
+        value,
+        isPartOfMultiline: false,
+        parentRecord: null
       };
       recordLines = [value];
       
@@ -82,8 +100,6 @@ export async function parseZoneRecords(zoneData) {
         currentRecord = null;
         recordLines = [];
       }
-    } else if (currentRecord && line.trim()) {
-      recordLines.push(line.trim());
     }
   }
 

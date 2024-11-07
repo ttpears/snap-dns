@@ -50,47 +50,52 @@ import { isMultilineRecord } from '../utils/dnsUtils';
 
 function MultilineRecordDialog({ record, open, onClose }) {
   const formattedValue = useMemo(() => {
-    if (record.type === 'SOA') {
-      const [
-        primaryNS,
-        adminMailbox,
-        serial,
-        refresh,
-        retry,
-        expire,
-        minimum
-      ] = record.value.split(/\s+/);
-
-      return `Primary NS: ${primaryNS}
+    if (!record) return '';
+    
+    switch (record.type) {
+      case 'SOA':
+        const [
+          primaryNS,
+          adminMailbox,
+          serial,
+          refresh,
+          retry,
+          expire,
+          minimum
+        ] = record.value.split(/\s+/);
+        return `Primary NS: ${primaryNS}
 Admin Mailbox: ${adminMailbox}
 Serial: ${serial}
 Refresh: ${refresh}
 Retry: ${retry}
 Expire: ${expire}
 Minimum: ${minimum}`;
+      default:
+        return record.value;
     }
-    return record.value;
   }, [record]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{record.type} Record Details</DialogTitle>
+      <DialogTitle>{record?.type} Record Details</DialogTitle>
       <DialogContent>
         <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2">Name:</Typography>
-          <Typography>{record.name}</Typography>
+          <Typography variant="subtitle2" color="text.primary">Name:</Typography>
+          <Typography color="text.primary">{record?.name}</Typography>
           
-          <Typography variant="subtitle2" sx={{ mt: 2 }}>TTL:</Typography>
-          <Typography>{record.ttl}</Typography>
+          <Typography variant="subtitle2" sx={{ mt: 2 }} color="text.primary">TTL:</Typography>
+          <Typography color="text.primary">{record?.ttl}</Typography>
           
-          <Typography variant="subtitle2" sx={{ mt: 2 }}>Value:</Typography>
+          <Typography variant="subtitle2" sx={{ mt: 2 }} color="text.primary">Value:</Typography>
           <pre style={{ 
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             fontFamily: 'monospace',
-            backgroundColor: '#f5f5f5',
+            backgroundColor: 'rgba(0, 0, 0, 0.04)',
             padding: '16px',
-            borderRadius: '4px'
+            borderRadius: '4px',
+            color: 'inherit',
+            margin: '8px 0'
           }}>
             {formattedValue}
           </pre>
