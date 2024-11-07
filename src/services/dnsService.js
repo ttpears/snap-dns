@@ -13,22 +13,34 @@ function formatRecordValue(type, lines) {
       const soaString = lines
         .join(' ')
         .replace(/[()]/g, '')
+        .replace(/;.*$/gm, '')
         .replace(/\s+/g, ' ')
         .trim();
 
-      const soaParts = soaString.split(/\s+/);
-      if (soaParts.length >= 7) {
+      const soaParts = soaString.match(/(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/);
+      
+      if (soaParts) {
         return {
-          primaryNS: soaParts[0],
-          adminMailbox: soaParts[1],
-          serial: soaParts[2],
-          refresh: soaParts[3],
-          retry: soaParts[4],
-          expire: soaParts[5],
-          minimum: soaParts[6]
+          primaryNS: soaParts[1],
+          adminMailbox: soaParts[2],
+          serial: soaParts[3],
+          refresh: soaParts[4],
+          retry: soaParts[5],
+          expire: soaParts[6],
+          minimum: soaParts[7]
         };
       }
-      return soaString;
+      
+      const parts = soaString.split(/\s+/);
+      return {
+        primaryNS: parts[0] || 'N/A',
+        adminMailbox: parts[1] || 'N/A',
+        serial: parts[2] || 'N/A',
+        refresh: parts[3] || 'N/A',
+        retry: parts[4] || 'N/A',
+        expire: parts[5] || 'N/A',
+        minimum: parts[6] || 'N/A'
+      };
     
     case 'TXT':
       return lines
