@@ -1,4 +1,4 @@
-# DNS Manager
+# Snap DNS
 
 A web-based DNS management interface for managing DNS zones and records using BIND's nsupdate utility.
 
@@ -14,7 +14,7 @@ A web-based DNS management interface for managing DNS zones and records using BI
 
 ## Prerequisites
 
-- Node.js 16+
+- Docker and Docker Compose
 - BIND DNS Server with nsupdate utility
 - TSIG keys configured for zones
 - Access to DNS server(s)
@@ -23,52 +23,23 @@ A web-based DNS management interface for managing DNS zones and records using BI
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/dns-manager.git
-cd dns-manager
+git clone https://github.com/ttpears/snap-dns.git
+cd snap-dns
 ```
 
-2. Install dependencies:
+2. Start the application:
 ```bash
-npm install
+docker-compose up --build -d
 ```
 
-3. Create a configuration file `config.json`:
-```json
-{
-  "keys": [
-    {
-      "name": "zone1-key",
-      "value": "your-base64-key==",
-      "algorithm": "hmac-sha256",
-      "server": "ns1.example.com",
-      "zones": ["example.com", "example.net"]
-    }
-  ],
-  "webhookUrl": "https://mattermost.example.com/hooks/your-webhook-id"
-}
-```
-
-4. Start the development server:
-```bash
-npm run dev
-```
+The frontend application will be available at http://localhost:3001. Use the Settings page to configure your DNS keys and webhook notifications.
 
 ## Configuration
 
-### TSIG Keys
-Each key configuration requires:
-- `name`: Key name as configured in BIND
-- `value`: Base64 encoded key value
-- `algorithm`: HMAC algorithm (e.g., hmac-sha256)
-- `server`: DNS server hostname
-- `zones`: Array of zones this key can manage
-
-### Webhook Notifications
-- Optional Mattermost webhook integration
-- Notifications for:
-  - Record changes
-  - Backup creation
-  - Zone restoration
+All configuration is handled through the web interface under Settings, including:
+- TSIG key management
+- Zone assignments
+- Webhook notifications
 
 ## Usage
 
