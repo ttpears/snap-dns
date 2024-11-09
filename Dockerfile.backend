@@ -18,13 +18,12 @@ COPY backend .
 RUN mkdir -p /tmp/snap-dns && \
     chmod 700 /tmp/snap-dns
 
-# Set environment
-ENV PORT=3002
-ENV HOST=0.0.0.0
-ENV TEMP_DIR=/tmp/snap-dns
+# Remove hardcoded port - we'll use environment variable
+ENV BACKEND_HOST=0.0.0.0
+ENV BACKEND_PORT=3002
 
-# Expose port
-EXPOSE 3002
+# Expose the correct port
+EXPOSE ${BACKEND_PORT}
 
 # Start the app
 CMD ["node", "server.js"] 

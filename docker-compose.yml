@@ -6,11 +6,11 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     ports:
-      - "3001:3001"
+      - "${PORT:-3001}:${PORT:-3001}"
+    env_file:
+      - .env.${NODE_ENV:-development}
     environment:
-      - HOST=0.0.0.0
-      - DANGEROUSLY_DISABLE_HOST_CHECK=true
-      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:3001}
+      - NODE_ENV=${NODE_ENV:-development}
     networks:
       - snap-dns-network
 
@@ -19,9 +19,11 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     ports:
-      - "3002:3002"
+      - "${BACKEND_PORT:-3002}:${BACKEND_PORT:-3002}"
+    env_file:
+      - .env.${NODE_ENV:-development}
     environment:
-      - HOST=0.0.0.0
+      - NODE_ENV=${NODE_ENV:-development}
     volumes:
       - temp-keys:/tmp/snap-dns
     networks:

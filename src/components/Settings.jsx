@@ -57,7 +57,7 @@ function Settings() {
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto' }}>
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h5" gutterBottom>
+        <Typography variant="h5" component="h2" gutterBottom>
           Application Settings
         </Typography>
         

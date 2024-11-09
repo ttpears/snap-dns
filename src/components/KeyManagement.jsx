@@ -118,7 +118,7 @@ function KeyManagement() {
 
   return (
     <Paper sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" component="h2" gutterBottom>
         Key Management
       </Typography>
 
@@ -221,10 +221,13 @@ function KeyManagement() {
           <ListItem key={key.id} divider>
             <ListItemText
               primary={key.name}
+              secondaryTypographyProps={{ component: 'div' }}
               secondary={
-                <Box>
-                  <Typography variant="body2">Server: {key.server}</Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                <Box sx={{ mt: 1 }}>
+                  <Box sx={{ mb: 0.5 }}>
+                    Server: {key.server}
+                  </Box>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                     {key.zones.map((zone, index) => (
                       <Chip key={index} label={zone} size="small" />
                     ))}

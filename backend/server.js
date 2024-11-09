@@ -728,8 +728,8 @@ app.post('/zone/:zoneName/record/update', async (req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3002;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = process.env.BACKEND_PORT || 3002;
+const HOST = process.env.BACKEND_HOST || '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
     console.log(`Server running on http://${HOST}:${PORT}`);

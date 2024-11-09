@@ -107,12 +107,13 @@ function DemoMode() {
     {
       label: 'Review Changes',
       content: (
-        <>
-          <Typography paragraph>
+        <Box sx={{ mt: 2 }}>
+          <Typography sx={{ mb: 2 }}>
             Before applying changes, always review them carefully. Here are your pending changes:
           </Typography>
+          
           {pendingChanges.length > 0 ? (
-            <Box sx={{ mt: 2 }}>
+            <Box>
               {pendingChanges.map((change, index) => (
                 <Alert key={index} severity="info" sx={{ mb: 1 }}>
                   {change.type === 'ADD' 
@@ -127,25 +128,31 @@ function DemoMode() {
               No pending changes. Go back and add a record first!
             </Alert>
           )}
-        </>
+        </Box>
       )
     },
     {
       label: 'Validation',
       content: (
-        <>
-          <Typography paragraph>
+        <Box sx={{ mt: 2 }}>
+          <Typography sx={{ mb: 2 }}>
             In a production environment, you can validate records against different resolvers:
           </Typography>
-          <ul>
-            <li>Internal resolver (default)</li>
-            <li>1.1.1.1 (Cloudflare)</li>
-            <li>8.8.8.8 (Google)</li>
-          </ul>
+          
+          <Box component="div" sx={{ mb: 2 }}>
+            <Typography component="div">
+              <Box component="ul" sx={{ pl: 3 }}>
+                <li>Internal resolver (default)</li>
+                <li>1.1.1.1 (Cloudflare)</li>
+                <li>8.8.8.8 (Google)</li>
+              </Box>
+            </Typography>
+          </Box>
+          
           <Alert severity="info" sx={{ mt: 2 }}>
             Demo Mode: Validation is simulated. In production, real DNS queries will be performed.
           </Alert>
-        </>
+        </Box>
       )
     },
     {
