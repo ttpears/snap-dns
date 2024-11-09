@@ -35,6 +35,7 @@ import { useState } from 'react';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import { notificationService } from '../services/notificationService';
+import { backupService } from '../services/backupService.ts';
 
 function SortableChange({ change, onRemove }) {
   const {
@@ -135,6 +136,28 @@ export function PendingChangesDrawer() {
         throw new Error('No key configuration found for this zone');
       }
 
+      // Create automatic backup before applying changes
+      const affectedRecords = pendingChanges.map(change => {
+        switch (change.type) {
+          case 'MODIFY':
+            return change.originalRecord;
+          case 'DELETE':
+            return change.record;
+          default:
+            return null;
+        }
+      }).filter(Boolean);
+
+      if (affectedRecords.length > 0) {
+        await backupService.createBackup(selectedZone, affectedRecords, {
+          type: 'auto',
+          description: 'Automatic backup before changes',
+          server: keyConfig.server,
+          config: config
+        });
+      }
+
+      // Apply changes
       for (const change of pendingChanges) {
         switch (change.type) {
           case 'ADD':
@@ -151,22 +174,15 @@ export function PendingChangesDrawer() {
           case 'DELETE':
             await dnsService.deleteRecord(selectedZone, change.record, keyConfig);
             break;
-          default:
-            console.warn('Unknown change type:', change.type);
         }
       }
 
       if (config.webhookUrl) {
-        try {
-          await notificationService.sendNotification(selectedZone, pendingChanges);
-        } catch (notifyError) {
-          console.error('Failed to send notification:', notifyError);
-        }
+        await notificationService.sendNotification(selectedZone, pendingChanges);
       }
 
       clearPendingChanges();
       setShowPendingDrawer(false);
-      
       setSuccess('Changes applied successfully');
     } catch (error) {
       console.error('Failed to apply changes:', error);

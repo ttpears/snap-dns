@@ -40,7 +40,7 @@ import {
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import AddDNSRecord from './AddDNSRecord';
-import { backupService } from '../services/backupService';
+import { backupService } from '../services/backupService.ts';
 import { notificationService } from '../services/notificationService';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { qualifyDnsName } from '../utils/dnsUtils';
