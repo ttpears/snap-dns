@@ -620,9 +620,10 @@ function BackupImport() {
                         />
                       </TableCell>
                       <TableCell>Name</TableCell>
+                      <TableCell>TTL</TableCell>
+                      <TableCell>Class</TableCell>
                       <TableCell>Type</TableCell>
                       <TableCell>Value</TableCell>
-                      <TableCell>TTL</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -630,6 +631,12 @@ function BackupImport() {
                       .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                       .map((record, index) => {
                         const actualIndex = page * rowsPerPage + index;
+                        // Format the value based on record type
+                        let displayValue = record.value;
+                        if (record.type === 'SOA' && typeof record.value === 'object') {
+                          displayValue = `${record.value.mname} ${record.value.rname} ${record.value.serial} ${record.value.refresh} ${record.value.retry} ${record.value.expire} ${record.value.minimum}`;
+                        }
+                        
                         return (
                           <TableRow 
                             key={`${record.name}-${record.type}-${actualIndex}`}
@@ -646,6 +653,8 @@ function BackupImport() {
                               />
                             </TableCell>
                             <TableCell>{record.name}</TableCell>
+                            <TableCell>{record.ttl}</TableCell>
+                            <TableCell>{record.class || 'IN'}</TableCell>
                             <TableCell>{record.type}</TableCell>
                             <TableCell 
                               sx={{ 
@@ -655,9 +664,8 @@ function BackupImport() {
                                 whiteSpace: 'nowrap' 
                               }}
                             >
-                              {record.value}
+                              {displayValue}
                             </TableCell>
-                            <TableCell>{record.ttl}</TableCell>
                           </TableRow>
                         );
                       })}
