@@ -7,40 +7,51 @@ function isMultilineType(type) {
   return ['SOA', 'TXT', 'MX', 'SRV', 'CAA'].includes(type);
 }
 
+function parseSOARecord(lines) {
+  // Join all lines and remove comments after semicolons
+  const soaText = lines.map(line => line.split(';')[0].trim()).join(' ');
+  
+  // Extract the content between parentheses if present
+  const parenthesesMatch = soaText.match(/\(([\s\S]*?)\)/);
+  
+  // Get the initial part (nameserver and admin email)
+  const initialPart = soaText.split('(')[0].trim();
+  const [primaryNS, adminMailbox] = initialPart.split(/\s+/).filter(Boolean);
+  
+  // Get the values part (either from within parentheses or after the initial part)
+  const valuesPart = parenthesesMatch ? parenthesesMatch[1] : soaText.split(')')[1] || '';
+  
+  // Extract all numbers from the values part
+  const numbers = valuesPart.split(/\s+/).map(Number).filter(n => !isNaN(n));
+  
+  // Construct the SOA object
+  const soa = {
+    primaryNS: primaryNS || 'N/A',
+    adminMailbox: (adminMailbox || 'N/A').replace('@', '.'),
+    serial: numbers[0] || 0,
+    refresh: numbers[1] || 0,
+    retry: numbers[2] || 0,
+    expire: numbers[3] || 0,
+    minimum: numbers[4] || 0
+  };
+
+  // Debug logging
+  console.log('SOA Parsing:', {
+    lines,
+    soaText,
+    initialPart,
+    valuesPart,
+    numbers,
+    result: soa
+  });
+
+  return soa;
+}
+
 function formatRecordValue(type, lines) {
   switch (type) {
     case 'SOA':
-      const soaString = lines
-        .join(' ')
-        .replace(/[()]/g, '')
-        .replace(/;.*$/gm, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      const soaParts = soaString.match(/(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/);
-      
-      if (soaParts) {
-        return {
-          primaryNS: soaParts[1],
-          adminMailbox: soaParts[2],
-          serial: soaParts[3],
-          refresh: soaParts[4],
-          retry: soaParts[5],
-          expire: soaParts[6],
-          minimum: soaParts[7]
-        };
-      }
-      
-      const parts = soaString.split(/\s+/);
-      return {
-        primaryNS: parts[0] || 'N/A',
-        adminMailbox: parts[1] || 'N/A',
-        serial: parts[2] || 'N/A',
-        refresh: parts[3] || 'N/A',
-        retry: parts[4] || 'N/A',
-        expire: parts[5] || 'N/A',
-        minimum: parts[6] || 'N/A'
-      };
+      return parseSOARecord(lines);
     
     case 'TXT':
       return lines
@@ -55,11 +66,6 @@ function formatRecordValue(type, lines) {
         .trim();
     
     case 'SRV':
-      return lines
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    
     case 'CAA':
       return lines
         .join(' ')
@@ -75,57 +81,51 @@ export async function parseZoneRecords(zoneData) {
   const records = [];
   let currentRecord = null;
   let recordLines = [];
-  let isPartOfMultiline = false;
 
-  const lines = zoneData.split('\n').map(line => line.trim()).filter(line => line);
+  const lines = zoneData
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.includes('TSIG') && !line.includes('key "'));
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    
-    if (line.includes('key "') || line.includes('TSIG')) {
-      continue;
-    }
-
     const match = line.match(/^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)(?:\s+(.*))?$/);
+    
     if (!match) {
       if (currentRecord && line.trim()) {
         recordLines.push(line.trim());
-        records.push({
-          ...currentRecord,
-          value: line.trim(),
-          isPartOfMultiline: true,
-          parentRecord: currentRecord.id
-        });
       }
       continue;
     }
 
     const [, name, ttl, recordClass, type, value = ''] = match;
 
-    if (type) {
-      if (currentRecord) {
-        currentRecord.value = formatRecordValue(currentRecord.type, recordLines);
-        records.push(currentRecord);
-      }
+    // Skip TSIG-related records
+    if (type === 'KEY' || type === 'TSIG') {
+      continue;
+    }
 
-      const recordId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      currentRecord = {
-        id: recordId,
-        name,
-        ttl: parseInt(ttl),
-        class: recordClass,
-        type,
-        value,
-        isPartOfMultiline: false,
-        parentRecord: null
-      };
-      recordLines = [value];
-      
-      if (!isMultilineType(type)) {
-        records.push(currentRecord);
-        currentRecord = null;
-        recordLines = [];
-      }
+    if (currentRecord) {
+      currentRecord.value = formatRecordValue(currentRecord.type, recordLines);
+      records.push(currentRecord);
+    }
+
+    const recordId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    currentRecord = {
+      id: recordId,
+      name,
+      ttl: parseInt(ttl),
+      class: recordClass,
+      type,
+      value,
+      isMultiline: isMultilineType(type)
+    };
+    recordLines = [value];
+
+    if (!isMultilineType(type)) {
+      records.push(currentRecord);
+      currentRecord = null;
+      recordLines = [];
     }
   }
 
@@ -182,33 +182,39 @@ export const dnsService = {
   },
 
   async updateRecord(zone, originalRecord, newRecord, keyConfig) {
-    console.log('Updating DNS record:', { zone, originalRecord, newRecord, keyConfig });
-    
-    const qualifiedOriginal = {
-      ...originalRecord,
-      name: qualifyDnsName(originalRecord.name, zone)
-    };
-    
-    const qualifiedNew = {
-      ...newRecord,
-      name: qualifyDnsName(newRecord.name, zone)
-    };
+    let formattedValue;
 
-    const API_URL = process.env.REACT_APP_API_URL;
-    
-    const response = await fetch(`${API_URL}/zone/${zone}/record`, {
-      method: 'PUT',
+    if (newRecord.type === 'SOA') {
+      // Format SOA record according to DNS standards
+      formattedValue = this.formatSOARecord(newRecord.value);
+    } else if (['TXT', 'SPF'].includes(newRecord.type)) {
+      // Handle TXT/SPF records - ensure proper quoting
+      formattedValue = this.formatTXTRecord(newRecord.value);
+    } else {
+      formattedValue = newRecord.value;
+    }
+
+    const response = await fetch(`${API_URL}/zone/${zone}/record/update`, {
+      method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         server: keyConfig.server,
         keyName: keyConfig.keyName,
         keyValue: keyConfig.keyValue,
         algorithm: keyConfig.algorithm,
-        originalRecord: qualifiedOriginal,
-        newRecord: qualifiedNew
-      }),
+        originalRecord: {
+          ...originalRecord,
+          value: typeof originalRecord.value === 'object' 
+            ? this.formatSOARecord(originalRecord.value)
+            : originalRecord.value
+        },
+        newRecord: {
+          ...newRecord,
+          value: formattedValue
+        }
+      })
     });
 
     if (!response.ok) {
@@ -217,6 +223,40 @@ export const dnsService = {
     }
 
     return response.json();
+  },
+
+  formatSOARecord(soa) {
+    // Format: primary-ns admin-email (serial refresh retry expire minimum)
+    return `${soa.mname} ${soa.rname} (
+      ${soa.serial}  ; serial
+      ${soa.refresh} ; refresh
+      ${soa.retry}   ; retry
+      ${soa.expire}  ; expire
+      ${soa.minimum} ; minimum
+    )`.replace(/\n\s+/g, ' ');
+  },
+
+  formatTXTRecord(value) {
+    // Handle TXT record formatting
+    // Split long TXT records into quoted strings
+    const chunks = [];
+    let remaining = value;
+    const maxLength = 255;
+
+    while (remaining.length > 0) {
+      let chunk = remaining.substring(0, maxLength);
+      // Ensure we don't split in the middle of a character
+      if (remaining.length > maxLength) {
+        const lastSpace = chunk.lastIndexOf(' ');
+        if (lastSpace !== -1) {
+          chunk = chunk.substring(0, lastSpace);
+        }
+      }
+      chunks.push(`"${chunk}"`);
+      remaining = remaining.substring(chunk.length).trim();
+    }
+
+    return chunks.join(' ');
   },
 
   async deleteRecord(zone, record, keyConfig) {

@@ -4,6 +4,8 @@ const fs = require('fs').promises;
 const path = require('path');
 const cors = require('cors');
 const crypto = require('crypto');
+const dnsPacket = require('dns-packet');
+const { Buffer } = require('buffer');
 require('dotenv').config();
 
 const app = express();
@@ -102,6 +104,32 @@ function parseDigOutput(output) {
     return records;
 }
 
+const parseSOARecord = (lines) => {
+  const soaText = lines.join(' ').trim();
+  console.log('Raw SOA text:', soaText);
+
+  // Extract the main parts (before parentheses)
+  const [nameServer, adminEmail] = soaText.split(/\s+/).slice(0, 2);
+  
+  // Extract numbers between parentheses
+  const numbers = soaText.match(/\(([^)]+)\)/);
+  const [serial, refresh, retry, expire, minimum] = numbers ? 
+    numbers[1].split(/[;\s]+/).filter(n => !isNaN(parseInt(n))) : [];
+
+  const soaData = {
+    mname: nameServer,
+    rname: adminEmail,
+    serial: parseInt(serial) || 0,
+    refresh: parseInt(refresh) || 0,
+    retry: parseInt(retry) || 0,
+    expire: parseInt(expire) || 0,
+    minimum: parseInt(minimum) || 0
+  };
+
+  console.log('Parsed SOA data:', soaData);
+  return soaData;
+};
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -184,16 +212,90 @@ app.post('/zone/:zoneName/axfr', async (req, res) => {
                 console.log('Dig command succeeded');
                 console.log('Raw output:', stdout);
 
-                const records = parseDigOutput(stdout);
-                console.log(`Parsed ${records.length} records`);
+                // Parse the dig output into structured records
+                const records = [];
+                const lines = stdout.split('\n');
                 
-                res.json(records);
-            } catch (err) {
-                console.error('Error processing dig output:', err);
+                let currentRecord = null;
+                let recordLines = [];
+
+                for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    
+                    if (trimmedLine === '' || trimmedLine.includes('TSIG') || trimmedLine.includes('key "')) {
+                        continue;
+                    }
+
+                    if (trimmedLine.startsWith(';')) {
+                        continue;
+                    }
+
+                    if (line.startsWith(' ') || line.startsWith('\t')) {
+                        recordLines.push(trimmedLine);
+                    } else {
+                        // Process previous record if exists
+                        if (currentRecord) {
+                            if (currentRecord.type === 'SOA') {
+                                const soaData = parseSOARecord([currentRecord.initialValue, ...recordLines]);
+                                records.push({
+                                    ...currentRecord,
+                                    value: soaData
+                                });
+                            } else {
+                                records.push({
+                                    ...currentRecord,
+                                    value: recordLines.join(' ').trim() || currentRecord.initialValue
+                                });
+                            }
+                        }
+
+                        // Start new record
+                        const match = line.match(/^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)(?:\s+(.*))?$/);
+                        if (match) {
+                            const [, name, ttl, recordClass, type, value = ''] = match;
+                            currentRecord = {
+                                name,
+                                ttl: parseInt(ttl),
+                                class: recordClass,
+                                type,
+                                initialValue: value
+                            };
+                            recordLines = [];
+                        }
+                    }
+                }
+
+                // Process last record
+                if (currentRecord) {
+                    if (currentRecord.type === 'SOA') {
+                        const soaData = parseSOARecord([currentRecord.initialValue, ...recordLines]);
+                        records.push({
+                            ...currentRecord,
+                            value: soaData
+                        });
+                    } else {
+                        records.push({
+                            ...currentRecord,
+                            value: recordLines.join(' ').trim() || currentRecord.initialValue
+                        });
+                    }
+                }
+
+                // Log the first SOA record for debugging
+                const soaRecord = records.find(r => r.type === 'SOA');
+                console.log('First SOA record:', soaRecord);
+
+                const filteredRecords = records.filter(r => 
+                    r.type !== 'TSIG' && r.type !== 'KEY'
+                );
+
+                res.json(filteredRecords);
+            } catch (error) {
+                console.error('Error processing zone transfer:', error);
                 res.status(500).json({ 
                     error: true, 
-                    message: 'Error processing zone transfer results',
-                    details: err.message
+                    message: 'Failed to process zone transfer',
+                    details: error.message 
                 });
             }
         });
@@ -583,6 +685,46 @@ app.post('/webhook/mattermost', async (req, res) => {
             details: error.message 
         });
     }
+});
+
+app.post('/zone/:zoneName/record/update', async (req, res) => {
+  const { zoneName } = req.params;
+  const { server, keyName, keyValue, algorithm, originalRecord, newRecord } = req.body;
+
+  try {
+    // Create a temporary key file
+    const keyFilePath = await createTempKeyFile(keyName, keyValue, algorithm);
+
+    // Prepare the nsupdate commands
+    let updateCommands = '';
+
+    // For SOA records, we need to delete the old one first
+    if (newRecord.type === 'SOA') {
+      updateCommands += `update delete ${originalRecord.name} ${originalRecord.type}\n`;
+      updateCommands += `update add ${newRecord.name} ${newRecord.ttl} ${newRecord.type} ${newRecord.value}\n`;
+    } else {
+      // For other records, we can just replace them
+      updateCommands += `update delete ${originalRecord.name} ${originalRecord.type} ${originalRecord.value}\n`;
+      updateCommands += `update add ${newRecord.name} ${newRecord.ttl} ${newRecord.type} ${newRecord.value}\n`;
+    }
+
+    updateCommands += 'send\n';
+
+    // Execute nsupdate
+    const result = await executeNSUpdate(updateCommands, server, keyFilePath);
+
+    // Clean up the temporary key file
+    await cleanupTempFile(keyFilePath);
+
+    res.json({ success: true, message: 'Record updated successfully' });
+  } catch (error) {
+    console.error('Failed to update record:', error);
+    res.status(500).json({ 
+      error: true, 
+      message: 'Failed to update record',
+      details: error.message 
+    });
+  }
 });
 
 // Start server

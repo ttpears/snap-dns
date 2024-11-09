@@ -47,20 +47,43 @@ import { qualifyDnsName } from '../utils/dnsUtils';
 import { useZone } from '../context/ZoneContext';
 import { PendingChangesDrawer } from './PendingChangesDrawer';
 import { isMultilineRecord } from '../utils/dnsUtils';
+import { RecordEditor } from './RecordEditor';
 
 function MultilineRecordDialog({ record, open, onClose }) {
+  const formatDuration = (seconds) => {
+    if (!seconds) return 'N/A';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    const parts = [];
+    if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+    if (minutes > 0) parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
+    
+    return parts.join(' ') || `${seconds} seconds`;
+  };
+
   const formattedValue = useMemo(() => {
     if (!record) return '';
     
+    console.log('Record in dialog:', record);
+    
     if (record.type === 'SOA') {
-      const soa = typeof record.value === 'object' ? record.value : {};
-      return `Primary NS: ${soa.primaryNS || 'N/A'}
-Admin Mailbox: ${soa.adminMailbox || 'N/A'}
-Serial: ${soa.serial || 'N/A'}
-Refresh: ${soa.refresh || 'N/A'}
-Retry: ${soa.retry || 'N/A'}
-Expire: ${soa.expire || 'N/A'}
-Minimum: ${soa.minimum || 'N/A'}`;
+      console.log('SOA value:', record.value);
+      const soa = record.value || {};
+      return [
+        `Primary Nameserver: ${soa.mname || 'N/A'}`,
+        `Admin Email: ${soa.rname || 'N/A'}`,
+        `Serial: ${soa.serial || 0}`,
+        `Refresh: ${soa.refresh || 0} seconds (${formatDuration(soa.refresh)})`,
+        `Retry: ${soa.retry || 0} seconds (${formatDuration(soa.retry)})`,
+        `Expire: ${soa.expire || 0} seconds (${formatDuration(soa.expire)})`,
+        `Minimum TTL: ${soa.minimum || 0} seconds (${formatDuration(soa.minimum)})`
+      ].join('\n');
+    }
+
+    if (typeof record.value === 'object') {
+      return JSON.stringify(record.value, null, 2);
     }
     
     return record.value;
@@ -68,21 +91,26 @@ Minimum: ${soa.minimum || 'N/A'}`;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{record?.type} Record Details</DialogTitle>
+      <DialogTitle>
+        {record?.type} Record Details
+      </DialogTitle>
       <DialogContent>
         <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" color="text.primary">Name:</Typography>
-          <Typography color="text.primary">{record?.name}</Typography>
+          <Typography variant="subtitle2" color="text.secondary">Name:</Typography>
+          <Typography color="text.primary" sx={{ mb: 2 }}>{record?.name}</Typography>
           
-          <Typography variant="subtitle2" sx={{ mt: 2 }} color="text.primary">TTL:</Typography>
-          <Typography color="text.primary">{record?.ttl}</Typography>
+          <Typography variant="subtitle2" color="text.secondary">TTL:</Typography>
+          <Typography color="text.primary" sx={{ mb: 2 }}>
+            {record?.ttl} seconds ({formatDuration(record?.ttl)})
+          </Typography>
           
-          <Typography variant="subtitle2" sx={{ mt: 2 }} color="text.primary">Value:</Typography>
+          <Typography variant="subtitle2" color="text.secondary">Value:</Typography>
           <pre style={{ 
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             fontFamily: 'monospace',
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: (theme) => 
+              theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
             padding: '16px',
             borderRadius: '4px',
             color: 'inherit',
@@ -421,6 +449,92 @@ function ZoneEditor() {
     setShowPendingDrawer(true);
   }, [selectedZone, addPendingChange, setShowPendingDrawer]);
 
+  const handleEditRecord = async (originalRecord, updatedRecord) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const keyConfig = config.keys.find(key => 
+        key.zones?.includes(selectedZone)
+      );
+
+      if (!keyConfig) {
+        throw new Error('No key configuration found for this zone');
+      }
+
+      // Format the record based on its type
+      const formattedRecord = formatRecordForUpdate(originalRecord, updatedRecord);
+
+      // Add to pending changes
+      addPendingChange({
+        type: 'MODIFY',
+        zone: selectedZone,
+        originalRecord: originalRecord,
+        newRecord: formattedRecord,
+        keyId: keyConfig.id
+      });
+
+      setShowPendingDrawer(true);
+    } catch (err) {
+      console.error('Failed to edit record:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatRecordForUpdate = (originalRecord, updatedRecord) => {
+    if (updatedRecord.type === 'SOA') {
+      // Ensure all SOA fields are numbers where appropriate
+      const soaValue = updatedRecord.value;
+      return {
+        ...updatedRecord,
+        value: {
+          mname: soaValue.mname,
+          rname: soaValue.rname,
+          serial: parseInt(soaValue.serial),
+          refresh: parseInt(soaValue.refresh),
+          retry: parseInt(soaValue.retry),
+          expire: parseInt(soaValue.expire),
+          minimum: parseInt(soaValue.minimum)
+        }
+      };
+    }
+
+    // Handle TXT and other multiline records
+    if (['TXT', 'SPF'].includes(updatedRecord.type)) {
+      return {
+        ...updatedRecord,
+        value: updatedRecord.value.trim()
+      };
+    }
+
+    return updatedRecord;
+  };
+
+  const [editingRecord, setEditingRecord] = useState(null);
+
+  const handleEditClick = (record) => {
+    setEditingRecord(record);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditClose = () => {
+    setEditingRecord(null);
+    setEditDialogOpen(false);
+  };
+
+  const handleEditSave = async (updatedRecord) => {
+    try {
+      await handleEditRecord(editingRecord, updatedRecord);
+      setEditDialogOpen(false);
+      setEditingRecord(null);
+    } catch (error) {
+      console.error('Failed to save record:', error);
+      setError(error.message);
+    }
+  };
+
   // Main render method
   return (
     <Paper sx={{ p: 3 }}>
@@ -612,10 +726,8 @@ function ZoneEditor() {
                       <TableCell align="right">
                         <IconButton
                           size="small"
-                          onClick={() => {
-                            setCurrentEditRecord(record);
-                            setEditDialogOpen(true);
-                          }}
+                          onClick={() => handleEditClick(record)}
+                          title="Edit Record"
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
@@ -646,7 +758,21 @@ function ZoneEditor() {
         </>
       )}
 
-      <EditRecordDialog />
+      <Dialog 
+        open={editDialogOpen} 
+        onClose={handleEditClose}
+        maxWidth="md"
+        fullWidth
+      >
+        {editingRecord && (
+          <RecordEditor
+            record={editingRecord}
+            onSave={handleEditSave}
+            onCancel={handleEditClose}
+          />
+        )}
+      </Dialog>
+
       <PreviewDialog />
 
       {showAddRecord && selectedZone && (
