@@ -5,6 +5,7 @@ WORKDIR /app
 # Install dependencies first (better caching)
 COPY package*.json ./
 RUN npm install -g react-scripts && \
+    npm install http-proxy-middleware && \
     npm install
 
 # Copy source code
@@ -13,6 +14,8 @@ COPY . .
 # Set environment
 ENV PORT=3001
 ENV HOST=0.0.0.0
+ENV WDS_SOCKET_PORT=3001
+ENV DANGEROUSLY_DISABLE_HOST_CHECK=true
 
 # Expose port
 EXPOSE 3001

@@ -9,6 +9,8 @@ services:
       - "3001:3001"
     environment:
       - HOST=0.0.0.0
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:3001}
     networks:
       - snap-dns-network
 
