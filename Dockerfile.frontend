@@ -6,6 +6,12 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
+# Install serve globally for production
+RUN npm install -g serve
+
+# Expose the port
+EXPOSE ${PORT}
+
 # Development uses start.js script, production uses build and serve
 CMD if [ "$NODE_ENV" = "production" ] ; \
     then \
@@ -13,12 +19,3 @@ CMD if [ "$NODE_ENV" = "production" ] ; \
     else \
     node scripts/start.js ; \
     fi
-
-# Install serve globally
-RUN npm install -g serve
-
-# Expose the port
-EXPOSE ${PORT}
-
-# Start the server using serve
-CMD ["sh", "-c", "serve -s build -l ${PORT}"] 

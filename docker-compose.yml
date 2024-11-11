@@ -13,8 +13,9 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - WDS_SOCKET_PORT=${PORT:-3001}
       - WATCHPACK_POLLING=true
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
     volumes:
-      - ./:/app
+      - .:/app:delegated
       - /app/node_modules
     networks:
       - snap-dns-network
