@@ -11,6 +11,11 @@ services:
       - .env.${NODE_ENV:-development}
     environment:
       - NODE_ENV=${NODE_ENV:-development}
+      - WDS_SOCKET_PORT=${PORT:-3001}
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./:/app
+      - /app/node_modules
     networks:
       - snap-dns-network
 

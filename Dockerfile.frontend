@@ -2,24 +2,23 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install dependencies first (better caching)
+# Install dependencies first
 COPY package*.json ./
-RUN npm install -g react-scripts && \
-    npm install http-proxy-middleware && \
-    npm install
+RUN npm install
 
-# Copy source code
-COPY . .
+# Development uses start.js script, production uses build and serve
+CMD if [ "$NODE_ENV" = "production" ] ; \
+    then \
+    npm run build:prod && npm run serve:prod ; \
+    else \
+    node scripts/start.js ; \
+    fi
 
-# Set environment
-ENV PORT=3001
-ENV HOST=0.0.0.0
-ENV WDS_SOCKET_PORT=3001
-ENV WDS_SOCKET_HOST=0.0.0.0
-ENV DANGEROUSLY_DISABLE_HOST_CHECK=true
+# Install serve globally
+RUN npm install -g serve
 
-# Expose port
-EXPOSE 3001
+# Expose the port
+EXPOSE ${PORT}
 
-# Start the app
-CMD ["npm", "start"] 
+# Start the server using serve
+CMD ["sh", "-c", "serve -s build -l ${PORT}"] 
