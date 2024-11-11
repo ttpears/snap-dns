@@ -176,9 +176,17 @@ function ZoneEditor() {
 
   const filteredRecords = useMemo(() => {
     return records.filter(record => {
+      const recordValueString = (() => {
+        if (!record.value) return '';
+        if (typeof record.value === 'object') {
+          return JSON.stringify(record.value);
+        }
+        return String(record.value);
+      })();
+
       const matchesSearch = searchTerm === '' ||
         record.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.value.toLowerCase().includes(searchTerm.toLowerCase());
+        recordValueString.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesType = filterType === 'ALL' || record.type === filterType;
       

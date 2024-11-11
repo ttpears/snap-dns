@@ -6,8 +6,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Install serve globally for production
-RUN npm install -g serve
+# Install react-scripts globally
+RUN npm install -g react-scripts serve
+
+# Copy the rest of the application
+COPY . .
 
 # Expose the port
 EXPOSE ${PORT}
