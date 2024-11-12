@@ -177,25 +177,41 @@ function ZoneEditor() {
     return Array.from(zones);
   }, [config.keys]);
 
+  const [searchText, setSearchText] = useState('');
+
   const filteredRecords = useMemo(() => {
     return records.filter(record => {
-      const recordValueString = (() => {
-        if (!record.value) return '';
-        if (typeof record.value === 'object') {
-          return JSON.stringify(record.value);
-        }
-        return String(record.value);
-      })();
+      const searchLower = searchText.toLowerCase();
+      
+      // Type filter
+      if (filterType !== 'ALL' && record.type !== filterType) {
+        return false;
+      }
 
-      const matchesSearch = searchTerm === '' ||
-        record.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        recordValueString.toLowerCase().includes(searchTerm.toLowerCase());
+      // Text search
+      if (!searchLower) return true; // If no search text, include record
       
-      const matchesType = filterType === 'ALL' || record.type === filterType;
+      const nameMatch = record.name.toLowerCase().includes(searchLower);
       
-      return matchesSearch && matchesType;
+      // Handle value search based on record type
+      let valueMatch = false;
+      if (record.type === 'SOA') {
+        // Search within SOA record fields
+        const soa = record.value || {};
+        valueMatch = Object.values(soa).some(val => 
+          String(val).toLowerCase().includes(searchLower)
+        );
+      } else if (typeof record.value === 'object') {
+        // Handle other record types that might have object values
+        valueMatch = JSON.stringify(record.value).toLowerCase().includes(searchLower);
+      } else {
+        // Standard string value search
+        valueMatch = String(record.value).toLowerCase().includes(searchLower);
+      }
+
+      return nameMatch || valueMatch || record.type.toLowerCase().includes(searchLower);
     });
-  }, [records, searchTerm, filterType]);
+  }, [records, searchText, filterType]);
 
   // Core functions
   const loadZoneRecords = useCallback(async () => {
@@ -548,8 +564,8 @@ function ZoneEditor() {
         </Select>
 
         <TextField
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
           placeholder="Search records..."
           InputProps={{
             startAdornment: (
@@ -585,6 +601,12 @@ function ZoneEditor() {
           {showAddRecord ? 'Cancel Add' : 'Add Record'}
         </Button>
       </Box>
+
+      {searchText && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Found {filteredRecords.length} matching records
+        </Typography>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
