@@ -198,7 +198,7 @@ function AddDNSRecord() {
             label="Record Type"
             required
           >
-            {['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS'].map((type) => (
+            {['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP'].map((type) => (
               <MenuItem key={type} value={type}>
                 {type}
               </MenuItem>

@@ -40,7 +40,12 @@
     "extends": [
       "react-app"
     ],
-    "root": true
+    "root": true,
+    "settings": {
+      "react": {
+        "version": "detect"
+      }
+    }
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",

@@ -4,7 +4,7 @@ import { qualifyDnsName } from '../utils/dnsUtils';
 const API_URL = process.env.REACT_APP_API_URL || '';
 
 function isMultilineType(type) {
-  return ['SOA', 'TXT', 'MX', 'SRV', 'CAA'].includes(type);
+  return ['SOA', 'TXT', 'MX', 'SRV', 'CAA', 'SSHFP'].includes(type);
 }
 
 function parseSOARecord(lines) {
@@ -71,6 +71,16 @@ function formatRecordValue(type, lines) {
         .join(' ')
         .replace(/\s+/g, ' ')
         .trim();
+    
+    case 'SSHFP':
+      return lines
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    
+    case 'PTR':
+      // PTR records should be a single line with a fully qualified domain name
+      return lines[0].trim();
     
     default:
       return lines.join(' ').trim();

@@ -141,6 +141,9 @@ function ZoneEditor() {
   
   const { selectedZone, setSelectedZone } = useZone();
 
+  // Add success state
+  const [success, setSuccess] = useState(null);
+
   // All state declarations in one place
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -159,8 +162,8 @@ function ZoneEditor() {
   const [multilineRecord, setMultilineRecord] = useState(null);
 
   // Add undo/redo history state
-  const [changeHistory, setChangeHistory] = useState([]);
-  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
+  const [changeHistory, setChangeHistory] = useState([[]]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   // Constants
   const recordTypes = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'PTR', 'SRV', 'CAA'];
@@ -263,46 +266,40 @@ function ZoneEditor() {
   }, [filteredRecords]);
 
   // History handlers
-  const saveToHistory = useCallback((zoneData) => {
-    setChangeHistory(prev => {
-      const newHistory = prev.slice(0, currentHistoryIndex + 1);
-      return [...newHistory, zoneData];
-    });
-    setCurrentHistoryIndex(prev => prev + 1);
-  }, [currentHistoryIndex]);
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < changeHistory.length - 1;
 
-  const canUndo = currentHistoryIndex > 0;
-  const canRedo = currentHistoryIndex < changeHistory.length - 1;
-
-  const undo = useCallback(async () => {
+  const handleUndo = useCallback(() => {
     if (!canUndo) return;
     
-    try {
-      setLoading(true);
-      const previousState = changeHistory[currentHistoryIndex - 1];
-      setRecords(previousState.records);
-      setCurrentHistoryIndex(prev => prev - 1);
-    } catch (err) {
-      setError('Failed to undo changes');
-    } finally {
-      setLoading(false);
-    }
-  }, [canUndo, changeHistory, currentHistoryIndex]);
+    const previousChanges = changeHistory[historyIndex - 1];
+    setPendingChanges([...previousChanges]);
+    setHistoryIndex(historyIndex - 1);
+  }, [canUndo, changeHistory, historyIndex, setPendingChanges]);
 
-  const redo = useCallback(async () => {
+  const handleRedo = useCallback(() => {
     if (!canRedo) return;
     
-    try {
-      setLoading(true);
-      const nextState = changeHistory[currentHistoryIndex + 1];
-      setRecords(nextState.records);
-      setCurrentHistoryIndex(prev => prev + 1);
-    } catch (err) {
-      setError('Failed to redo changes');
-    } finally {
-      setLoading(false);
+    const nextChanges = changeHistory[historyIndex + 1];
+    setPendingChanges([...nextChanges]);
+    setHistoryIndex(historyIndex + 1);
+  }, [canRedo, changeHistory, historyIndex, setPendingChanges]);
+
+  // Add an effect to track pending changes history
+  useEffect(() => {
+    const currentChanges = JSON.stringify(pendingChanges);
+    const historyChanges = JSON.stringify(changeHistory[historyIndex]);
+    
+    if (currentChanges !== historyChanges) {
+      setChangeHistory(prev => {
+        // Remove any future states if we're not at the end
+        const newHistory = prev.slice(0, historyIndex + 1);
+        // Add current changes as new state
+        return [...newHistory, [...pendingChanges]];
+      });
+      setHistoryIndex(prev => prev + 1);
     }
-  }, [canRedo, changeHistory, currentHistoryIndex]);
+  }, [pendingChanges, historyIndex]);
 
   // UI Components
   const EditRecordDialog = () => {
@@ -377,63 +374,6 @@ function ZoneEditor() {
     );
   };
 
-  const PreviewDialog = () => (
-    <Dialog
-      open={showPreview}
-      onClose={() => setShowPreview(false)}
-      maxWidth="lg"
-      fullWidth
-    >
-      <DialogTitle>Preview Changes</DialogTitle>
-      <DialogContent>
-        <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
-          {previewContent || 'No changes to preview'}
-        </Typography>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setShowPreview(false)}>Close</Button>
-      </DialogActions>
-    </Dialog>
-  );
-
-  const [previewContent, setPreviewContent] = useState('');
-
-  const handlePreviewChanges = () => {
-    const preview = pendingChanges.map(change => {
-      if (change.type === 'ADD') {
-        const fqdn = qualifyDnsName(change.name, change.zone);
-        return `ADD: ${fqdn} ${change.ttl} ${change.recordType} ${change.value}`;
-      } else if (change.type === 'DELETE') {
-        // Use the record's full name and ensure all fields are included
-        const fqdn = qualifyDnsName(change.record.name, change.zone);
-        return `DELETE: ${fqdn} ${change.record.ttl} ${change.record.class || 'IN'} ${change.record.type} ${change.record.value}`;
-      } else if (change.type === 'MODIFY') {
-        const fqdn = qualifyDnsName(change.originalRecord.name, change.zone);
-        return `MODIFY: ${fqdn}\n` +
-               `  FROM: ${change.originalRecord.ttl} ${change.originalRecord.type} ${change.originalRecord.value}\n` +
-               `  TO: ${change.newRecord.ttl} ${change.newRecord.type} ${change.newRecord.value}`;
-      }
-      return '';
-    }).join('\n\n');
-
-    setPreviewContent(preview);
-    setShowPreview(true);
-  };
-
-  // Add success state
-  const [success, setSuccess] = useState(null);
-
-  // Add success alert display
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => {
-        setSuccess(null);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [success]);
-
-  // Add this with the other handlers near the top of the ZoneEditor function
   const handleDeleteRecord = useCallback((record) => {
     if (!selectedZone || !record) {
       setError('Cannot delete record: Missing zone or record data');
@@ -557,27 +497,19 @@ function ZoneEditor() {
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="outlined"
-            onClick={undo}
+            onClick={handleUndo}
             disabled={!canUndo || loading}
             startIcon={<UndoIcon />}
           >
-            Undo
+            Undo ({historyIndex})
           </Button>
           <Button
             variant="outlined"
-            onClick={redo}
+            onClick={handleRedo}
             disabled={!canRedo || loading}
             startIcon={<RedoIcon />}
           >
-            Redo
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<PreviewIcon />}
-            onClick={handlePreviewChanges}
-            disabled={pendingChanges.length === 0}
-          >
-            Preview Changes
+            Redo ({changeHistory.length - historyIndex - 1})
           </Button>
           <Button
             variant="contained"
@@ -593,7 +525,7 @@ function ZoneEditor() {
               )
             }
           >
-            Pending Changes
+            Pending Changes ({pendingChanges.length})
           </Button>
         </Box>
       </Box>
@@ -780,8 +712,6 @@ function ZoneEditor() {
           />
         )}
       </Dialog>
-
-      <PreviewDialog />
 
       {showAddRecord && selectedZone && (
         <AddDNSRecord 
