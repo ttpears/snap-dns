@@ -663,6 +663,14 @@ send
 app.post('/webhook/mattermost', async (req, res) => {
     const { webhookUrl, payload } = req.body;
     
+    // Validate required fields
+    if (!webhookUrl || !payload) {
+        return res.status(400).json({ 
+            error: true, 
+            message: 'Missing required fields: webhookUrl and payload'
+        });
+    }
+    
     try {
         const response = await fetch(webhookUrl, {
             method: 'POST',
