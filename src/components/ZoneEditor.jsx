@@ -166,7 +166,19 @@ function ZoneEditor() {
   const [historyIndex, setHistoryIndex] = useState(0);
 
   // Constants
-  const recordTypes = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'PTR', 'SRV', 'CAA'];
+  const recordTypes = [
+    'A',
+    'AAAA',
+    'CNAME',
+    'MX',
+    'TXT',
+    'SRV',
+    'NS',
+    'PTR',
+    'CAA',
+    'SSHFP',
+    'SOA'
+  ];
 
   // Computed values
   const availableZones = useMemo(() => {
@@ -183,29 +195,30 @@ function ZoneEditor() {
     return records.filter(record => {
       const searchLower = searchText.toLowerCase();
       
-      // Type filter
+      // Type filter - use exact match for record types
       if (filterType !== 'ALL' && record.type !== filterType) {
         return false;
       }
 
       // Text search
-      if (!searchLower) return true; // If no search text, include record
+      if (!searchLower) return true;
       
       const nameMatch = record.name.toLowerCase().includes(searchLower);
       
       // Handle value search based on record type
       let valueMatch = false;
-      if (record.type === 'SOA') {
-        // Search within SOA record fields
+      if (record.type === 'SSHFP') {
+        // Special handling for SSHFP record values
+        const sshfpValue = String(record.value).toLowerCase();
+        valueMatch = sshfpValue.includes(searchLower);
+      } else if (record.type === 'SOA') {
         const soa = record.value || {};
         valueMatch = Object.values(soa).some(val => 
           String(val).toLowerCase().includes(searchLower)
         );
       } else if (typeof record.value === 'object') {
-        // Handle other record types that might have object values
         valueMatch = JSON.stringify(record.value).toLowerCase().includes(searchLower);
       } else {
-        // Standard string value search
         valueMatch = String(record.value).toLowerCase().includes(searchLower);
       }
 
