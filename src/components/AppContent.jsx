@@ -31,6 +31,7 @@ import Settings from './Settings';
 import AddDNSRecord from './AddDNSRecord';
 import { notificationService } from '../services/notificationService';
 import { PendingChangesDrawer } from './PendingChangesDrawer';
+import Footer from './Footer';
 
 function AppContent({ drawerWidth, darkMode, toggleDarkMode }) {
   const { config } = useConfig();
@@ -77,7 +78,8 @@ function AppContent({ drawerWidth, darkMode, toggleDarkMode }) {
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` }
+          width: { sm: `calc(100% - ${drawerWidth}px)` },
+          mb: '60px',
         }}
       >
         <Toolbar />
@@ -92,6 +94,7 @@ function AppContent({ drawerWidth, darkMode, toggleDarkMode }) {
         </Container>
       </Box>
 
+      <Footer />
       <PendingChangesDrawer />
     </Box>
   );
