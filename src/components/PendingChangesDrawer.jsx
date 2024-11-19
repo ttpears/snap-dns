@@ -36,6 +36,8 @@ import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import { notificationService } from '../services/notificationService';
 import { backupService } from '../services/backupService.ts';
+import { validationService } from '../services/validationService';
+import { DNSValidationService } from '../services/validationService';
 
 function SortableChange({ change, onRemove }) {
   const {
@@ -114,6 +116,8 @@ export function PendingChangesDrawer() {
     })
   );
 
+  const validationService = new DNSValidationService();
+
   const handleDragEnd = (event) => {
     const { active, over } = event;
 
@@ -134,6 +138,14 @@ export function PendingChangesDrawer() {
       const keyConfig = config.keys.find(key => key.zones.includes(selectedZone));
       if (!keyConfig) {
         throw new Error('No key configuration found for this zone');
+      }
+
+      // Validate all pending changes before proceeding
+      const validationResult = validationService.validateZoneChanges(pendingChanges, selectedZone);
+      if (!validationResult.isValid) {
+        setError(`Validation failed:\n${validationResult.errors.join('\n')}`);
+        setLoading(false);
+        return;
       }
 
       // Create automatic backup before applying changes
