@@ -20,6 +20,7 @@ import { qualifyDnsName } from '../utils/dnsUtils';
 import { useZone } from '../context/ZoneContext';
 import { Badge } from '@mui/material';
 import { Edit as EditIcon } from '@mui/icons-material';
+import { DNSValidationService } from '../services/validationService';
 
 function AddDNSRecord() {
   const { config } = useConfig();
@@ -37,6 +38,7 @@ function AddDNSRecord() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const { addPendingChange, setShowPendingDrawer, pendingChanges } = usePendingChanges();
+  const validationService = new DNSValidationService();
 
   // Update local zone when context zone changes
   useEffect(() => {
@@ -64,6 +66,19 @@ function AddDNSRecord() {
 
       const zone = useManualZone ? manualZone : localSelectedZone;
       
+      // Validate the record before adding to pending changes
+      const validationResult = validationService.validateRecord({
+        name: newRecord.name,
+        type: newRecord.type,
+        value: newRecord.value,
+        ttl: newRecord.ttl
+      }, zone);
+
+      if (!validationResult.isValid) {
+        setError(validationResult.errors.join('\n'));
+        return;
+      }
+
       const change = {
         type: 'ADD',
         zone: zone,

@@ -2,9 +2,23 @@ import { KeyConfig } from '../config';
 
 export interface DNSRecord {
   name: string;
-  type: string;
+  type: RecordType;
   value: string;
   ttl: number;
+}
+
+export enum RecordType {
+  A = 'A',
+  AAAA = 'AAAA',
+  CNAME = 'CNAME',
+  MX = 'MX',
+  TXT = 'TXT',
+  SRV = 'SRV',
+  NS = 'NS',
+  PTR = 'PTR',
+  CAA = 'CAA',
+  SOA = 'SOA',
+  SSHFP = 'SSHFP'
 }
 
 export interface DNSService {
