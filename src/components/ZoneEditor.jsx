@@ -24,7 +24,8 @@ import {
   Typography,
   TextField,
   InputAdornment,
-  TablePagination
+  TablePagination,
+  Chip
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -36,6 +37,9 @@ import { usePendingChanges } from '../context/PendingChangesContext';
 import { backupService } from '../services/backupService';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import UndoIcon from '@mui/icons-material/Undo';
+import RedoIcon from '@mui/icons-material/Redo';
+import RecordEditor from './RecordEditor';
 
 function MultilineRecordDialog({ record, open, onClose }) {
   const formatDuration = (seconds) => {
@@ -230,20 +234,8 @@ function ZoneEditor() {
 
   const handleDeleteRecord = async (record) => {
     try {
-      const keyConfig = config.keys.find(key => key.id === selectedKey);
-      if (!keyConfig) {
-        throw new Error('No key configuration found');
-      }
-
-      // Create backup before deletion
-      await backupService.createBackup(selectedZone, [record], {
-        type: 'auto',
-        description: 'Automatic backup before record deletion',
-        server: keyConfig.server,
-        config: config
-      });
-
       const change = {
+        id: Date.now(),
         type: 'DELETE',
         zone: selectedZone,
         keyId: selectedKey,
@@ -259,21 +251,9 @@ function ZoneEditor() {
 
   const handleDeleteSelected = async () => {
     try {
-      const keyConfig = config.keys.find(key => key.id === selectedKey);
-      if (!keyConfig) {
-        throw new Error('No key configuration found');
-      }
-
-      // Create backup before bulk deletion
-      await backupService.createBackup(selectedZone, selectedRecords, {
-        type: 'auto',
-        description: 'Automatic backup before bulk deletion',
-        server: keyConfig.server,
-        config: config
-      });
-
       selectedRecords.forEach(record => {
         const change = {
+          id: Date.now() + Math.random(),
           type: 'DELETE',
           zone: selectedZone,
           keyId: selectedKey,
@@ -297,6 +277,7 @@ function ZoneEditor() {
   const handleEditSave = async (updatedRecord) => {
     try {
       const change = {
+        id: Date.now(),
         type: 'MODIFY',
         zone: selectedZone,
         keyId: selectedKey,
@@ -352,6 +333,40 @@ function ZoneEditor() {
              String(record.value).toLowerCase().includes(searchLower);
     });
   }, [records, searchText, filterType]);
+
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < changeHistory.length - 1;
+
+  const handleUndo = useCallback(() => {
+    if (!canUndo) return;
+    
+    const previousChanges = changeHistory[historyIndex - 1];
+    setPendingChanges([...previousChanges]);
+    setHistoryIndex(historyIndex - 1);
+  }, [canUndo, changeHistory, historyIndex, setPendingChanges]);
+
+  const handleRedo = useCallback(() => {
+    if (!canRedo) return;
+    
+    const nextChanges = changeHistory[historyIndex + 1];
+    setPendingChanges([...nextChanges]);
+    setHistoryIndex(historyIndex + 1);
+  }, [canRedo, changeHistory, historyIndex, setPendingChanges]);
+
+  useEffect(() => {
+    const currentChanges = JSON.stringify(pendingChanges);
+    const historyChanges = JSON.stringify(changeHistory[historyIndex]);
+    
+    if (currentChanges !== historyChanges) {
+      setChangeHistory(prev => {
+        // Remove any future states if we're not at the end
+        const newHistory = prev.slice(0, historyIndex + 1);
+        // Add current changes as new state
+        return [...newHistory, [...pendingChanges]];
+      });
+      setHistoryIndex(prev => prev + 1);
+    }
+  }, [pendingChanges, historyIndex]);
 
   return (
     <Paper sx={{ p: 3 }}>
@@ -468,12 +483,13 @@ function ZoneEditor() {
             />
           )}
 
-          <TableContainer component={Paper}>
-            <Table>
+          <TableContainer>
+            <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox">
                     <Checkbox
+                      size="small"
                       indeterminate={selectedRecords.length > 0 && selectedRecords.length < records.length}
                       checked={records.length > 0 && selectedRecords.length === records.length}
                       onChange={handleSelectAllClick}
@@ -497,9 +513,11 @@ function ZoneEditor() {
                         r.type === record.type && 
                         r.value === record.value
                       )}
+                      hover
                     >
                       <TableCell padding="checkbox">
                         <Checkbox
+                          size="small"
                           checked={selectedRecords.some(r => 
                             r.name === record.name && 
                             r.type === record.type && 
@@ -509,7 +527,9 @@ function ZoneEditor() {
                         />
                       </TableCell>
                       <TableCell>{record.name}</TableCell>
-                      <TableCell>{record.type}</TableCell>
+                      <TableCell>
+                        <Chip label={record.type} size="small" />
+                      </TableCell>
                       <TableCell>
                         {isMultilineRecord(record) ? (
                           <Button 
@@ -525,17 +545,18 @@ function ZoneEditor() {
                       <TableCell>{record.ttl}</TableCell>
                       <TableCell align="right">
                         <IconButton
-                          onClick={() => handleEditRecord(record)}
                           size="small"
+                          onClick={() => handleEditRecord(record)}
+                          title="Edit Record"
                         >
-                          <EditIcon />
+                          <EditIcon fontSize="small" />
                         </IconButton>
                         <IconButton
-                          onClick={() => handleDeleteRecord(record)}
                           size="small"
+                          onClick={() => handleDeleteRecord(record)}
                           color="error"
                         >
-                          <DeleteIcon />
+                          <DeleteIcon fontSize="small" />
                         </IconButton>
                       </TableCell>
                     </TableRow>
@@ -581,6 +602,25 @@ function ZoneEditor() {
           />
         )}
       </Dialog>
+
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <Button
+          variant="outlined"
+          onClick={handleUndo}
+          disabled={!canUndo || loading}
+          startIcon={<UndoIcon />}
+        >
+          Undo ({historyIndex})
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={handleRedo}
+          disabled={!canRedo || loading}
+          startIcon={<RedoIcon />}
+        >
+          Redo ({changeHistory.length - historyIndex - 1})
+        </Button>
+      </Box>
     </Paper>
   );
 }

@@ -12,15 +12,18 @@ export function PendingChangesProvider({ children }) {
     const formattedChange = {
       id: `change-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: change.type,
-      zone: change.zone
+      zone: change.zone,
+      keyId: change.keyId
     };
 
     // Add type-specific properties
     if (change.type === 'ADD') {
-      formattedChange.name = change.name;
-      formattedChange.recordType = change.recordType;
-      formattedChange.value = change.value;
-      formattedChange.ttl = change.ttl;
+      formattedChange.record = {
+        name: change.record.name,
+        type: change.record.type,
+        value: change.record.value,
+        ttl: change.record.ttl
+      };
     } else if (change.type === 'MODIFY') {
       formattedChange.originalRecord = change.originalRecord;
       formattedChange.newRecord = change.newRecord;

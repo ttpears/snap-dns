@@ -35,7 +35,7 @@ import { useState } from 'react';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import { notificationService } from '../services/notificationService';
-import { backupService } from '../services/backupService.ts';
+import { backupService } from '../services/backupService';
 
 function SortableChange({ change, onRemove }) {
   const {
@@ -80,7 +80,7 @@ function SortableChange({ change, onRemove }) {
           `DELETE: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`
         )}
         {change.type === 'ADD' && (
-          `ADD: ${change.name} ${change.ttl} ${change.recordType} ${change.value}`
+          `ADD: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`
         )}
         {change.type === 'MODIFY' && (
           `MODIFY: ${change.originalRecord.name}\n` +
@@ -93,7 +93,11 @@ function SortableChange({ change, onRemove }) {
 }
 
 export function PendingChangesDrawer() {
-  const { selectedZone } = useZone();
+  const { config } = useConfig();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+
   const { 
     pendingChanges, 
     removePendingChange, 
@@ -102,10 +106,6 @@ export function PendingChangesDrawer() {
     setPendingChanges,
     clearPendingChanges 
   } = usePendingChanges();
-  const [loading, setLoading] = useState(false);
-  const { config } = useConfig();
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -114,25 +114,17 @@ export function PendingChangesDrawer() {
     })
   );
 
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-
-    if (active.id !== over.id) {
-      setPendingChanges((items) => {
-        const oldIndex = items.findIndex(item => item.id === active.id);
-        const newIndex = items.findIndex(item => item.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-  };
-
   const applyChanges = async () => {
     setError(null);
     setSuccess(null);
+    setLoading(true);
     
     try {
       // First pass: validate all changes have valid keys
       for (const change of pendingChanges) {
+        if (!change.keyId) {
+          throw new Error('Change missing keyId');
+        }
         const keyConfig = config.keys.find(key => key.id === change.keyId);
         if (!keyConfig) {
           throw new Error(`No key configuration found for key ID: ${change.keyId}`);
@@ -172,10 +164,10 @@ export function PendingChangesDrawer() {
         switch (change.type) {
           case 'ADD':
             await dnsService.addRecord(change.zone, {
-              name: change.name,
-              type: change.recordType,
-              value: change.value,
-              ttl: change.ttl
+              name: change.record.name,
+              type: change.record.type,
+              value: change.record.value,
+              ttl: change.record.ttl
             }, keyConfig);
             break;
           case 'MODIFY':
@@ -192,12 +184,26 @@ export function PendingChangesDrawer() {
         await notificationService.sendNotification(selectedZone, pendingChanges);
       }
 
+      setSuccess('Changes applied successfully');
       clearPendingChanges();
       setShowPendingDrawer(false);
-      setSuccess('Changes applied successfully');
     } catch (error) {
       console.error('Failed to apply changes:', error);
       setError(`Failed to apply changes: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+
+    if (active.id !== over.id) {
+      setPendingChanges((items) => {
+        const oldIndex = items.findIndex(item => item.id === active.id);
+        const newIndex = items.findIndex(item => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
     }
   };
 
@@ -272,4 +278,6 @@ export function PendingChangesDrawer() {
       </Box>
     </Drawer>
   );
-} 
+}
+
+export default PendingChangesDrawer; 

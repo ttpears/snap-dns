@@ -45,13 +45,16 @@ function AddDNSRecord({ zone, selectedKey, onRecordAdded }) {
       }
 
       const change = {
+        id: Date.now(),
         type: 'ADD',
         zone: zone,
         keyId: selectedKey,
-        name: newRecord.name,
-        recordType: newRecord.type,
-        value: newRecord.value,
-        ttl: newRecord.ttl
+        record: {
+          name: newRecord.name.endsWith(zone) ? newRecord.name : `${newRecord.name}.${zone}`,
+          type: newRecord.type,
+          value: newRecord.value,
+          ttl: newRecord.ttl
+        }
       };
 
       addPendingChange(change);
