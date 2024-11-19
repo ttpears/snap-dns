@@ -127,41 +127,51 @@ export function PendingChangesDrawer() {
   };
 
   const applyChanges = async () => {
-    setLoading(true);
     setError(null);
+    setSuccess(null);
     
     try {
-      const keyConfig = config.keys.find(key => key.zones.includes(selectedZone));
-      if (!keyConfig) {
-        throw new Error('No key configuration found for this zone');
+      // First pass: validate all changes have valid keys
+      for (const change of pendingChanges) {
+        const keyConfig = config.keys.find(key => key.id === change.keyId);
+        if (!keyConfig) {
+          throw new Error(`No key configuration found for key ID: ${change.keyId}`);
+        }
       }
 
       // Create automatic backup before applying changes
-      const affectedRecords = pendingChanges.map(change => {
-        switch (change.type) {
-          case 'MODIFY':
-            return change.originalRecord;
-          case 'DELETE':
-            return change.record;
-          default:
-            return null;
-        }
-      }).filter(Boolean);
+      for (const change of pendingChanges) {
+        const keyConfig = config.keys.find(key => key.id === change.keyId);
+        const affectedRecords = pendingChanges
+          .filter(c => c.zone === change.zone)
+          .map(c => {
+            switch (c.type) {
+              case 'MODIFY':
+                return c.originalRecord;
+              case 'DELETE':
+                return c.record;
+              default:
+                return null;
+            }
+          }).filter(Boolean);
 
-      if (affectedRecords.length > 0) {
-        await backupService.createBackup(selectedZone, affectedRecords, {
-          type: 'auto',
-          description: 'Automatic backup before changes',
-          server: keyConfig.server,
-          config: config
-        });
+        if (affectedRecords.length > 0) {
+          await backupService.createBackup(change.zone, affectedRecords, {
+            type: 'auto',
+            description: 'Automatic backup before changes',
+            server: keyConfig.server,
+            config: config
+          });
+        }
       }
 
       // Apply changes
       for (const change of pendingChanges) {
+        const keyConfig = config.keys.find(key => key.id === change.keyId);
+        
         switch (change.type) {
           case 'ADD':
-            await dnsService.addRecord(selectedZone, {
+            await dnsService.addRecord(change.zone, {
               name: change.name,
               type: change.recordType,
               value: change.value,
@@ -169,14 +179,15 @@ export function PendingChangesDrawer() {
             }, keyConfig);
             break;
           case 'MODIFY':
-            await dnsService.updateRecord(selectedZone, change.originalRecord, change.newRecord, keyConfig);
+            await dnsService.updateRecord(change.zone, change.originalRecord, change.newRecord, keyConfig);
             break;
           case 'DELETE':
-            await dnsService.deleteRecord(selectedZone, change.record, keyConfig);
+            await dnsService.deleteRecord(change.zone, change.record, keyConfig);
             break;
         }
       }
 
+      // Send webhook notification if configured
       if (config.webhookUrl) {
         await notificationService.sendNotification(selectedZone, pendingChanges);
       }
@@ -187,8 +198,6 @@ export function PendingChangesDrawer() {
     } catch (error) {
       console.error('Failed to apply changes:', error);
       setError(`Failed to apply changes: ${error.message}`);
-    } finally {
-      setLoading(false);
     }
   };
 

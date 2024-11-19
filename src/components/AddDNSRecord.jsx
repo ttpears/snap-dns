@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   TextField,
@@ -21,35 +21,17 @@ import { useZone } from '../context/ZoneContext';
 import { Badge } from '@mui/material';
 import { Edit as EditIcon } from '@mui/icons-material';
 
-function AddDNSRecord() {
+function AddDNSRecord({ zone, selectedKey, onRecordAdded }) {
   const { config } = useConfig();
-  const { selectedZone: contextZone, setSelectedZone: setContextZone } = useZone();
-  const [selectedKey, setSelectedKey] = useState('');
-  const [localSelectedZone, setLocalSelectedZone] = useState(contextZone || '');
-  const [manualZone, setManualZone] = useState('');
-  const [useManualZone, setUseManualZone] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const { addPendingChange, setShowPendingDrawer, pendingChanges } = usePendingChanges();
   const [newRecord, setNewRecord] = useState({
     name: '',
     ttl: 3600,
     type: 'A',
     value: ''
   });
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-  const { addPendingChange, setShowPendingDrawer, pendingChanges } = usePendingChanges();
-
-  // Update local zone when context zone changes
-  useEffect(() => {
-    if (contextZone && !localSelectedZone) {
-      setLocalSelectedZone(contextZone);
-    }
-  }, [contextZone]);
-
-  const handleZoneChange = (e) => {
-    const newZone = e.target.value;
-    setLocalSelectedZone(newZone);
-    setContextZone(newZone); // Update the shared context
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,16 +44,14 @@ function AddDNSRecord() {
         throw new Error('No key configuration found');
       }
 
-      const zone = useManualZone ? manualZone : localSelectedZone;
-      
       const change = {
         type: 'ADD',
         zone: zone,
+        keyId: selectedKey,
         name: newRecord.name,
         recordType: newRecord.type,
         value: newRecord.value,
-        ttl: newRecord.ttl,
-        keyId: selectedKey
+        ttl: newRecord.ttl
       };
 
       addPendingChange(change);
@@ -85,6 +65,10 @@ function AddDNSRecord() {
         type: 'A',
         value: ''
       });
+
+      if (onRecordAdded) {
+        onRecordAdded();
+      }
     } catch (error) {
       setError(error.message);
     }
@@ -112,64 +96,7 @@ function AddDNSRecord() {
         </Button>
       </Box>
 
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={useManualZone}
-              onChange={(e) => setUseManualZone(e.target.checked)}
-            />
-          }
-          label="Manual Zone Entry"
-        />
-      </FormControl>
-
-      {useManualZone ? (
-        <TextField
-          fullWidth
-          label="Zone"
-          value={manualZone}
-          onChange={(e) => setManualZone(e.target.value)}
-          sx={{ mb: 2 }}
-        />
-      ) : (
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Zone</InputLabel>
-          <Select
-            value={localSelectedZone}
-            onChange={handleZoneChange}
-            label="Zone"
-          >
-            {config.keys.flatMap(key => 
-              key.zones?.map(zone => (
-                <MenuItem key={zone} value={zone}>
-                  {zone}
-                </MenuItem>
-              )) || []
-            ).filter((zone, index, self) => 
-              self.findIndex(z => z.props.value === zone.props.value) === index
-            )}
-          </Select>
-        </FormControl>
-      )}
-
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-        {/* Key Selection */}
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Key</InputLabel>
-          <Select
-            value={selectedKey}
-            onChange={(e) => setSelectedKey(e.target.value)}
-            label="Key"
-          >
-            {config.keys.map(key => (
-              <MenuItem key={key.id} value={key.id}>
-                {key.name || key.id}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
         {/* Record Details */}
         <TextField
           fullWidth

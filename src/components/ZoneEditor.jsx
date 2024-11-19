@@ -1,53 +1,41 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  Paper,
   Box,
-  Typography,
   Button,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Checkbox,
+  CircularProgress,
   Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  Typography,
   TextField,
-  Badge,
-  Select,
-  MenuItem,
   InputAdornment,
-  IconButton,
-  CircularProgress,
-  TableContainer,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  TablePagination,
-  Checkbox,
-  Chip
+  TablePagination
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  Preview as PreviewIcon,
-  Save as SaveIcon,
-  Undo as UndoIcon,
-  Redo as RedoIcon,
-  Search as SearchIcon,
-  Refresh as RefreshIcon
-} from '@mui/icons-material';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import AddDNSRecord from './AddDNSRecord';
-import { backupService } from '../services/backupService.ts';
-import { notificationService } from '../services/notificationService';
 import { usePendingChanges } from '../context/PendingChangesContext';
-import { qualifyDnsName } from '../utils/dnsUtils';
-import { useZone } from '../context/ZoneContext';
-import { PendingChangesDrawer } from './PendingChangesDrawer';
-import { isMultilineRecord } from '../utils/dnsUtils';
-import { RecordEditor } from './RecordEditor';
+import { backupService } from '../services/backupService';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import SearchIcon from '@mui/icons-material/Search';
 
 function MultilineRecordDialog({ record, open, onClose }) {
   const formatDuration = (seconds) => {
@@ -66,10 +54,7 @@ function MultilineRecordDialog({ record, open, onClose }) {
   const formattedValue = useMemo(() => {
     if (!record) return '';
     
-    console.log('Record in dialog:', record);
-    
     if (record.type === 'SOA') {
-      console.log('SOA value:', record.value);
       const soa = record.value || {};
       return [
         `Primary Nameserver: ${soa.mname || 'N/A'}`,
@@ -138,13 +123,9 @@ function ZoneEditor() {
     setShowPendingDrawer,
     setPendingChanges 
   } = usePendingChanges();
-  
-  const { selectedZone, setSelectedZone } = useZone();
 
-  // Add success state
-  const [success, setSuccess] = useState(null);
-
-  // All state declarations in one place
+  const [selectedZone, setSelectedZone] = useState('');
+  const [selectedKey, setSelectedKey] = useState('');
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -155,32 +136,18 @@ function ZoneEditor() {
   const [selectedTypes, setSelectedTypes] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
-  const [showAddRecord, setShowAddRecord] = useState(false);
   const [selectedRecords, setSelectedRecords] = useState([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [currentEditRecord, setCurrentEditRecord] = useState(null);
+  const [editingRecord, setEditingRecord] = useState(null);
   const [multilineRecord, setMultilineRecord] = useState(null);
-
-  // Add undo/redo history state
   const [changeHistory, setChangeHistory] = useState([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
-
-  // Constants
+  const [showAddRecord, setShowAddRecord] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const recordTypes = [
-    'A',
-    'AAAA',
-    'CNAME',
-    'MX',
-    'TXT',
-    'SRV',
-    'NS',
-    'PTR',
-    'CAA',
-    'SSHFP',
-    'SOA'
+    'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP', 'SOA'
   ];
 
-  // Computed values
   const availableZones = useMemo(() => {
     const zones = new Set();
     config.keys?.forEach(key => {
@@ -189,66 +156,23 @@ function ZoneEditor() {
     return Array.from(zones);
   }, [config.keys]);
 
-  const [searchText, setSearchText] = useState('');
+  const availableKeys = useMemo(() => {
+    if (!selectedZone) return [];
+    return config.keys?.filter(key => key.zones?.includes(selectedZone)) || [];
+  }, [selectedZone, config.keys]);
 
-  const filteredRecords = useMemo(() => {
-    return records.filter(record => {
-      const searchLower = searchText.toLowerCase();
-      
-      // Type filter - use exact match for record types
-      if (filterType !== 'ALL' && record.type !== filterType) {
-        return false;
-      }
-
-      // Text search
-      if (!searchLower) return true;
-      
-      const nameMatch = record.name.toLowerCase().includes(searchLower);
-      
-      // Handle value search based on record type
-      let valueMatch = false;
-      if (record.type === 'SSHFP') {
-        // Special handling for SSHFP record values
-        const sshfpValue = String(record.value).toLowerCase();
-        valueMatch = sshfpValue.includes(searchLower);
-      } else if (record.type === 'SOA') {
-        const soa = record.value || {};
-        valueMatch = Object.values(soa).some(val => 
-          String(val).toLowerCase().includes(searchLower)
-        );
-      } else if (typeof record.value === 'object') {
-        valueMatch = JSON.stringify(record.value).toLowerCase().includes(searchLower);
-      } else {
-        valueMatch = String(record.value).toLowerCase().includes(searchLower);
-      }
-
-      return nameMatch || valueMatch || record.type.toLowerCase().includes(searchLower);
-    });
-  }, [records, searchText, filterType]);
-
-  // Core functions
   const loadZoneRecords = useCallback(async () => {
-    if (!selectedZone) return;
+    if (!selectedZone || !selectedKey) return;
     
     setLoading(true);
     setError(null);
     
     try {
-      const keyConfig = config.keys.find(key => 
-        key.zones?.includes(selectedZone)
-      );
+      const keyConfig = config.keys.find(key => key.id === selectedKey);
       
       if (!keyConfig) {
-        throw new Error('No key configuration found for this zone');
+        throw new Error('No key configuration found');
       }
-
-      // Debug log to verify key config
-      console.log('Using key config:', {
-        server: keyConfig.server,
-        keyName: keyConfig.keyName,
-        keyValue: keyConfig.keyValue,
-        algorithm: keyConfig.algorithm
-      });
 
       const records = await dnsService.fetchZoneRecords(selectedZone, keyConfig);
       setRecords(records);
@@ -258,16 +182,22 @@ function ZoneEditor() {
     } finally {
       setLoading(false);
     }
-  }, [selectedZone, config.keys]);
+  }, [selectedZone, selectedKey, config.keys]);
 
-  // Effect to load records when zone changes
   useEffect(() => {
-    if (selectedZone) {
+    if (selectedZone && selectedKey) {
       loadZoneRecords();
     }
-  }, [selectedZone, loadZoneRecords]);
+  }, [selectedZone, selectedKey, loadZoneRecords]);
 
-  // Record selection handlers
+  const handleSelectAllClick = (event) => {
+    if (event.target.checked) {
+      setSelectedRecords(records);
+    } else {
+      setSelectedRecords([]);
+    }
+  };
+
   const handleSelectRecord = useCallback((record) => {
     setSelectedRecords(prev => {
       const isSelected = prev.some(r => 
@@ -286,283 +216,152 @@ function ZoneEditor() {
     });
   }, []);
 
-  const handleSelectAllRecords = useCallback((event) => {
-    if (event.target.checked) {
-      setSelectedRecords(filteredRecords);
-    } else {
-      setSelectedRecords([]);
-    }
-  }, [filteredRecords]);
-
-  // History handlers
-  const canUndo = historyIndex > 0;
-  const canRedo = historyIndex < changeHistory.length - 1;
-
-  const handleUndo = useCallback(() => {
-    if (!canUndo) return;
-    
-    const previousChanges = changeHistory[historyIndex - 1];
-    setPendingChanges([...previousChanges]);
-    setHistoryIndex(historyIndex - 1);
-  }, [canUndo, changeHistory, historyIndex, setPendingChanges]);
-
-  const handleRedo = useCallback(() => {
-    if (!canRedo) return;
-    
-    const nextChanges = changeHistory[historyIndex + 1];
-    setPendingChanges([...nextChanges]);
-    setHistoryIndex(historyIndex + 1);
-  }, [canRedo, changeHistory, historyIndex, setPendingChanges]);
-
-  // Add an effect to track pending changes history
-  useEffect(() => {
-    const currentChanges = JSON.stringify(pendingChanges);
-    const historyChanges = JSON.stringify(changeHistory[historyIndex]);
-    
-    if (currentChanges !== historyChanges) {
-      setChangeHistory(prev => {
-        // Remove any future states if we're not at the end
-        const newHistory = prev.slice(0, historyIndex + 1);
-        // Add current changes as new state
-        return [...newHistory, [...pendingChanges]];
-      });
-      setHistoryIndex(prev => prev + 1);
-    }
-  }, [pendingChanges, historyIndex]);
-
-  // UI Components
-  const EditRecordDialog = () => {
-    const [editedRecord, setEditedRecord] = useState(currentEditRecord);
-
-    useEffect(() => {
-      setEditedRecord(currentEditRecord);
-    }, [currentEditRecord]);
-
-    const handleSubmit = () => {
-      const change = {
-        type: 'MODIFY',
-        zone: selectedZone,
-        originalRecord: currentEditRecord,
-        newRecord: editedRecord
-      };
-      
-      addPendingChange(change);
-      setEditDialogOpen(false);
-    };
-
-    return (
-      <Dialog 
-        open={editDialogOpen} 
-        onClose={() => setEditDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Edit DNS Record</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <TextField
-              label="Name"
-              value={editedRecord?.name || ''}
-              onChange={(e) => setEditedRecord(prev => ({
-                ...prev,
-                name: e.target.value
-              }))}
-              fullWidth
-            />
-            <TextField
-              label="TTL"
-              type="number"
-              value={editedRecord?.ttl || ''}
-              onChange={(e) => setEditedRecord(prev => ({
-                ...prev,
-                ttl: parseInt(e.target.value)
-              }))}
-              fullWidth
-            />
-            <TextField
-              label="Value"
-              value={editedRecord?.value || ''}
-              onChange={(e) => setEditedRecord(prev => ({
-                ...prev,
-                value: e.target.value
-              }))}
-              fullWidth
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-          <Button 
-            onClick={handleSubmit}
-            color="primary"
-          >
-            Queue Changes
-          </Button>
-        </DialogActions>
-      </Dialog>
-    );
+  const handleZoneChange = (event) => {
+    const newZone = event.target.value;
+    setSelectedZone(newZone);
+    setSelectedKey('');
+    setSelectedRecords([]);
   };
 
-  const handleDeleteRecord = useCallback((record) => {
-    if (!selectedZone || !record) {
-      setError('Cannot delete record: Missing zone or record data');
-      return;
-    }
+  const handleKeyChange = (event) => {
+    setSelectedKey(event.target.value);
+    setSelectedRecords([]);
+  };
 
-    const deleteChange = {
-      type: 'DELETE',
-      zone: selectedZone,
-      record: {
-        name: record.name,
-        type: record.type,
-        value: record.value,
-        ttl: record.ttl,
-        class: record.class || 'IN'
-      }
-    };
-
-    console.log('Creating delete change:', deleteChange);
-    addPendingChange(deleteChange);
-    setShowPendingDrawer(true);
-  }, [selectedZone, addPendingChange, setShowPendingDrawer]);
-
-  const handleEditRecord = async (originalRecord, updatedRecord) => {
+  const handleDeleteRecord = async (record) => {
     try {
-      setLoading(true);
-      setError(null);
-
-      const keyConfig = config.keys.find(key => 
-        key.zones?.includes(selectedZone)
-      );
-
+      const keyConfig = config.keys.find(key => key.id === selectedKey);
       if (!keyConfig) {
-        throw new Error('No key configuration found for this zone');
+        throw new Error('No key configuration found');
       }
 
-      // Format the record based on its type
-      const formattedRecord = formatRecordForUpdate(originalRecord, updatedRecord);
+      // Create backup before deletion
+      await backupService.createBackup(selectedZone, [record], {
+        type: 'auto',
+        description: 'Automatic backup before record deletion',
+        server: keyConfig.server,
+        config: config
+      });
 
-      // Add to pending changes
-      addPendingChange({
-        type: 'MODIFY',
+      const change = {
+        type: 'DELETE',
         zone: selectedZone,
-        originalRecord: originalRecord,
-        newRecord: formattedRecord,
-        keyId: keyConfig.id
+        keyId: selectedKey,
+        record: record
+      };
+
+      addPendingChange(change);
+      setShowPendingDrawer(true);
+    } catch (error) {
+      setError(`Failed to delete record: ${error.message}`);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    try {
+      const keyConfig = config.keys.find(key => key.id === selectedKey);
+      if (!keyConfig) {
+        throw new Error('No key configuration found');
+      }
+
+      // Create backup before bulk deletion
+      await backupService.createBackup(selectedZone, selectedRecords, {
+        type: 'auto',
+        description: 'Automatic backup before bulk deletion',
+        server: keyConfig.server,
+        config: config
+      });
+
+      selectedRecords.forEach(record => {
+        const change = {
+          type: 'DELETE',
+          zone: selectedZone,
+          keyId: selectedKey,
+          record: record
+        };
+        addPendingChange(change);
       });
 
       setShowPendingDrawer(true);
-    } catch (err) {
-      console.error('Failed to edit record:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      setSelectedRecords([]);
+    } catch (error) {
+      setError(`Failed to delete records: ${error.message}`);
     }
   };
 
-  const formatRecordForUpdate = (originalRecord, updatedRecord) => {
-    if (updatedRecord.type === 'SOA') {
-      // Ensure all SOA fields are numbers where appropriate
-      const soaValue = updatedRecord.value;
-      return {
-        ...updatedRecord,
-        value: {
-          mname: soaValue.mname,
-          rname: soaValue.rname,
-          serial: parseInt(soaValue.serial),
-          refresh: parseInt(soaValue.refresh),
-          retry: parseInt(soaValue.retry),
-          expire: parseInt(soaValue.expire),
-          minimum: parseInt(soaValue.minimum)
-        }
-      };
-    }
-
-    // Handle TXT and other multiline records
-    if (['TXT', 'SPF'].includes(updatedRecord.type)) {
-      return {
-        ...updatedRecord,
-        value: updatedRecord.value.trim()
-      };
-    }
-
-    return updatedRecord;
-  };
-
-  const [editingRecord, setEditingRecord] = useState(null);
-
-  const handleEditClick = (record) => {
+  const handleEditRecord = (record) => {
     setEditingRecord(record);
     setEditDialogOpen(true);
   };
 
-  const handleEditClose = () => {
-    setEditingRecord(null);
-    setEditDialogOpen(false);
-  };
-
   const handleEditSave = async (updatedRecord) => {
     try {
-      await handleEditRecord(editingRecord, updatedRecord);
+      const change = {
+        type: 'MODIFY',
+        zone: selectedZone,
+        keyId: selectedKey,
+        originalRecord: editingRecord,
+        newRecord: updatedRecord
+      };
+      
+      addPendingChange(change);
+      setShowPendingDrawer(true);
       setEditDialogOpen(false);
       setEditingRecord(null);
     } catch (error) {
-      console.error('Failed to save record:', error);
       setError(error.message);
     }
   };
 
-  // Main render method
+  const formatRecordValue = (record) => {
+    if (record.type === 'SOA') {
+      const soa = record.value;
+      return `${soa.mname} ${soa.rname} ${soa.serial} ${soa.refresh} ${soa.retry} ${soa.expire} ${soa.minimum}`;
+    }
+    return record.value;
+  };
+
+  const isMultilineRecord = (record) => {
+    if (!record) return false;
+    
+    // SOA records are always shown in the modal
+    if (record.type === 'SOA') return true;
+    
+    // TXT records with long values
+    if (record.type === 'TXT' && record.value.length > 40) return true;
+    
+    // Any record with an object value
+    if (typeof record.value === 'object') return true;
+    
+    return false;
+  };
+
+  const filteredRecords = useMemo(() => {
+    return records.filter(record => {
+      const searchLower = searchText.toLowerCase();
+      
+      // Type filter
+      if (filterType !== 'ALL' && record.type !== filterType) {
+        return false;
+      }
+
+      if (!searchLower) return true;
+      
+      return record.name.toLowerCase().includes(searchLower) ||
+             record.type.toLowerCase().includes(searchLower) ||
+             String(record.value).toLowerCase().includes(searchLower);
+    });
+  }, [records, searchText, filterType]);
+
   return (
     <Paper sx={{ p: 3 }}>
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {success}
-        </Alert>
-      )}
-      
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Zone Editor</Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            onClick={handleUndo}
-            disabled={!canUndo || loading}
-            startIcon={<UndoIcon />}
-          >
-            Undo ({historyIndex})
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={handleRedo}
-            disabled={!canRedo || loading}
-            startIcon={<RedoIcon />}
-          >
-            Redo ({changeHistory.length - historyIndex - 1})
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => setShowPendingDrawer(true)}
-            startIcon={
-              pendingChanges.length > 0 ? (
-                <Badge badgeContent={pendingChanges.length} color="error">
-                  <EditIcon />
-                </Badge>
-              ) : (
-                <EditIcon />
-              )
-            }
-          >
-            Pending Changes ({pendingChanges.length})
-          </Button>
-        </Box>
-      </Box>
-
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
         <Select
           value={selectedZone}
-          onChange={(e) => setSelectedZone(e.target.value)}
+          onChange={(e) => {
+            setSelectedZone(e.target.value);
+            setSelectedKey('');
+          }}
           displayEmpty
           fullWidth
         >
@@ -572,6 +371,23 @@ function ZoneEditor() {
           {availableZones.map((zone) => (
             <MenuItem key={zone} value={zone}>
               {zone}
+            </MenuItem>
+          ))}
+        </Select>
+
+        <Select
+          value={selectedKey}
+          onChange={(e) => setSelectedKey(e.target.value)}
+          displayEmpty
+          fullWidth
+          disabled={!selectedZone}
+        >
+          <MenuItem value="" disabled>
+            Select a DNS Key
+          </MenuItem>
+          {availableKeys.map((key) => (
+            <MenuItem key={key.id} value={key.id}>
+              {key.name || key.id}
             </MenuItem>
           ))}
         </Select>
@@ -601,25 +417,11 @@ function ZoneEditor() {
 
         <IconButton 
           onClick={loadZoneRecords} 
-          disabled={!selectedZone || loading}
+          disabled={!selectedZone || !selectedKey || loading}
         >
           <RefreshIcon />
         </IconButton>
-
-        <Button
-          variant="contained"
-          onClick={() => setShowAddRecord(!showAddRecord)}
-          disabled={!selectedZone}
-        >
-          {showAddRecord ? 'Cancel Add' : 'Add Record'}
-        </Button>
       </Box>
-
-      {searchText && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Found {filteredRecords.length} matching records
-        </Typography>
-      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -628,33 +430,59 @@ function ZoneEditor() {
       )}
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-          <CircularProgress />
-        </Box>
+        <CircularProgress />
       ) : (
         <>
-          <TableContainer>
-            <Table size="small">
+          <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
+            <Button
+              variant="contained"
+              onClick={() => setShowAddRecord(true)}
+              startIcon={<AddIcon />}
+              disabled={!selectedZone || !selectedKey}
+            >
+              Add Record
+            </Button>
+            {selectedRecords.length > 0 && (
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleDeleteSelected}
+                startIcon={<DeleteIcon />}
+              >
+                Delete Selected ({selectedRecords.length})
+              </Button>
+            )}
+          </Box>
+
+          {showAddRecord && selectedZone && selectedKey && (
+            <AddDNSRecord 
+              zone={selectedZone}
+              selectedKey={selectedKey}
+              onRecordAdded={() => {
+                setShowAddRecord(false);
+                loadZoneRecords();
+              }}
+              pendingChanges={pendingChanges}
+              addPendingChange={addPendingChange}
+              setShowPendingDrawer={setShowPendingDrawer}
+            />
+          )}
+
+          <TableContainer component={Paper}>
+            <Table>
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox">
                     <Checkbox
-                      indeterminate={
-                        selectedRecords.length > 0 && 
-                        selectedRecords.length < filteredRecords.length
-                      }
-                      checked={
-                        filteredRecords.length > 0 && 
-                        selectedRecords.length === filteredRecords.length
-                      }
-                      onChange={handleSelectAllRecords}
+                      indeterminate={selectedRecords.length > 0 && selectedRecords.length < records.length}
+                      checked={records.length > 0 && selectedRecords.length === records.length}
+                      onChange={handleSelectAllClick}
                     />
                   </TableCell>
                   <TableCell>Name</TableCell>
-                  <TableCell>TTL</TableCell>
-                  <TableCell>Class</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Value</TableCell>
+                  <TableCell>TTL</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -662,7 +490,7 @@ function ZoneEditor() {
                 {filteredRecords
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((record, index) => (
-                    <TableRow 
+                    <TableRow
                       key={`${record.name}-${record.type}-${index}`}
                       selected={selectedRecords.some(r => 
                         r.name === record.name && 
@@ -681,11 +509,7 @@ function ZoneEditor() {
                         />
                       </TableCell>
                       <TableCell>{record.name}</TableCell>
-                      <TableCell>{record.ttl}</TableCell>
-                      <TableCell>{record.class}</TableCell>
-                      <TableCell>
-                        <Chip label={record.type} size="small" />
-                      </TableCell>
+                      <TableCell>{record.type}</TableCell>
                       <TableCell>
                         {isMultilineRecord(record) ? (
                           <Button 
@@ -698,20 +522,20 @@ function ZoneEditor() {
                           record.value
                         )}
                       </TableCell>
+                      <TableCell>{record.ttl}</TableCell>
                       <TableCell align="right">
                         <IconButton
+                          onClick={() => handleEditRecord(record)}
                           size="small"
-                          onClick={() => handleEditClick(record)}
-                          title="Edit Record"
                         >
-                          <EditIcon fontSize="small" />
+                          <EditIcon />
                         </IconButton>
                         <IconButton
-                          size="small"
                           onClick={() => handleDeleteRecord(record)}
+                          size="small"
                           color="error"
                         >
-                          <DeleteIcon fontSize="small" />
+                          <DeleteIcon />
                         </IconButton>
                       </TableCell>
                     </TableRow>
@@ -719,6 +543,7 @@ function ZoneEditor() {
               </TableBody>
             </Table>
           </TableContainer>
+
           <TablePagination
             component="div"
             count={filteredRecords.length}
@@ -733,31 +558,6 @@ function ZoneEditor() {
         </>
       )}
 
-      <Dialog 
-        open={editDialogOpen} 
-        onClose={handleEditClose}
-        maxWidth="md"
-        fullWidth
-      >
-        {editingRecord && (
-          <RecordEditor
-            record={editingRecord}
-            onSave={handleEditSave}
-            onCancel={handleEditClose}
-          />
-        )}
-      </Dialog>
-
-      {showAddRecord && selectedZone && (
-        <AddDNSRecord 
-          zone={selectedZone}
-          onRecordAdded={() => {
-            setShowAddRecord(false);
-            loadZoneRecords();
-          }}
-        />
-      )}
-
       {multilineRecord && (
         <MultilineRecordDialog
           record={multilineRecord}
@@ -765,6 +565,22 @@ function ZoneEditor() {
           onClose={() => setMultilineRecord(null)}
         />
       )}
+
+      <Dialog 
+        open={editDialogOpen} 
+        onClose={() => setEditDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        {editingRecord && (
+          <RecordEditor
+            record={editingRecord}
+            selectedKey={selectedKey}
+            onSave={handleEditSave}
+            onCancel={() => setEditDialogOpen(false)}
+          />
+        )}
+      </Dialog>
     </Paper>
   );
 }

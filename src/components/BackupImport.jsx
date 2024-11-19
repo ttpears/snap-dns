@@ -76,6 +76,7 @@ function BackupImport() {
   const [filterZone, setFilterZone] = useState('all');
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [selectedKey, setSelectedKey] = useState('');
 
   useEffect(() => {
     loadBackups();
@@ -95,9 +96,14 @@ function BackupImport() {
     return Array.from(zones);
   }, [config.keys]);
 
+  const availableKeys = useMemo(() => {
+    if (!selectedZone) return [];
+    return config.keys?.filter(key => key.zones?.includes(selectedZone)) || [];
+  }, [config.keys, selectedZone]);
+
   const handleBackup = async () => {
-    if (!selectedZone) {
-      setError('Please select a zone to backup');
+    if (!selectedZone || !selectedKey) {
+      setError('Please select both a zone and a key');
       return;
     }
 
@@ -106,12 +112,9 @@ function BackupImport() {
     setSuccess(null);
 
     try {
-      const keyConfig = config.keys.find(key => 
-        key.zones?.includes(selectedZone)
-      );
-
+      const keyConfig = config.keys.find(key => key.id === selectedKey);
       if (!keyConfig) {
-        throw new Error('No key configuration found for this zone');
+        throw new Error('No key configuration found');
       }
 
       const records = await dnsService.fetchZoneRecords(selectedZone, keyConfig);
@@ -379,6 +382,22 @@ function BackupImport() {
             {availableZones.map((zone) => (
               <MenuItem key={zone} value={zone}>
                 {zone}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel>DNS Key</InputLabel>
+          <Select
+            value={selectedKey}
+            onChange={(e) => setSelectedKey(e.target.value)}
+            label="DNS Key"
+            disabled={!selectedZone}
+          >
+            {availableKeys.map((key) => (
+              <MenuItem key={key.id} value={key.id}>
+                {key.name || key.id}
               </MenuItem>
             ))}
           </Select>

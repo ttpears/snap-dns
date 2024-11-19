@@ -1,7 +1,58 @@
 import React, { useState } from 'react';
 import { Box, Typography, Grid, TextField, Button, Alert } from '@mui/material';
+import { KeyConfig } from '../config';
 
-export function RecordEditor({ record, onSave, onCancel }) {
+// Record type enum
+export enum RecordType {
+  A = 'A',
+  AAAA = 'AAAA',
+  CNAME = 'CNAME',
+  MX = 'MX',
+  TXT = 'TXT',
+  SRV = 'SRV',
+  NS = 'NS',
+  PTR = 'PTR',
+  CAA = 'CAA',
+  SOA = 'SOA',
+  SSHFP = 'SSHFP'
+}
+
+// Base DNS record interface
+export interface DNSRecord {
+  name: string;
+  type: RecordType;
+  value: string;
+  ttl: number;
+}
+
+// Pending change interface for tracking modifications
+export interface PendingChange {
+  type: 'ADD' | 'MODIFY' | 'DELETE';
+  zone: string;
+  keyId: string;
+  record?: DNSRecord;
+  originalRecord?: DNSRecord;
+  newRecord?: DNSRecord;
+  name?: string;
+  recordType?: RecordType;
+  value?: string;
+  ttl?: number;
+}
+
+// Validation result interface
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+}
+
+// DNS operation result
+export interface DNSOperationResult {
+  success: boolean;
+  message: string;
+  error?: string;
+}
+
+export function RecordEditor({ record, onSave, onCancel, selectedKey }) {
   const [editedRecord, setEditedRecord] = useState({ ...record });
   const [error, setError] = useState(null);
 
@@ -37,10 +88,14 @@ export function RecordEditor({ record, onSave, onCancel }) {
       if (isSOA) {
         onSave({
           ...editedRecord,
-          value: soaFields
+          value: soaFields,
+          keyId: selectedKey
         });
       } else {
-        onSave(editedRecord);
+        onSave({
+          ...editedRecord,
+          keyId: selectedKey
+        });
       }
     } catch (err) {
       setError(err.message);

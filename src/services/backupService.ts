@@ -54,25 +54,25 @@ export class BackupService {
         version: this.VERSION
       };
 
-      // Add new backup at the beginning
       backups.unshift(newBackup);
 
-      // Remove oldest backups until we're under size limit
       while (this.calculateSize(backups) > this.MAX_STORAGE_SIZE || backups.length > this.MAX_BACKUPS) {
         backups.pop();
       }
 
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(backups));
       
-      // Notify if it's a manual backup
       if (options.type === 'manual') {
         await notificationService.notifyBackupCreated(newBackup);
       }
 
       return newBackup;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to create backup:', error);
-      throw new Error(`Failed to create backup: ${error.message}`);
+      if (error instanceof Error) {
+        throw new Error(`Failed to create backup: ${error.message}`);
+      }
+      throw new Error('Failed to create backup: Unknown error');
     }
   }
 
@@ -80,7 +80,6 @@ export class BackupService {
     try {
       const recordsToRestore = selectedRecords || backup.records;
       
-      // Get key config for the zone
       const keyConfig = config.keys.find(key => 
         key.zones?.includes(backup.zone) && key.server === backup.server
       );
@@ -89,13 +88,15 @@ export class BackupService {
         throw new Error('No key configuration found for this zone and server');
       }
 
-      // Restore records one by one
       for (const record of recordsToRestore) {
         await dnsService.addRecord(backup.zone, record, keyConfig);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to restore records:', error);
-      throw new Error(`Failed to restore records: ${error.message}`);
+      if (error instanceof Error) {
+        throw new Error(`Failed to restore records: ${error.message}`);
+      }
+      throw new Error('Failed to restore records: Unknown error');
     }
   }
 
@@ -112,47 +113,56 @@ export class BackupService {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to download backup:', error);
-      throw new Error(`Failed to download backup: ${error.message}`);
+      if (error instanceof Error) {
+        throw new Error(`Failed to download backup: ${error.message}`);
+      }
+      throw new Error('Failed to download backup: Unknown error');
     }
   }
 
-  async importBackup(file: File, config: Config): Promise<DNSBackup> {
+  async importBackup(file: File): Promise<DNSBackup> {
     try {
       const content = await file.text();
-      const backup = JSON.parse(content) as DNSBackup;
+      const backup = JSON.parse(content);
       
       // Validate backup structure
-      if (!backup.zone || !backup.records || !Array.isArray(backup.records)) {
-        throw new Error('Invalid backup file structure');
+      if (!this.isValidBackup(backup)) {
+        throw new Error('Invalid backup format');
       }
 
-      // Add missing fields for older backups
-      const normalizedBackup: DNSBackup = {
-        ...backup,
-        id: backup.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: backup.timestamp || Date.now(),
-        type: backup.type || 'manual',
-        version: backup.version || '1.0',
-        server: backup.server || config.defaultServer
-      };
-
-      // Add to existing backups
       const backups = this.getBackups();
-      backups.unshift(normalizedBackup);
+      backups.unshift(backup);
 
-      // Maintain size limits
+      // Maintain storage limits
       while (this.calculateSize(backups) > this.MAX_STORAGE_SIZE || backups.length > this.MAX_BACKUPS) {
         backups.pop();
       }
 
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(backups));
-      return normalizedBackup;
-    } catch (error) {
+      return backup;
+    } catch (error: unknown) {
       console.error('Failed to import backup:', error);
-      throw new Error(`Failed to import backup: ${error.message}`);
+      if (error instanceof Error) {
+        throw new Error(`Failed to import backup: ${error.message}`);
+      }
+      throw new Error('Failed to import backup: Unknown error');
     }
+  }
+
+  // Add type guard for backup validation
+  private isValidBackup(backup: unknown): backup is DNSBackup {
+    return (
+      typeof backup === 'object' &&
+      backup !== null &&
+      'id' in backup &&
+      'timestamp' in backup &&
+      'zone' in backup &&
+      'server' in backup &&
+      'records' in backup &&
+      Array.isArray((backup as DNSBackup).records)
+    );
   }
 
   deleteBackup(backupId: string): boolean {
