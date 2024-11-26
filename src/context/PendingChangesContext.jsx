@@ -5,6 +5,8 @@ const PendingChangesContext = createContext();
 export function PendingChangesProvider({ children }) {
   const [pendingChanges, setPendingChanges] = useState([]);
   const [showPendingDrawer, setShowPendingDrawer] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState(null);
 
   const addPendingChange = (change) => {
     console.log('Adding pending change:', change);
@@ -58,6 +60,35 @@ export function PendingChangesProvider({ children }) {
     });
   };
 
+  const applyChanges = async () => {
+    setApplying(true);
+    setError(null);
+    
+    try {
+      // Apply the changes
+      await dnsService.applyChanges(pendingChanges);
+      
+      // Log for debugging
+      console.log('Changes applied, emitting event for zones:', 
+        [...new Set(pendingChanges.map(change => change.zone))]);
+      
+      // Emit event with affected zones
+      const affectedZones = [...new Set(pendingChanges.map(change => change.zone))];
+      window.dispatchEvent(new CustomEvent('dnsChangesApplied', {
+        detail: { zones: affectedZones }
+      }));
+      
+      // Clear the changes
+      setPendingChanges([]);
+      setShowPendingDrawer(false);
+    } catch (error) {
+      console.error('Error applying changes:', error);
+      setError(error.message);
+    } finally {
+      setApplying(false);
+    }
+  };
+
   return (
     <PendingChangesContext.Provider value={{
       pendingChanges,
@@ -67,7 +98,9 @@ export function PendingChangesProvider({ children }) {
       reorderPendingChanges,
       showPendingDrawer,
       setShowPendingDrawer,
-      setPendingChanges
+      setPendingChanges,
+      applying,
+      error
     }}>
       {children}
     </PendingChangesContext.Provider>

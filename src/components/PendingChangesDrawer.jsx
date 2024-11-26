@@ -184,6 +184,13 @@ export function PendingChangesDrawer() {
         await notificationService.sendNotification(selectedZone, pendingChanges);
       }
 
+      // Emit custom event with affected zones
+      const affectedZones = [...new Set(pendingChanges.map(change => change.zone))];
+      const event = new CustomEvent('dnsChangesApplied', {
+        detail: { zones: affectedZones }
+      });
+      window.dispatchEvent(event);
+
       setSuccess('Changes applied successfully');
       clearPendingChanges();
       setShowPendingDrawer(false);

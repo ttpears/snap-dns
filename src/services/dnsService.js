@@ -150,7 +150,8 @@ export async function parseZoneRecords(zoneData) {
 export const dnsService = {
   async fetchZoneRecords(zoneName, keyConfig) {
     try {
-      const records = await dnsServer.getRecords(zoneName, keyConfig);
+      const timestamp = Date.now();
+      const records = await dnsServer.getRecords(zoneName, keyConfig, timestamp);
       return records;
     } catch (error) {
       console.error('Error fetching zone records:', error);

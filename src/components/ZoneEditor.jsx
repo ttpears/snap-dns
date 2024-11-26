@@ -151,6 +151,9 @@ function ZoneEditor() {
   const recordTypes = [
     'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP', 'SOA'
   ];
+  const [addRecordDialogOpen, setAddRecordDialogOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const availableZones = useMemo(() => {
     const zones = new Set();
@@ -168,7 +171,8 @@ function ZoneEditor() {
   const loadZoneRecords = useCallback(async () => {
     if (!selectedZone || !selectedKey) return;
     
-    setLoading(true);
+    console.log('Loading records for zone:', selectedZone);
+    setRefreshing(true);
     setError(null);
     
     try {
@@ -178,13 +182,15 @@ function ZoneEditor() {
         throw new Error('No key configuration found');
       }
 
+      console.log('Fetching zone records...');
       const records = await dnsService.fetchZoneRecords(selectedZone, keyConfig);
+      console.log('Received records:', records);
       setRecords(records);
     } catch (err) {
       console.error('Failed to load zone records:', err);
       setError(err.message);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
   }, [selectedZone, selectedKey, config.keys]);
 
@@ -368,6 +374,36 @@ function ZoneEditor() {
     }
   }, [pendingChanges, historyIndex]);
 
+  const handleAddRecordClick = () => {
+    setAddRecordDialogOpen(true);
+  };
+
+  // Add effect to listen for applied changes
+  useEffect(() => {
+    const handleChangesApplied = (event) => {
+      const { zones } = event.detail;
+      
+      if (selectedZone && zones.includes(selectedZone)) {
+        setIsRefreshing(true);
+        
+        // Add a delay to allow DNS propagation
+        setTimeout(async () => {
+          try {
+            await loadZoneRecords();
+          } catch (error) {
+            console.error('Error refreshing zone records:', error);
+            setError('Failed to refresh zone records after changes');
+          } finally {
+            setIsRefreshing(false);
+          }
+        }, 2000); // 2 second delay
+      }
+    };
+
+    window.addEventListener('dnsChangesApplied', handleChangesApplied);
+    return () => window.removeEventListener('dnsChangesApplied', handleChangesApplied);
+  }, [selectedZone, loadZoneRecords]);
+
   return (
     <Paper sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
@@ -432,15 +468,25 @@ function ZoneEditor() {
 
         <IconButton 
           onClick={loadZoneRecords} 
-          disabled={!selectedZone || !selectedKey || loading}
+          disabled={!selectedZone || !selectedKey || refreshing}
         >
-          <RefreshIcon />
+          {refreshing ? (
+            <CircularProgress size={24} />
+          ) : (
+            <RefreshIcon />
+          )}
         </IconButton>
       </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
+        </Alert>
+      )}
+
+      {isRefreshing && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Refreshing zone records...
         </Alert>
       )}
 
@@ -451,7 +497,7 @@ function ZoneEditor() {
           <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
             <Button
               variant="contained"
-              onClick={() => setShowAddRecord(true)}
+              onClick={handleAddRecordClick}
               startIcon={<AddIcon />}
               disabled={!selectedZone || !selectedKey}
             >
@@ -469,19 +515,26 @@ function ZoneEditor() {
             )}
           </Box>
 
-          {showAddRecord && selectedZone && selectedKey && (
-            <AddDNSRecord 
-              zone={selectedZone}
-              selectedKey={selectedKey}
-              onRecordAdded={() => {
-                setShowAddRecord(false);
-                loadZoneRecords();
-              }}
-              pendingChanges={pendingChanges}
-              addPendingChange={addPendingChange}
-              setShowPendingDrawer={setShowPendingDrawer}
-            />
-          )}
+          <Dialog 
+            open={addRecordDialogOpen} 
+            onClose={() => setAddRecordDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle>Add DNS Record</DialogTitle>
+            {selectedZone && selectedKey && (
+              <AddDNSRecord 
+                zone={selectedZone}
+                selectedKey={selectedKey}
+                onRecordAdded={() => {
+                  setAddRecordDialogOpen(false);
+                  loadZoneRecords();
+                }}
+                addPendingChange={addPendingChange}
+                setShowPendingDrawer={setShowPendingDrawer}
+              />
+            )}
+          </Dialog>
 
           <TableContainer>
             <Table size="small">

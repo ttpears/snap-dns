@@ -7,33 +7,32 @@ class DnsServer {
     console.log('API URL configured as:', this.baseUrl);
   }
 
-  async getRecords(zone, keyConfig) {
+  async getRecords(zoneName, keyConfig, timestamp) {
     try {
-      const url = `${this.baseUrl}/zone/${zone}/axfr`;
-      console.log('Making AXFR request to:', url);
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          server: keyConfig.server,
-          keyName: keyConfig.keyName,
-          keyValue: keyConfig.keyValue,
-          algorithm: keyConfig.algorithm
-        })
-      });
+      const response = await fetch(
+        `${this.baseUrl}/zone/${zoneName}/axfr?t=${timestamp}`, 
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            server: keyConfig.server,
+            keyName: keyConfig.keyName,
+            keyValue: keyConfig.keyValue,
+            algorithm: keyConfig.algorithm
+          })
+        }
+      );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Server response:', errorText);
-        throw new Error(`Server error: ${errorText}`);
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch zone records');
       }
 
       return await response.json();
     } catch (error) {
-      console.error('DNS Server error:', error);
+      console.error('Error fetching records:', error);
       throw error;
     }
   }
