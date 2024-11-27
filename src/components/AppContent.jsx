@@ -14,12 +14,14 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Button,
+  Badge,
 } from '@mui/material';
 import {
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
   Dns as DnsIcon,
   Delete as DeleteIcon,
+  Save as SaveIcon,
 } from '@mui/icons-material';
 import { useConfig } from '../context/ConfigContext';
 import { usePendingChanges } from '../context/PendingChangesContext';
@@ -50,11 +52,20 @@ function AppContent({ drawerWidth, darkMode, toggleDarkMode }) {
           <Typography variant="h6" noWrap component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <DnsIcon /> Snap DNS Manager
           </Typography>
-          <Tooltip title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>
-            <IconButton color="inherit" onClick={toggleDarkMode}>
-              {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-            </IconButton>
-          </Tooltip>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button
+              color="inherit"
+              onClick={() => setShowPendingDrawer(true)}
+              startIcon={<Badge badgeContent={pendingChanges.length} color="error"><SaveIcon /></Badge>}
+            >
+              Pending Changes
+            </Button>
+            <Tooltip title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+              <IconButton color="inherit" onClick={toggleDarkMode}>
+                {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Toolbar>
       </AppBar>
 

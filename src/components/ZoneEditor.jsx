@@ -40,6 +40,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import UndoIcon from '@mui/icons-material/Undo';
 import RedoIcon from '@mui/icons-material/Redo';
 import RecordEditor from './RecordEditor';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 function MultilineRecordDialog({ record, open, onClose }) {
   const formatDuration = (seconds) => {
@@ -154,6 +155,8 @@ function ZoneEditor() {
   const [addRecordDialogOpen, setAddRecordDialogOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [copyingRecord, setCopyingRecord] = useState(null);
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
 
   const availableZones = useMemo(() => {
     const zones = new Set();
@@ -404,6 +407,31 @@ function ZoneEditor() {
     return () => window.removeEventListener('dnsChangesApplied', handleChangesApplied);
   }, [selectedZone, loadZoneRecords]);
 
+  const handleCopyRecord = (record) => {
+    setCopyingRecord({
+      ...record,
+      id: undefined,
+      name: `${record.name}`
+    });
+    setCopyDialogOpen(true);
+  };
+
+  const handleCopySave = (newRecord) => {
+    // Add the new record to pending changes
+    addPendingChange({
+      type: 'ADD',
+      zone: selectedZone,
+      keyId: selectedKey,
+      record: newRecord
+    });
+
+    // Close the dialog
+    setCopyDialogOpen(false);
+
+    // Show the pending changes drawer
+    setShowPendingDrawer(true);
+  };
+
   return (
     <Paper sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
@@ -599,6 +627,13 @@ function ZoneEditor() {
                       <TableCell align="right">
                         <IconButton
                           size="small"
+                          onClick={() => handleCopyRecord(record)}
+                          title="Copy and Edit Record"
+                        >
+                          <ContentCopyIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
                           onClick={() => handleEditRecord(record)}
                           title="Edit Record"
                         >
@@ -652,6 +687,22 @@ function ZoneEditor() {
             selectedKey={selectedKey}
             onSave={handleEditSave}
             onCancel={() => setEditDialogOpen(false)}
+          />
+        )}
+      </Dialog>
+
+      <Dialog 
+        open={copyDialogOpen} 
+        onClose={() => setCopyDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        {copyingRecord && (
+          <RecordEditor
+            record={copyingRecord}
+            onSave={handleCopySave}
+            onCancel={() => setCopyDialogOpen(false)}
+            isCopy={true}
           />
         )}
       </Dialog>
