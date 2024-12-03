@@ -20,7 +20,7 @@ RUN mkdir -p /tmp/snap-dns && \
 # Copy source code and config files
 COPY backend/tsconfig.json ./
 COPY backend/src ./src
-COPY backend/.env* ./
+COPY backend/.env .env
 COPY backend/.env.* ./
 
 # Environment variables
