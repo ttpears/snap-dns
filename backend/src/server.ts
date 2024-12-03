@@ -35,6 +35,11 @@ const corsOptions = {
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3001'];
     console.log('CORS Check:', { origin, allowedOrigins, env: NODE_ENV });
     
+    if (NODE_ENV === 'development') {
+      callback(null, true);
+      return;
+    }
+    
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -43,8 +48,18 @@ const corsOptions = {
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'Accept', 
+    'Origin', 
+    'X-Requested-With',
+    'x-dns-key-name',
+    'x-dns-key-secret',
+    'x-dns-key-algorithm'
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 };
 
 // Middleware
