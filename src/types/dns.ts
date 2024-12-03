@@ -18,9 +18,10 @@ export enum RecordType {
 // Base DNS record interface
 export interface DNSRecord {
   name: string;
-  type: RecordType;
-  value: string;
+  type: string;
+  value: string | object;
   ttl: number;
+  class?: string;
 }
 
 // Pending change interface for tracking modifications
@@ -47,5 +48,20 @@ export interface ValidationResult {
 export interface DNSOperationResult {
   success: boolean;
   message: string;
+  error?: string;
+}
+
+export interface ZoneConfig {
+  server: string;
+  keyName: string;
+  keyValue: string;
+  algorithm: string;
+  id: string;
+}
+
+export interface ZoneOperationResult {
+  success: boolean;
+  message?: string;
+  records?: DNSRecord[];
   error?: string;
 }

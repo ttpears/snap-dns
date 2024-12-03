@@ -12,6 +12,10 @@ import {
   FormHelperText,
   Grid
 } from '@mui/material';
+import { usePendingChanges } from '../context/PendingChangesContext';
+import { useKey } from '../context/KeyContext';
+import { dnsService } from '../services/dnsService';
+import { useConfig } from '../context/ConfigContext';
 
 // Record type definitions with their specific fields and validations
 const RECORD_TYPES = {
@@ -170,25 +174,64 @@ const RECORD_TYPES = {
   }
 };
 
-function AddDNSRecord({ zone, selectedKey, onRecordAdded, addPendingChange, setShowPendingDrawer }) {
+function AddDNSRecord({ zone, onSuccess }) {
+  const { selectedKey, selectedZone } = useKey();
+  const { addPendingChange, setShowPendingDrawer } = usePendingChanges();
+  const { config } = useConfig();
   const [record, setRecord] = useState({
     name: '',
     ttl: 3600,
     type: 'A',
-    value: ''
+    value: '',
+    priority: 0,
+    weight: 0,
+    port: 0,
+    target: '',
+    flags: 0,
+    tag: 'issue',
+    algorithm: 1,
+    fptype: 1,
+    fingerprint: ''
   });
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [validationErrors, setValidationErrors] = useState({});
 
   const currentTypeFields = useMemo(() => {
     return RECORD_TYPES[record.type]?.fields || [];
   }, [record.type]);
 
   const handleFieldChange = (fieldName, value) => {
-    setRecord(prev => ({
-      ...prev,
-      [fieldName]: value
-    }));
+    setRecord(prev => {
+      const newRecord = {
+        ...prev,
+        [fieldName]: value
+      };
+
+      // Only validate the record name and TTL while typing
+      if (selectedZone && (fieldName === 'name' || fieldName === 'ttl')) {
+        let validationRecord = { ...newRecord };
+        
+        // For SRV records, create a temporary formatted value
+        if (newRecord.type === 'SRV') {
+          validationRecord = {
+            ...newRecord,
+            value: `${newRecord.priority || 0} ${newRecord.weight || 0} ${newRecord.port || 0} ${newRecord.target || ''}`
+          };
+        }
+
+        const validation = DNSValidationService.validateRecord(validationRecord, selectedZone);
+        setValidationErrors(validation.errors.reduce((acc, error) => {
+          // Only show errors related to the current field
+          if (error.toLowerCase().includes(fieldName)) {
+            acc[fieldName] = error;
+          }
+          return acc;
+        }, {}));
+      }
+
+      return newRecord;
+    });
 
     // Clear field error when value changes
     if (fieldErrors[fieldName]) {
@@ -200,81 +243,96 @@ function AddDNSRecord({ zone, selectedKey, onRecordAdded, addPendingChange, setS
   };
 
   const validateFields = () => {
-    const errors = {};
-    let isValid = true;
-
-    // Validate common fields
-    if (!record.name) {
-      errors.name = 'Name is required';
-      isValid = false;
+    if (!selectedZone) {
+      setError('Please select a zone first');
+      return false;
     }
 
-    if (!record.ttl || record.ttl < 0) {
-      errors.ttl = 'Valid TTL is required';
-      isValid = false;
-    }
-
-    // Validate type-specific fields
-    currentTypeFields.forEach(field => {
-      const value = record[field.name];
-      if (field.required && !value) {
-        errors[field.name] = `${field.label} is required`;
-        isValid = false;
-      } else if (field.validate && value && !field.validate(value)) {
-        errors[field.name] = `Invalid ${field.label.toLowerCase()}`;
-        isValid = false;
+    // For SRV records, validate individual fields first
+    if (record.type === 'SRV') {
+      if (!record.priority || !record.weight || !record.port || !record.target) {
+        setError('All SRV fields are required');
+        return false;
       }
-    });
+      // Create a temporary record with formatted value for validation
+      const tempRecord = {
+        ...record,
+        value: `${record.priority} ${record.weight} ${record.port} ${record.target}`
+      };
+      const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
+      if (!validation.isValid) {
+        setValidationErrors(validation.errors.reduce((acc, error) => {
+          // Map errors to fields based on content
+          if (error.includes('name')) acc.name = error;
+          else if (error.includes('TTL')) acc.ttl = error;
+          else acc.value = error;
+          return acc;
+        }, {}));
+        return false;
+      }
+    } else {
+      // For other record types, validate normally
+      const validation = DNSValidationService.validateRecord(record, selectedZone);
+      if (!validation.isValid) {
+        setValidationErrors(validation.errors.reduce((acc, error) => {
+          if (error.includes('name')) acc.name = error;
+          else if (error.includes('TTL')) acc.ttl = error;
+          else acc.value = error;
+          return acc;
+        }, {}));
+        return false;
+      }
+    }
 
-    setFieldErrors(errors);
-    return isValid;
+    return true;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
     setError(null);
 
-    if (!validateFields()) {
-      return;
-    }
-
     try {
-      // Format record value based on type
-      let formattedRecord = { ...record };
-      if (record.type === 'MX') {
-        formattedRecord.value = `${record.priority} ${record.value}`;
-      } else if (record.type === 'SRV') {
-        formattedRecord.value = `${record.priority} ${record.weight} ${record.port} ${record.target}`;
-      } else if (record.type === 'CAA') {
-        formattedRecord.value = `${record.flags} ${record.tag} "${record.value}"`;
-      } else if (record.type === 'SSHFP') {
-        formattedRecord.value = `${record.algorithm} ${record.fptype} ${record.fingerprint}`;
-      }
-
-      // Create pending change
-      const change = {
-        id: Date.now(),
-        type: 'ADD',
-        zone: zone,
-        keyId: selectedKey,
-        record: formattedRecord
+      const keyConfig = {
+        server: selectedKey.server,
+        keyName: selectedKey.name,
+        keyValue: selectedKey.secret,
+        algorithm: selectedKey.algorithm
       };
 
-      // Add to pending changes
-      addPendingChange(change);
-      setShowPendingDrawer(true);
+      const record = {
+        name: recordName.trim(),
+        type: recordType,
+        value: recordValue.trim(),
+        ttl: parseInt(ttl, 10),
+        class: 'IN'
+      };
 
-      // Call onRecordAdded callback to close modal
-      if (onRecordAdded) {
-        onRecordAdded(formattedRecord);
+      await dnsService.addRecord(zone, record, keyConfig);
+      
+      // Reset form
+      setRecordName('');
+      setRecordValue('');
+      setTtl(config.defaultTTL || 3600);
+      setRecordType('A');
+      
+      if (onSuccess) {
+        onSuccess();
       }
+      setSuccess('Record added successfully');
     } catch (error) {
-      setError(error.message);
+      setError(`Failed to add record: ${error.message}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ p: 3 }}>
+    <Box 
+      component="form" 
+      onSubmit={handleSubmit} 
+      sx={{ p: 3 }}
+    >
       <Grid container spacing={2}>
         {/* Common fields */}
         <Grid item xs={12}>
@@ -283,8 +341,8 @@ function AddDNSRecord({ zone, selectedKey, onRecordAdded, addPendingChange, setS
             label="Name"
             value={record.name}
             onChange={(e) => handleFieldChange('name', e.target.value)}
-            error={!!fieldErrors.name}
-            helperText={fieldErrors.name || 'Record name relative to zone (@ for zone apex)'}
+            error={!!validationErrors.name}
+            helperText={validationErrors.name || 'Record name relative to zone (@ for zone apex)'}
             required
           />
         </Grid>
@@ -296,8 +354,8 @@ function AddDNSRecord({ zone, selectedKey, onRecordAdded, addPendingChange, setS
             type="number"
             value={record.ttl}
             onChange={(e) => handleFieldChange('ttl', parseInt(e.target.value))}
-            error={!!fieldErrors.ttl}
-            helperText={fieldErrors.ttl || 'Time to live in seconds'}
+            error={!!validationErrors.ttl}
+            helperText={validationErrors.ttl || 'Time to live in seconds'}
             required
           />
         </Grid>
@@ -364,7 +422,11 @@ function AddDNSRecord({ zone, selectedKey, onRecordAdded, addPendingChange, setS
       )}
 
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 3 }}>
-        <Button type="submit" variant="contained" color="primary">
+        <Button 
+          type="submit" 
+          variant="contained" 
+          color="primary"
+        >
           Add Record
         </Button>
       </Box>

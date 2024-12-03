@@ -1,264 +1,376 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
+  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
   TextField,
-  Select,
-  MenuItem,
+  Grid,
+  Typography,
+  Alert,
   FormControl,
   InputLabel,
-  Box,
-  Alert,
-  Grid,
-  Typography
+  Select,
+  MenuItem
 } from '@mui/material';
+import { DNSValidationService } from '../services/dnsValidationService';
 
 function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
-  const [editedRecord, setEditedRecord] = useState({
-    name: record.name,
-    type: record.type,
-    value: record.value,
-    ttl: record.ttl
+  const [editedRecord, setEditedRecord] = useState({ ...record });
+  const [error, setError] = useState(null);
+  const [soaFields, setSOAFields] = useState({
+    mname: '',
+    rname: '',
+    serial: 0,
+    refresh: 3600,
+    retry: 1800,
+    expire: 604800,
+    minimum: 86400
   });
-
-  const [structuredFields, setStructuredFields] = useState(() => {
-    switch (record.type) {
-      case 'SRV':
-        const [priority, weight, port, target] = record.value.split(' ');
-        return { priority, weight, port, target };
-      case 'MX':
-        const [preference, exchange] = record.value.split(' ');
-        return { preference, exchange };
-      case 'SSHFP':
-        const [algorithm, fptype, fingerprint] = record.value.split(' ');
-        return { algorithm, fptype, fingerprint };
-      default:
-        return {};
-    }
-  });
-
-  const [hasChanges, setHasChanges] = useState(false);
-
-  const checkForChanges = useCallback(() => {
-    const baseChanged = 
-      editedRecord.name !== record.name ||
-      editedRecord.type !== record.type ||
-      editedRecord.ttl !== record.ttl;
-
-    let valueChanged = false;
-    switch (editedRecord.type) {
-      case 'SRV':
-        valueChanged = 
-          structuredFields.priority !== record.value.split(' ')[0] ||
-          structuredFields.weight !== record.value.split(' ')[1] ||
-          structuredFields.port !== record.value.split(' ')[2] ||
-          structuredFields.target !== record.value.split(' ')[3];
-        break;
-      case 'MX':
-        valueChanged = 
-          structuredFields.preference !== record.value.split(' ')[0] ||
-          structuredFields.exchange !== record.value.split(' ')[1];
-        break;
-      case 'SSHFP':
-        valueChanged = 
-          structuredFields.algorithm !== record.value.split(' ')[0] ||
-          structuredFields.fptype !== record.value.split(' ')[1] ||
-          structuredFields.fingerprint !== record.value.split(' ')[2];
-        break;
-      default:
-        valueChanged = editedRecord.value !== record.value;
-    }
-
-    setHasChanges(baseChanged || valueChanged);
-  }, [editedRecord, structuredFields, record]);
 
   useEffect(() => {
-    checkForChanges();
-  }, [editedRecord, structuredFields, checkForChanges]);
+    if (record.type === 'SOA') {
+      if (typeof record.value === 'object') {
+        setSOAFields(record.value);
+      } else {
+        // Parse the SOA string value into fields
+        const parsed = DNSValidationService.parseSOAValue(record.value);
+        setSOAFields(parsed);
+      }
+    }
+    setEditedRecord({ ...record });
+  }, [record]);
 
-  const handleFieldChange = (field, value) => {
-    setEditedRecord(prev => ({ ...prev, [field]: value }));
+  const handleChange = (field, value) => {
+    setEditedRecord(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    setError(null);
   };
 
-  const handleStructuredFieldChange = (field, value) => {
-    setStructuredFields(prev => ({ ...prev, [field]: value }));
+  const handleSOAChange = (field, value) => {
+    setSOAFields(prev => {
+      const updated = {
+        ...prev,
+        [field]: value
+      };
+      // Update the main record value
+      setEditedRecord(prev => ({
+        ...prev,
+        value: updated
+      }));
+      return updated;
+    });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (isCopy && !hasChanges) {
-      setError('Please modify at least one field to create a copy');
-      return;
+  const renderSOAFields = () => {
+    return (
+      <>
+        <Grid item xs={12}>
+          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+            SOA Record Fields
+          </Typography>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            label="Primary Nameserver (MNAME)"
+            value={soaFields.mname}
+            onChange={(e) => handleSOAChange('mname', e.target.value)}
+            helperText="Fully qualified domain name of the primary nameserver"
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            label="Responsible Person (RNAME)"
+            value={soaFields.rname}
+            onChange={(e) => handleSOAChange('rname', e.target.value)}
+            helperText="Email address with @ replaced by ."
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Serial Number"
+            value={soaFields.serial}
+            onChange={(e) => handleSOAChange('serial', parseInt(e.target.value))}
+            helperText="Zone version number (YYYYMMDDNN format recommended)"
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Refresh Interval"
+            value={soaFields.refresh}
+            onChange={(e) => handleSOAChange('refresh', parseInt(e.target.value))}
+            helperText="Seconds between zone refresh attempts"
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Retry Interval"
+            value={soaFields.retry}
+            onChange={(e) => handleSOAChange('retry', parseInt(e.target.value))}
+            helperText="Seconds between retry attempts"
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Expire Time"
+            value={soaFields.expire}
+            onChange={(e) => handleSOAChange('expire', parseInt(e.target.value))}
+            helperText="Seconds until zone is considered no longer authoritative"
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Minimum TTL"
+            value={soaFields.minimum}
+            onChange={(e) => handleSOAChange('minimum', parseInt(e.target.value))}
+            helperText="Default minimum TTL for negative responses"
+          />
+        </Grid>
+      </>
+    );
+  };
+
+  const renderMXFields = () => {
+    if (record.type !== 'MX') return null;
+    
+    const [priority = '', target = ''] = editedRecord.value.split(/\s+/);
+    
+    return (
+      <>
+        <Grid item xs={12} md={4}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Priority"
+            value={priority}
+            onChange={(e) => {
+              const newValue = `${e.target.value} ${target}`;
+              handleChange('value', newValue);
+            }}
+            helperText="Lower numbers have higher priority (0-65535)"
+          />
+        </Grid>
+        <Grid item xs={12} md={8}>
+          <TextField
+            fullWidth
+            label="Mail Server"
+            value={target}
+            onChange={(e) => {
+              const newValue = `${priority} ${e.target.value}`;
+              handleChange('value', newValue);
+            }}
+            helperText="Fully qualified domain name of the mail server"
+          />
+        </Grid>
+      </>
+    );
+  };
+
+  const renderSRVFields = () => {
+    if (record.type !== 'SRV') return null;
+
+    const [priority = '0', weight = '0', port = '', target = ''] = editedRecord.value.split(/\s+/);
+
+    return (
+      <>
+        <Grid item xs={12} md={3}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Priority"
+            value={priority}
+            onChange={(e) => updateSRVField('priority', e.target.value)}
+            helperText="Lower numbers have higher priority"
+          />
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Weight"
+            value={weight}
+            onChange={(e) => updateSRVField('weight', e.target.value)}
+            helperText="Relative weight for records with same priority"
+          />
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Port"
+            value={port}
+            onChange={(e) => updateSRVField('port', e.target.value)}
+            helperText="TCP or UDP port number"
+          />
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <TextField
+            fullWidth
+            label="Target"
+            value={target}
+            onChange={(e) => updateSRVField('target', e.target.value)}
+            helperText="Hostname of the target server"
+          />
+        </Grid>
+      </>
+    );
+  };
+
+  const updateSRVField = (field, value) => {
+    const parts = editedRecord.value.split(/\s+/);
+    const indexes = { priority: 0, weight: 1, port: 2, target: 3 };
+    parts[indexes[field]] = value;
+    handleChange('value', parts.join(' '));
+  };
+
+  const renderTXTFields = () => {
+    if (record.type !== 'TXT') return null;
+
+    // Parse the TXT record value for editing
+    const rawValue = typeof editedRecord.value === 'string' 
+      ? editedRecord.value
+          .split(/"\s+"/) // Split on quotes with spaces between them
+          .map(str => str.replace(/^"|"$/g, '')) // Remove surrounding quotes from each part
+          .join('\n') // Join with newlines for editing
+      : '';
+
+    return (
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          label="Text Value"
+          value={rawValue}
+          onChange={(e) => {
+            handleChange('value', e.target.value);
+          }}
+          multiline
+          rows={4}
+          helperText={
+            'Enter your text content normally. Each line will be treated as a separate string. ' +
+            'Special characters (including !) are allowed. Quotes will be handled automatically.'
+          }
+        />
+      </Grid>
+    );
+  };
+
+  const formatTXTValue = (value) => {
+    if (!value) return '""';
+
+    // Split on newlines and handle each line
+    return value
+      .split('\n')
+      .map(line => {
+        line = line.trim();
+        if (!line) return null;
+        
+        // Remove any existing quotes
+        line = line.replace(/^"|"$/g, '');
+        
+        // Always quote each line for consistency
+        return `"${line}"`;
+      })
+      .filter(Boolean) // Remove empty lines
+      .join(' ');
+  };
+
+  const handleSave = () => {
+    try {
+      let processedRecord = { 
+        ...editedRecord,
+        id: isCopy ? undefined : editedRecord.id
+      };
+
+      // Special handling for TXT records
+      if (editedRecord.type === 'TXT') {
+        processedRecord.value = formatTXTValue(editedRecord.value);
+      }
+      // Handle SOA records
+      else if (editedRecord.type === 'SOA') {
+        processedRecord.value = soaFields;
+      }
+
+      onSave(processedRecord);
+    } catch (err) {
+      setError(err.message);
     }
-
-    let finalValue = editedRecord.value;
-    switch (editedRecord.type) {
-      case 'SRV':
-        finalValue = `${structuredFields.priority} ${structuredFields.weight} ${structuredFields.port} ${structuredFields.target}`;
-        break;
-      case 'MX':
-        finalValue = `${structuredFields.preference} ${structuredFields.exchange}`;
-        break;
-      case 'SSHFP':
-        finalValue = `${structuredFields.algorithm} ${structuredFields.fptype} ${structuredFields.fingerprint}`;
-        break;
-    }
-
-    const finalRecord = {
-      ...editedRecord,
-      value: finalValue,
-      id: isCopy ? undefined : editedRecord.id
-    };
-
-    onSave(finalRecord);
   };
 
   return (
-    <>
-      <DialogTitle>{isCopy ? 'Copy DNS Record' : 'Edit DNS Record'}</DialogTitle>
-      <DialogContent>
-        <Box sx={{ pt: 2 }}>
+    <DialogContent>
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
           <TextField
             fullWidth
             label="Name"
             value={editedRecord.name}
-            onChange={(e) => handleFieldChange('name', e.target.value)}
-            sx={{ mb: 2 }}
+            onChange={(e) => handleChange('name', e.target.value)}
           />
-
-          <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Type</InputLabel>
-            <Select
-              value={editedRecord.type}
-              onChange={(e) => handleFieldChange('type', e.target.value)}
-              label="Type"
-            >
-              <MenuItem value="A">A</MenuItem>
-              <MenuItem value="AAAA">AAAA</MenuItem>
-              <MenuItem value="CNAME">CNAME</MenuItem>
-              <MenuItem value="MX">MX</MenuItem>
-              <MenuItem value="TXT">TXT</MenuItem>
-              <MenuItem value="SRV">SRV</MenuItem>
-              <MenuItem value="NS">NS</MenuItem>
-              <MenuItem value="PTR">PTR</MenuItem>
-              <MenuItem value="SOA">SOA</MenuItem>
-              <MenuItem value="CAA">CAA</MenuItem>
-              <MenuItem value="SSHFP">SSHFP</MenuItem>
-            </Select>
-          </FormControl>
-
-          {editedRecord.type === 'SRV' && (
-            <>
-              <TextField
-                fullWidth
-                label="Priority"
-                value={structuredFields.priority}
-                onChange={(e) => handleStructuredFieldChange('priority', e.target.value)}
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Weight"
-                value={structuredFields.weight}
-                onChange={(e) => handleStructuredFieldChange('weight', e.target.value)}
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Port"
-                value={structuredFields.port}
-                onChange={(e) => handleStructuredFieldChange('port', e.target.value)}
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Target"
-                value={structuredFields.target}
-                onChange={(e) => handleStructuredFieldChange('target', e.target.value)}
-                sx={{ mb: 2 }}
-              />
-            </>
-          )}
-
-          {editedRecord.type === 'MX' && (
-            <>
-              <TextField
-                fullWidth
-                label="Preference"
-                value={structuredFields.preference}
-                onChange={(e) => handleStructuredFieldChange('preference', e.target.value)}
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Exchange"
-                value={structuredFields.exchange}
-                onChange={(e) => handleStructuredFieldChange('exchange', e.target.value)}
-                sx={{ mb: 2 }}
-              />
-            </>
-          )}
-
-          {editedRecord.type === 'SSHFP' && (
-            <>
-              <TextField
-                fullWidth
-                label="Algorithm"
-                value={structuredFields.algorithm}
-                onChange={(e) => handleStructuredFieldChange('algorithm', e.target.value)}
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Fingerprint Type"
-                value={structuredFields.fptype}
-                onChange={(e) => handleStructuredFieldChange('fptype', e.target.value)}
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Fingerprint"
-                value={structuredFields.fingerprint}
-                onChange={(e) => handleStructuredFieldChange('fingerprint', e.target.value)}
-                sx={{ mb: 2 }}
-              />
-            </>
-          )}
-
-          {editedRecord.type !== 'SRV' && editedRecord.type !== 'MX' && editedRecord.type !== 'SSHFP' && (
-            <TextField
-              fullWidth
-              label="Value"
-              value={editedRecord.value}
-              onChange={(e) => handleFieldChange('value', e.target.value)}
-              sx={{ mb: 2 }}
-            />
-          )}
-
+        </Grid>
+        <Grid item xs={12}>
           <TextField
             fullWidth
             label="TTL"
             type="number"
             value={editedRecord.ttl}
-            onChange={(e) => handleFieldChange('ttl', parseInt(e.target.value, 10))}
-            sx={{ mb: 2 }}
+            onChange={(e) => handleChange('ttl', parseInt(e.target.value))}
           />
-        </Box>
-      </DialogContent>
+        </Grid>
+        
+        {record.type === 'SOA' ? (
+          renderSOAFields()
+        ) : record.type === 'MX' ? (
+          renderMXFields()
+        ) : record.type === 'SRV' ? (
+          renderSRVFields()
+        ) : record.type === 'TXT' ? (
+          renderTXTFields()
+        ) : (
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Value"
+              value={editedRecord.value}
+              onChange={(e) => handleChange('value', e.target.value)}
+              helperText={
+                record.type === 'CNAME' ? 'Fully qualified domain name ending with a dot' :
+                record.type === 'A' ? 'IPv4 address (e.g., 192.168.1.1)' :
+                record.type === 'AAAA' ? 'IPv6 address' :
+                undefined
+              }
+            />
+          </Grid>
+        )}
+      </Grid>
+
+      {error && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       <DialogActions>
         <Button onClick={onCancel}>Cancel</Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained"
-          disabled={isCopy && !hasChanges}
-          color="primary"
-        >
+        <Button onClick={handleSave} variant="contained" color="primary">
           {isCopy ? 'Create Copy' : 'Save Changes'}
         </Button>
       </DialogActions>
-    </>
+    </DialogContent>
   );
 }
 

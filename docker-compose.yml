@@ -25,17 +25,26 @@ services:
     ports:
       - "${BACKEND_PORT:-3002}:${BACKEND_PORT:-3002}"
     env_file:
-      - .env.${NODE_ENV:-development}
+      - backend/.env
+      - backend/.env.${NODE_ENV:-development}
     environment:
       - NODE_ENV=${NODE_ENV:-development}
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=3002
+      - TS_NODE_PROJECT=tsconfig.json
     volumes:
+      - ./backend/src:/app/src:delegated
+      - ./backend/tsconfig.json:/app/tsconfig.json:delegated
+      - backend_node_modules:/app/node_modules
       - temp-keys:/tmp/snap-dns
     networks:
       - snap-dns-network
     cap_add:
-      - NET_RAW  # Required for dig
+      - NET_RAW
+    command: npm run docker:dev
 
 volumes:
+  backend_node_modules:
   temp-keys:
 
 networks:

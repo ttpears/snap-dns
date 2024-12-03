@@ -3,75 +3,66 @@ import {
   Box,
   Paper,
   Typography,
-  TextField,
   Button,
+  TextField,
+  IconButton,
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  Chip,
+  ListItemSecondary,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   Alert,
+  Chip,
+  Stack,
+  Tooltip
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  Save as SaveIcon,
-} from '@mui/icons-material';
-import { useConfig } from '../context/ConfigContext';
+import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon } from '@mui/icons-material';
+import { useKey } from '../context/KeyContext';
 
 function KeyManagement() {
-  const { config, updateConfig } = useConfig();
+  const { keys, addKey, removeKey, updateKey } = useKey();
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [editingKey, setEditingKey] = useState(null);
-  const [error, setError] = useState(null);
   const [newKey, setNewKey] = useState({
-    id: '',
     name: '',
-    server: '',
-    keyName: '',
-    keyValue: '',
-    algorithm: 'hmac-sha512',
-    zones: [],
-    type: 'internal'
+    algorithm: 'hmac-sha256',
+    secret: '',
+    zones: []
   });
-  const [currentZone, setCurrentZone] = useState('');
+  const [zoneInput, setZoneInput] = useState('');
+  const [error, setError] = useState(null);
 
-  const resetForm = () => {
-    setNewKey({
-      id: '',
-      name: '',
-      server: '',
-      keyName: '',
-      keyValue: '',
-      algorithm: 'hmac-sha512',
-      zones: [],
-      type: 'internal'
-    });
-    setEditingKey(null);
-    setCurrentZone('');
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewKey(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  const handleOpenDialog = (key = null) => {
+    if (key) {
+      setEditingKey(key);
+      setNewKey({ ...key });
+    } else {
+      setEditingKey(null);
+      setNewKey({
+        name: '',
+        algorithm: 'hmac-sha256',
+        secret: '',
+        zones: []
+      });
+    }
+    setDialogOpen(true);
   };
 
   const handleAddZone = () => {
-    if (currentZone && !newKey.zones.includes(currentZone)) {
-      setNewKey(prev => ({
-        ...prev,
-        zones: [...prev.zones, currentZone]
-      }));
-      setCurrentZone('');
-    }
+    if (!zoneInput.trim()) return;
+    
+    setNewKey(prev => ({
+      ...prev,
+      zones: [...new Set([...prev.zones, zoneInput.trim()])]
+    }));
+    setZoneInput('');
   };
 
   const handleRemoveZone = (zoneToRemove) => {
@@ -81,171 +72,198 @@ function KeyManagement() {
     }));
   };
 
-  const handleEditKey = (key) => {
-    setNewKey({ ...key });
-    setEditingKey(key.id);
-  };
-
-  const handleDeleteKey = (keyId) => {
-    const updatedKeys = config.keys.filter(key => key.id !== keyId);
-    updateConfig({ ...config, keys: updatedKeys });
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setError(null);
-
+  const handleSaveKey = () => {
     try {
-      let updatedKeys;
-      if (editingKey) {
-        updatedKeys = config.keys.map(key => 
-          key.id === editingKey ? { ...newKey } : key
-        );
-      } else {
-        const keyToSave = {
-          ...newKey,
-          id: `key-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-        };
-        updatedKeys = [...(config.keys || []), keyToSave];
+      if (!newKey.name || !newKey.algorithm || !newKey.secret) {
+        throw new Error('All fields are required');
       }
-
-      updateConfig({ ...config, keys: updatedKeys });
-      resetForm();
+      
+      if (editingKey) {
+        updateKey(editingKey.id, newKey);
+      } else {
+        addKey(newKey);
+      }
+      
+      setDialogOpen(false);
+      setEditingKey(null);
+      setNewKey({
+        name: '',
+        algorithm: 'hmac-sha256',
+        secret: '',
+        zones: []
+      });
+      setError(null);
     } catch (err) {
       setError(err.message);
     }
   };
 
   return (
-    <Paper sx={{ p: 3 }}>
-      <Typography variant="h5" component="h2" gutterBottom>
-        Key Management
-      </Typography>
-
-      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField
-            label="Key Name"
-            name="name"
-            value={newKey.name}
-            onChange={handleInputChange}
-            required
-            fullWidth
-          />
-
-          <TextField
-            label="Server"
-            name="server"
-            value={newKey.server}
-            onChange={handleInputChange}
-            required
-            fullWidth
-          />
-
-          <TextField
-            label="Key Name (TSIG)"
-            name="keyName"
-            value={newKey.keyName}
-            onChange={handleInputChange}
-            required
-            fullWidth
-          />
-
-          <TextField
-            label="Key Value"
-            name="keyValue"
-            value={newKey.keyValue}
-            onChange={handleInputChange}
-            required
-            fullWidth
-          />
-
-          <FormControl fullWidth>
-            <InputLabel>Algorithm</InputLabel>
-            <Select
-              name="algorithm"
-              value={newKey.algorithm}
-              onChange={handleInputChange}
-              label="Algorithm"
-            >
-              <MenuItem value="hmac-sha512">HMAC-SHA512</MenuItem>
-              <MenuItem value="hmac-sha256">HMAC-SHA256</MenuItem>
-              <MenuItem value="hmac-sha1">HMAC-SHA1</MenuItem>
-            </Select>
-          </FormControl>
-
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-            <TextField
-              label="Add Zone"
-              value={currentZone}
-              onChange={(e) => setCurrentZone(e.target.value)}
-              sx={{ flexGrow: 1 }}
-            />
-            <Button
-              variant="contained"
-              onClick={handleAddZone}
-              disabled={!currentZone}
-            >
-              Add
-            </Button>
-          </Box>
-
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-            {newKey.zones.map((zone, index) => (
-              <Chip
-                key={index}
-                label={zone}
-                onDelete={() => handleRemoveZone(zone)}
-              />
-            ))}
-          </Box>
-
-          {error && (
-            <Alert severity="error" onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
-
-          <Button
-            type="submit"
-            variant="contained"
-            startIcon={editingKey ? <SaveIcon /> : <AddIcon />}
-          >
-            {editingKey ? 'Update Key' : 'Add Key'}
-          </Button>
-        </Box>
+    <Paper sx={{ p: 3, mt: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h5" component="h2">
+          TSIG Keys
+        </Typography>
+        <Button 
+          variant="contained" 
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog()}
+        >
+          Add Key
+        </Button>
       </Box>
 
-      <List sx={{ mt: 3 }}>
-        {config.keys?.map((key) => (
-          <ListItem key={key.id} divider>
+      <List>
+        {keys.map((key) => (
+          <ListItem
+            key={key.id}
+            secondaryAction={
+              <Box>
+                <Tooltip title="Edit Key">
+                  <IconButton edge="end" onClick={() => handleOpenDialog(key)} sx={{ mr: 1 }}>
+                    <EditIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete Key">
+                  <IconButton edge="end" onClick={() => removeKey(key.id)}>
+                    <DeleteIcon />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            }
+          >
             <ListItemText
               primary={key.name}
-              secondaryTypographyProps={{ component: 'div' }}
               secondary={
-                <Box sx={{ mt: 1 }}>
-                  <Box sx={{ mb: 0.5 }}>
-                    Server: {key.server}
-                  </Box>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {key.zones.map((zone, index) => (
-                      <Chip key={index} label={zone} size="small" />
-                    ))}
+                <Box component="span" sx={{ display: 'block' }}>
+                  <Typography 
+                    variant="body2" 
+                    color="text.secondary" 
+                    component="span"
+                  >
+                    {key.algorithm} • Created: {new Date(key.created).toLocaleDateString()}
+                  </Typography>
+                  <Box component="span" sx={{ display: 'block', mt: 1 }}>
+                    <Stack 
+                      direction="row" 
+                      spacing={1} 
+                      component="span" 
+                      sx={{ display: 'inline-flex', flexWrap: 'wrap', gap: 1 }}
+                    >
+                      {key.zones.map((zone) => (
+                        <Chip
+                          key={zone}
+                          label={zone}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          component="span"
+                        />
+                      ))}
+                    </Stack>
                   </Box>
                 </Box>
               }
             />
-            <ListItemSecondaryAction>
-              <IconButton onClick={() => handleEditKey(key)}>
-                <EditIcon />
-              </IconButton>
-              <IconButton onClick={() => handleDeleteKey(key.id)}>
-                <DeleteIcon />
-              </IconButton>
-            </ListItemSecondaryAction>
           </ListItem>
         ))}
       </List>
+
+      {keys.length === 0 && (
+        <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+          No TSIG keys configured
+        </Typography>
+      )}
+
+      <Dialog 
+        open={dialogOpen} 
+        onClose={() => setDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {editingKey ? 'Edit TSIG Key' : 'Add TSIG Key'}
+        </DialogTitle>
+        <DialogContent>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Key Name"
+            fullWidth
+            value={newKey.name}
+            onChange={(e) => setNewKey(prev => ({ ...prev, name: e.target.value }))}
+          />
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>Algorithm</InputLabel>
+            <Select
+              value={newKey.algorithm}
+              onChange={(e) => setNewKey(prev => ({ ...prev, algorithm: e.target.value }))}
+              label="Algorithm"
+            >
+              <MenuItem value="hmac-md5">HMAC-MD5</MenuItem>
+              <MenuItem value="hmac-sha1">HMAC-SHA1</MenuItem>
+              <MenuItem value="hmac-sha256">HMAC-SHA256</MenuItem>
+              <MenuItem value="hmac-sha512">HMAC-SHA512</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            margin="dense"
+            label="Secret"
+            fullWidth
+            value={newKey.secret}
+            onChange={(e) => setNewKey(prev => ({ ...prev, secret: e.target.value }))}
+            helperText="Base64 encoded key"
+          />
+          
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Managed Zones
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+              <TextField
+                size="small"
+                label="Add Zone"
+                value={zoneInput}
+                onChange={(e) => setZoneInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddZone();
+                  }
+                }}
+              />
+              <Button 
+                variant="outlined" 
+                onClick={handleAddZone}
+                disabled={!zoneInput.trim()}
+              >
+                Add
+              </Button>
+            </Box>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              {newKey.zones.map((zone) => (
+                <Chip
+                  key={zone}
+                  label={zone}
+                  onDelete={() => handleRemoveZone(zone)}
+                  size="small"
+                />
+              ))}
+            </Stack>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSaveKey} variant="contained">
+            {editingKey ? 'Save Changes' : 'Add Key'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 }

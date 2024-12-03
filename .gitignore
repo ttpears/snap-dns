@@ -77,3 +77,7 @@ debug.log
 
 # Local configuration
 src/config/local.js
+
+# TypeScript
+dist/
+*.tsbuildinfo

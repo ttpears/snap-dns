@@ -1,287 +1,406 @@
-import React from 'react';
-import { 
-  Drawer, 
-  Box, 
-  Typography, 
-  Button, 
-  Alert,
+import React, { useState } from 'react';
+import {
+  Drawer,
+  Box,
+  Typography,
+  Button,
+  List,
+  ListItem,
+  ListItemText,
   IconButton,
-  CircularProgress 
+  Divider,
+  Alert,
+  CircularProgress,
+  Stack,
+  Collapse,
+  Tooltip
 } from '@mui/material';
-import { 
+import {
   Delete as DeleteIcon,
-  Save as SaveIcon,
-  DragIndicator as DragIndicatorIcon
+  Close as CloseIcon,
+  Add as AddIcon,
+  Edit as EditIcon,
+  RestoreFromTrash as RestoreIcon,
+  DragIndicator,
+  KeyboardArrowDown as ExpandMoreIcon,
+  KeyboardArrowUp as ExpandLessIcon
 } from '@mui/icons-material';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { usePendingChanges } from '../context/PendingChangesContext';
-import { useZone } from '../context/ZoneContext';
-import { useState } from 'react';
-import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
-import { notificationService } from '../services/notificationService';
-import { backupService } from '../services/backupService';
 
-function SortableChange({ change, onRemove }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: change.id });
+function PendingChangesDrawer({ 
+  open, 
+  onClose,
+  pendingChanges,
+  setPendingChanges,
+  removePendingChange,
+  clearPendingChanges
+}) {
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState(null);
+  const [draggingIndex, setDraggingIndex] = useState(null);
+  const [expandedItems, setExpandedItems] = useState({});
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+  const handleDragStart = (e, index) => {
+    setDraggingIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
   };
 
-  return (
-    <div ref={setNodeRef} style={style}>
-      <Alert 
-        severity="info" 
-        sx={{ 
-          mb: 1,
-          display: 'flex',
-          alignItems: 'center'
-        }}
-        icon={
-          <DragIndicatorIcon
-            {...attributes}
-            {...listeners}
-            sx={{ cursor: 'grab' }}
-          />
-        }
-        action={
-          <IconButton
-            size="small"
-            onClick={() => onRemove(change.id)}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        }
-      >
-        {change.type === 'DELETE' && (
-          `DELETE: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`
-        )}
-        {change.type === 'ADD' && (
-          `ADD: ${change.record.name} ${change.record.ttl} ${change.record.type} ${change.record.value}`
-        )}
-        {change.type === 'MODIFY' && (
-          `MODIFY: ${change.originalRecord.name}\n` +
-          `FROM: ${change.originalRecord.ttl} ${change.originalRecord.type} ${change.originalRecord.value}\n` +
-          `TO: ${change.newRecord.ttl} ${change.newRecord.type} ${change.newRecord.value}`
-        )}
-      </Alert>
-    </div>
-  );
-}
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggingIndex === null) return;
 
-export function PendingChangesDrawer() {
-  const { config } = useConfig();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+    const items = Array.from(pendingChanges);
+    const draggedItem = items[draggingIndex];
+    items.splice(draggingIndex, 1);
+    items.splice(index, 0, draggedItem);
 
-  const { 
-    pendingChanges, 
-    removePendingChange, 
-    showPendingDrawer, 
-    setShowPendingDrawer,
-    setPendingChanges,
-    clearPendingChanges 
-  } = usePendingChanges();
+    setPendingChanges(items);
+    setDraggingIndex(index);
+  };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const handleDragEnd = () => {
+    setDraggingIndex(null);
+  };
 
-  const applyChanges = async () => {
+  const handleApplyChanges = async () => {
+    setApplying(true);
     setError(null);
-    setSuccess(null);
-    setLoading(true);
-    
+
     try {
-      // First pass: validate all changes have valid keys
-      for (const change of pendingChanges) {
-        if (!change.keyId) {
-          throw new Error('Change missing keyId');
+      // Group changes by zone
+      const changesByZone = pendingChanges.reduce((acc, change) => {
+        if (!acc[change.zone]) {
+          acc[change.zone] = [];
         }
-        const keyConfig = config.keys.find(key => key.id === change.keyId);
-        if (!keyConfig) {
-          throw new Error(`No key configuration found for key ID: ${change.keyId}`);
-        }
-      }
+        acc[change.zone].push(change);
+        return acc;
+      }, {});
 
-      // Create automatic backup before applying changes
-      for (const change of pendingChanges) {
-        const keyConfig = config.keys.find(key => key.id === change.keyId);
-        const affectedRecords = pendingChanges
-          .filter(c => c.zone === change.zone)
-          .map(c => {
-            switch (c.type) {
-              case 'MODIFY':
-                return c.originalRecord;
-              case 'DELETE':
-                return c.record;
-              default:
-                return null;
-            }
-          }).filter(Boolean);
-
-        if (affectedRecords.length > 0) {
-          await backupService.createBackup(change.zone, affectedRecords, {
-            type: 'auto',
-            description: 'Automatic backup before changes',
-            server: keyConfig.server,
-            config: config
-          });
-        }
-      }
-
-      // Apply changes
-      for (const change of pendingChanges) {
-        const keyConfig = config.keys.find(key => key.id === change.keyId);
+      // Apply changes zone by zone
+      for (const [zone, changes] of Object.entries(changesByZone)) {
+        // Get the key configuration from the first change
+        const firstChange = changes[0];
         
-        switch (change.type) {
-          case 'ADD':
-            await dnsService.addRecord(change.zone, {
-              name: change.record.name,
-              type: change.record.type,
-              value: change.record.value,
-              ttl: change.record.ttl
-            }, keyConfig);
-            break;
-          case 'MODIFY':
-            await dnsService.updateRecord(change.zone, change.originalRecord, change.newRecord, keyConfig);
-            break;
-          case 'DELETE':
-            await dnsService.deleteRecord(change.zone, change.record, keyConfig);
-            break;
+        // Get the full key configuration from localStorage
+        const config = JSON.parse(localStorage.getItem('dns_manager_config') || '{}');
+        const keyConfig = config.keys.find(k => k.id === firstChange.keyId);
+        
+        if (!keyConfig) {
+          throw new Error(`No key configuration found for ID: ${firstChange.keyId}`);
+        }
+
+        // Create backup before applying changes
+        const backup = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: Date.now(),
+          zone: zone,
+          server: keyConfig.server,
+          records: [], // Will be populated by current records
+          type: 'auto',
+          description: 'Automatic backup before changes',
+          version: '1.0'
+        };
+
+        try {
+          // Get current records for backup
+          const currentRecords = await dnsService.fetchZoneRecords(zone, keyConfig);
+          backup.records = currentRecords;
+
+          // Save backup
+          const backups = JSON.parse(localStorage.getItem('dnsBackups') || '[]');
+          backups.unshift(backup);
+          localStorage.setItem('dnsBackups', JSON.stringify(backups));
+
+          // Apply changes in order
+          for (const change of changes) {
+            switch (change.type) {
+              case 'ADD':
+                await dnsService.addRecord(change.zone, change.record, keyConfig);
+                break;
+              case 'DELETE':
+                await dnsService.deleteRecord(change.zone, change.record, keyConfig);
+                break;
+              case 'MODIFY':
+                await dnsService.updateRecord(change.zone, change.originalRecord, change.newRecord, keyConfig);
+                break;
+              case 'RESTORE':
+                await dnsService.addRecord(change.zone, change.record, keyConfig);
+                break;
+              default:
+                console.warn(`Unknown change type: ${change.type}`);
+            }
+          }
+
+          // Dispatch event to notify components that changes were applied
+          window.dispatchEvent(new CustomEvent('dnsChangesApplied', {
+            detail: { zones: [zone] }
+          }));
+        } catch (error) {
+          console.error(`Failed to process changes for zone ${zone}:`, error);
+          throw new Error(`Failed to process changes for zone ${zone}: ${error.message}`);
         }
       }
 
-      // Send webhook notification if configured
-      if (config.webhookUrl) {
-        await notificationService.sendNotification(selectedZone, pendingChanges);
-      }
-
-      // Emit custom event with affected zones
-      const affectedZones = [...new Set(pendingChanges.map(change => change.zone))];
-      const event = new CustomEvent('dnsChangesApplied', {
-        detail: { zones: affectedZones }
-      });
-      window.dispatchEvent(event);
-
-      setSuccess('Changes applied successfully');
       clearPendingChanges();
-      setShowPendingDrawer(false);
+      onClose();
     } catch (error) {
       console.error('Failed to apply changes:', error);
       setError(`Failed to apply changes: ${error.message}`);
     } finally {
-      setLoading(false);
+      setApplying(false);
     }
   };
 
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-
-    if (active.id !== over.id) {
-      setPendingChanges((items) => {
-        const oldIndex = items.findIndex(item => item.id === active.id);
-        const newIndex = items.findIndex(item => item.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
+  const getChangeDescription = (change) => {
+    if (!change || !change.type) {
+      console.warn('Invalid change object:', change);
+      return 'Unknown change';
     }
+
+    try {
+      switch (change.type) {
+        case 'ADD':
+          return change.record ? 
+            `Add ${change.record.type} record "${change.record.name}" with value "${change.record.value}"` :
+            'Add record';
+        case 'DELETE':
+          return change.record ? 
+            `Delete ${change.record.type} record "${change.record.name}" with value "${change.record.value}"` :
+            'Delete record';
+        case 'MODIFY':
+          if (!change.originalRecord || !change.newRecord) {
+            return 'Modify record';
+          }
+          const changes = [];
+          if (change.originalRecord.value !== change.newRecord.value) {
+            changes.push(`value from "${change.originalRecord.value}" to "${change.newRecord.value}"`);
+          }
+          if (change.originalRecord.ttl !== change.newRecord.ttl) {
+            changes.push(`TTL from ${change.originalRecord.ttl} to ${change.newRecord.ttl}`);
+          }
+          return `Modify ${change.originalRecord.type} record "${change.originalRecord.name}": change ${changes.join(' and ')}`;
+        case 'RESTORE':
+          return change.record ? 
+            `Restore ${change.record.type} record "${change.record.name}" with value "${change.record.value}" from backup` :
+            'Restore record from backup';
+        default:
+          return `Unknown change type: ${change.type}`;
+      }
+    } catch (error) {
+      console.error('Error generating change description:', error, change);
+      return 'Invalid change';
+    }
+  };
+
+  const getChangeIcon = (type) => {
+    if (!type) return null;
+
+    switch (type) {
+      case 'ADD':
+        return <AddIcon color="success" />;
+      case 'DELETE':
+        return <DeleteIcon color="error" />;
+      case 'MODIFY':
+        return <EditIcon color="warning" />;
+      case 'RESTORE':
+        return <RestoreIcon color="info" />;
+      default:
+        return null;
+    }
+  };
+
+  const toggleExpanded = (changeId) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [changeId]: !prev[changeId]
+    }));
   };
 
   return (
     <Drawer
       anchor="right"
-      open={showPendingDrawer}
-      onClose={() => setShowPendingDrawer(false)}
+      open={open}
+      onClose={onClose}
+      PaperProps={{
+        sx: { width: 400 }
+      }}
     >
-      <Box sx={{ width: 400, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Box sx={{ 
-          p: 2, 
-          borderBottom: 1, 
-          borderColor: 'divider',
-          backgroundColor: 'background.paper',
-          position: 'sticky',
-          top: 0,
-          zIndex: 1
-        }}>
-          <Typography variant="h6">Pending Changes</Typography>
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">
+            Pending Changes ({pendingChanges.length})
+          </Typography>
+          <IconButton onClick={onClose} size="small">
+            <CloseIcon />
+          </IconButton>
         </Box>
 
-        <Box sx={{ p: 2, mt: 1, flexGrow: 1, overflowY: 'auto' }}>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={pendingChanges.map(change => change.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {pendingChanges.map((change) => (
-                <SortableChange
-                  key={change.id}
-                  change={change}
-                  onRemove={removePendingChange}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <List>
+          {pendingChanges.map((change, index) => (
+            <React.Fragment key={typeof change.id === 'undefined' ? index : change.id}>
+              <ListItem
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragEnd={handleDragEnd}
+                sx={{
+                  cursor: 'grab',
+                  backgroundColor: draggingIndex === index ? 'action.hover' : 'inherit',
+                  '&:hover': {
+                    backgroundColor: 'action.hover'
+                  },
+                  pr: 6
+                }}
+                onClick={() => toggleExpanded(change.id || `temp-${index}`)}
+              >
+                <DragIndicator sx={{ mr: 1, cursor: 'grab', flexShrink: 0 }} />
+                <ListItemText
+                  sx={{ 
+                    mr: 1,
+                    '& .MuiListItemText-primary': {
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      flexWrap: 'nowrap',
+                      minWidth: 0
+                    },
+                    '& .MuiTypography-root': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }
+                  }}
+                  primary={
+                    <Stack direction="row" spacing={1} alignItems="center" component="span">
+                      {getChangeIcon(change.type)}
+                      <Typography component="span" noWrap>{getChangeDescription(change)}</Typography>
+                      <IconButton 
+                        size="small" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleExpanded(change.id || `temp-${index}`);
+                        }}
+                      >
+                        {expandedItems[change.id || `temp-${index}`] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      </IconButton>
+                    </Stack>
+                  }
+                  secondary={
+                    <Stack component="span" spacing={0.5}>
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        component="span"
+                        noWrap
+                      >
+                        Zone: {change.zone}
+                      </Typography>
+                      {change.source && (
+                        <Typography 
+                          variant="body2" 
+                          color="text.secondary" 
+                          component="span"
+                          noWrap
+                        >
+                          Source: {change.source.type} ({new Date(change.source.timestamp).toLocaleString()})
+                        </Typography>
+                      )}
+                    </Stack>
+                  }
                 />
-              ))}
-            </SortableContext>
-          </DndContext>
-        </Box>
+                <IconButton
+                  edge="end"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removePendingChange(change.id);
+                  }}
+                  disabled={applying}
+                  sx={{ 
+                    position: 'absolute',
+                    right: 8
+                  }}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </ListItem>
+              <Collapse in={expandedItems[change.id || `temp-${index}`]} timeout="auto" unmountOnExit>
+                <Box sx={{ p: 2, pl: 6, bgcolor: 'action.hover' }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Full Change Details:
+                  </Typography>
+                  {change.type === 'MODIFY' ? (
+                    <>
+                      <Typography variant="body2" color="text.secondary">
+                        Original Record:
+                      </Typography>
+                      <Box component="pre" sx={{ 
+                        p: 1, 
+                        bgcolor: 'background.paper',
+                        borderRadius: 1,
+                        overflow: 'auto'
+                      }}>
+                        {JSON.stringify(change.originalRecord, null, 2)}
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        New Record:
+                      </Typography>
+                      <Box component="pre" sx={{ 
+                        p: 1, 
+                        bgcolor: 'background.paper',
+                        borderRadius: 1,
+                        overflow: 'auto'
+                      }}>
+                        {JSON.stringify(change.newRecord, null, 2)}
+                      </Box>
+                    </>
+                  ) : (
+                    <Box component="pre" sx={{ 
+                      p: 1, 
+                      bgcolor: 'background.paper',
+                      borderRadius: 1,
+                      overflow: 'auto'
+                    }}>
+                      {JSON.stringify(change.record, null, 2)}
+                    </Box>
+                  )}
+                </Box>
+              </Collapse>
+              <Divider />
+            </React.Fragment>
+          ))}
+        </List>
 
-        <Box sx={{ 
-          p: 2, 
-          borderTop: 1, 
-          borderColor: 'divider',
-          backgroundColor: 'background.paper',
-          position: 'sticky',
-          bottom: 0,
-          zIndex: 1,
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: 2
-        }}>
-          <Button 
-            onClick={() => setShowPendingDrawer(false)}
-            variant="outlined"
-          >
-            Close
-          </Button>
-          <Button
-            onClick={applyChanges}
-            variant="contained"
-            color="primary"
-            disabled={pendingChanges.length === 0 || loading}
-            startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
-          >
-            Apply Changes
-          </Button>
-        </Box>
+        {pendingChanges.length > 0 && (
+          <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleApplyChanges}
+              disabled={applying}
+              fullWidth
+            >
+              {applying ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                'Apply Changes'
+              )}
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={clearPendingChanges}
+              disabled={applying}
+            >
+              Clear All
+            </Button>
+          </Box>
+        )}
       </Box>
     </Drawer>
   );

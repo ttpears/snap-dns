@@ -41,6 +41,7 @@ import UndoIcon from '@mui/icons-material/Undo';
 import RedoIcon from '@mui/icons-material/Redo';
 import RecordEditor from './RecordEditor';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { useKey } from '../context/KeyContext';
 
 function MultilineRecordDialog({ record, open, onClose }) {
   const formatDuration = (seconds) => {
@@ -129,8 +130,8 @@ function ZoneEditor() {
     setPendingChanges 
   } = usePendingChanges();
 
-  const [selectedZone, setSelectedZone] = useState('');
-  const [selectedKey, setSelectedKey] = useState('');
+  const { selectedKey, selectedZone, selectKey, selectZone } = useKey();
+
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -179,14 +180,12 @@ function ZoneEditor() {
     setError(null);
     
     try {
-      const keyConfig = config.keys.find(key => key.id === selectedKey);
-      
-      if (!keyConfig) {
+      if (!selectedKey) {
         throw new Error('No key configuration found');
       }
 
       console.log('Fetching zone records...');
-      const records = await dnsService.fetchZoneRecords(selectedZone, keyConfig);
+      const records = await dnsService.fetchZoneRecords(selectedZone, selectedKey);
       console.log('Received records:', records);
       setRecords(records);
     } catch (err) {
@@ -195,7 +194,7 @@ function ZoneEditor() {
     } finally {
       setRefreshing(false);
     }
-  }, [selectedZone, selectedKey, config.keys]);
+  }, [selectedZone, selectedKey]);
 
   useEffect(() => {
     if (selectedZone && selectedKey) {
@@ -231,13 +230,14 @@ function ZoneEditor() {
 
   const handleZoneChange = (event) => {
     const newZone = event.target.value;
-    setSelectedZone(newZone);
-    setSelectedKey('');
+    selectZone(newZone);
+    selectKey(null);
     setSelectedRecords([]);
   };
 
   const handleKeyChange = (event) => {
-    setSelectedKey(event.target.value);
+    const key = availableKeys.find(k => k.id === event.target.value);
+    selectKey(key);
     setSelectedRecords([]);
   };
 
@@ -247,7 +247,7 @@ function ZoneEditor() {
         id: Date.now(),
         type: 'DELETE',
         zone: selectedZone,
-        keyId: selectedKey,
+        keyId: selectedKey.id,
         record: record
       };
 
@@ -265,7 +265,7 @@ function ZoneEditor() {
           id: Date.now() + Math.random(),
           type: 'DELETE',
           zone: selectedZone,
-          keyId: selectedKey,
+          keyId: selectedKey.id,
           record: record
         };
         addPendingChange(change);
@@ -289,7 +289,7 @@ function ZoneEditor() {
         id: Date.now(),
         type: 'MODIFY',
         zone: selectedZone,
-        keyId: selectedKey,
+        keyId: selectedKey.id,
         originalRecord: editingRecord,
         newRecord: updatedRecord
       };
@@ -421,7 +421,7 @@ function ZoneEditor() {
     addPendingChange({
       type: 'ADD',
       zone: selectedZone,
-      keyId: selectedKey,
+      keyId: selectedKey.id,
       record: newRecord
     });
 
@@ -436,11 +436,8 @@ function ZoneEditor() {
     <Paper sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
         <Select
-          value={selectedZone}
-          onChange={(e) => {
-            setSelectedZone(e.target.value);
-            setSelectedKey('');
-          }}
+          value={selectedZone || ''}
+          onChange={handleZoneChange}
           displayEmpty
           fullWidth
         >
@@ -455,8 +452,8 @@ function ZoneEditor() {
         </Select>
 
         <Select
-          value={selectedKey}
-          onChange={(e) => setSelectedKey(e.target.value)}
+          value={selectedKey?.id || ''}
+          onChange={handleKeyChange}
           displayEmpty
           fullWidth
           disabled={!selectedZone}
@@ -609,43 +606,54 @@ function ZoneEditor() {
                       </TableCell>
                       <TableCell>{record.name}</TableCell>
                       <TableCell>
-                        <Chip label={record.type} size="small" />
+                        <Box component="span">
+                          <Chip 
+                            label={record.type} 
+                            size="small" 
+                            component="span"
+                          />
+                        </Box>
                       </TableCell>
                       <TableCell>
-                        {isMultilineRecord(record) ? (
-                          <Button 
-                            size="small" 
-                            onClick={() => setMultilineRecord(record)}
-                          >
-                            View Full Record
-                          </Button>
-                        ) : (
-                          record.value
-                        )}
+                        <Box component="span">
+                          {isMultilineRecord(record) ? (
+                            <Button 
+                              size="small" 
+                              onClick={() => setMultilineRecord(record)}
+                              sx={{ display: 'inline-flex' }}
+                            >
+                              View Full Record
+                            </Button>
+                          ) : (
+                            record.value
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell>{record.ttl}</TableCell>
                       <TableCell align="right">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleCopyRecord(record)}
-                          title="Copy and Edit Record"
-                        >
-                          <ContentCopyIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditRecord(record)}
-                          title="Edit Record"
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDeleteRecord(record)}
-                          color="error"
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                        <Box component="span" sx={{ display: 'inline-flex', gap: 1 }}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleCopyRecord(record)}
+                            title="Copy and Edit Record"
+                          >
+                            <ContentCopyIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditRecord(record)}
+                            title="Edit Record"
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteRecord(record)}
+                            color="error"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))}

@@ -1,113 +1,61 @@
-import React, { useEffect } from 'react';
-import {
-  Box,
-  CssBaseline,
-  Drawer,
-  AppBar,
-  Toolbar,
-  Typography,
-  Container,
-  IconButton,
-  Tooltip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  Button,
-  Badge,
-} from '@mui/material';
-import {
-  Brightness4 as DarkModeIcon,
-  Brightness7 as LightModeIcon,
-  Dns as DnsIcon,
-  Delete as DeleteIcon,
-  Save as SaveIcon,
-} from '@mui/icons-material';
-import { useConfig } from '../context/ConfigContext';
-import { usePendingChanges } from '../context/PendingChangesContext';
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import Navigation from './Navigation';
-import ZoneEditor from './ZoneEditor';
-import BackupImport from './BackupImport';
-import Settings from './Settings';
+import Layout from './Layout';
 import AddDNSRecord from './AddDNSRecord';
-import { notificationService } from '../services/notificationService';
-import { PendingChangesDrawer } from './PendingChangesDrawer';
-import Footer from './Footer';
+import ZoneEditor from './ZoneEditor';
+import Settings from './Settings';
+import Snapshots from './Snapshots';
+import { useKey } from '../context/KeyContext';
+import { useConfig } from '../context/ConfigContext';
 
-function AppContent({ drawerWidth, darkMode, toggleDarkMode }) {
+function AppContent({ darkMode, toggleDarkMode }) {
+  const { selectedKey, selectedZone } = useKey();
   const { config } = useConfig();
-  const { pendingChanges, showPendingDrawer, setShowPendingDrawer } = usePendingChanges();
 
-  useEffect(() => {
-    notificationService.setWebhookUrl(config.webhookUrl || null);
-  }, [config.webhookUrl]);
+  // Protected route component that requires key selection
+  const ProtectedZoneRoute = ({ children }) => {
+    if (!selectedKey && (!config.keys || config.keys.length === 0)) {
+      return (
+        <Navigate 
+          to="/settings" 
+          replace 
+          state={{ message: 'Please configure a TSIG key first' }} 
+        />
+      );
+    }
+    return children;
+  };
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <CssBaseline />
-      
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Typography variant="h6" noWrap component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <DnsIcon /> Snap DNS Manager
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button
-              color="inherit"
-              onClick={() => setShowPendingDrawer(true)}
-              startIcon={<Badge badgeContent={pendingChanges.length} color="error"><SaveIcon /></Badge>}
-            >
-              Pending Changes
-            </Button>
-            <Tooltip title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>
-              <IconButton color="inherit" onClick={toggleDarkMode}>
-                {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Toolbar>
-      </AppBar>
-
-      <Drawer
-        variant="permanent"
-        sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          [`& .MuiDrawer-paper`]: { 
-            width: drawerWidth, 
-            boxSizing: 'border-box' 
-          },
-        }}
-      >
-        <Toolbar />
-        <Navigation />
-      </Drawer>
-
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mb: '60px',
-        }}
-      >
-        <Toolbar />
-        <Container maxWidth="xl">
-          <Routes>
-            <Route path="/" element={<Navigate to="/zones" replace />} />
-            <Route path="/zones" element={<ZoneEditor />} />
-            <Route path="/add" element={<AddDNSRecord />} />
-            <Route path="/backup" element={<BackupImport />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </Container>
-      </Box>
-
-      <Footer />
-      <PendingChangesDrawer />
-    </Box>
+    <Layout darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
+      <Routes>
+        <Route 
+          path="/" 
+          element={
+            <ProtectedZoneRoute>
+              <AddDNSRecord />
+            </ProtectedZoneRoute>
+          } 
+        />
+        <Route 
+          path="/zones" 
+          element={
+            <ProtectedZoneRoute>
+              <ZoneEditor />
+            </ProtectedZoneRoute>
+          } 
+        />
+        <Route 
+          path="/snapshots" 
+          element={
+            <ProtectedZoneRoute>
+              <Snapshots />
+            </ProtectedZoneRoute>
+          } 
+        />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>
+    </Layout>
   );
 }
 

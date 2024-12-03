@@ -1,105 +1,63 @@
-import { KeyConfig } from '../config';
+import { DNSRecord, ZoneConfig, ZoneOperationResult } from '../types/dns';
 
-export interface DNSRecord {
-  name: string;
-  type: string;
-  value: string;
-  ttl: number;
-}
+export type { DNSRecord, ZoneConfig, ZoneOperationResult };
 
-export interface DNSService {
-  addRecord(zone: string, record: DNSRecord, keyConfig: KeyConfig): Promise<void>;
-  updateRecord(zone: string, originalRecord: DNSRecord, newRecord: DNSRecord, keyConfig: KeyConfig): Promise<void>;
-  deleteRecord(zone: string, record: DNSRecord, keyConfig: KeyConfig): Promise<void>;
-  fetchZoneRecords(zone: string, keyConfig: KeyConfig): Promise<DNSRecord[]>;
-}
+class DNSService {
+  private baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3002';
 
-class DNSServiceImpl implements DNSService {
-  async addRecord(zone: string, record: DNSRecord, keyConfig: KeyConfig): Promise<void> {
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/zone/${zone}/record`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        server: keyConfig.server,
-        keyName: keyConfig.keyName,
-        keyValue: keyConfig.keyValue,
-        algorithm: keyConfig.algorithm,
-        record
-      })
+  async fetchZoneRecords(zone: string, keyConfig: ZoneConfig): Promise<DNSRecord[]> {
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-dns-server': keyConfig.server,
+      'x-dns-key-name': keyConfig.keyName,
+      'x-dns-key-value': keyConfig.keyValue,
+      'x-dns-algorithm': keyConfig.algorithm,
+      'x-dns-key-id': keyConfig.id
+    };
+
+    const response = await fetch(`${this.baseUrl}/api/zones/${zone}`, {
+      method: 'GET',
+      headers
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to add record');
+      throw new Error(error.error || 'Failed to fetch zone records');
     }
+
+    const data = await response.json();
+    return data.records;
   }
 
-  async updateRecord(zone: string, originalRecord: DNSRecord, newRecord: DNSRecord, keyConfig: KeyConfig): Promise<void> {
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/zone/${zone}/record`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        server: keyConfig.server,
-        keyName: keyConfig.keyName,
-        keyValue: keyConfig.keyValue,
-        algorithm: keyConfig.algorithm,
-        originalRecord,
-        newRecord
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update record');
-    }
-  }
-
-  async deleteRecord(zone: string, record: DNSRecord, keyConfig: KeyConfig): Promise<void> {
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/zone/${zone}/record/delete`, {
+  async addRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/zones/${zone}/records`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        server: keyConfig.server,
-        keyName: keyConfig.keyName,
-        keyValue: keyConfig.keyValue,
-        algorithm: keyConfig.algorithm,
-        record
-      })
+      body: JSON.stringify({ record, keyConfig })
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to delete record');
+      throw new Error(error.error || 'Failed to add record');
     }
   }
 
-  async fetchZoneRecords(zone: string, keyConfig: KeyConfig): Promise<DNSRecord[]> {
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/zone/${zone}/records`, {
-      method: 'POST',
+  async deleteRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/zones/${zone}/records`, {
+      method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        server: keyConfig.server,
-        keyName: keyConfig.keyName,
-        keyValue: keyConfig.keyValue,
-        algorithm: keyConfig.algorithm
-      })
+      body: JSON.stringify({ record, keyConfig })
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch zone records');
+      throw new Error(error.error || 'Failed to delete record');
     }
-
-    return response.json();
   }
 }
 
-export const dnsService = new DNSServiceImpl();
+export const dnsService = new DNSService();

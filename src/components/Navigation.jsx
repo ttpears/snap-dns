@@ -1,46 +1,62 @@
 import React from 'react';
-import {
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-} from '@mui/material';
-import {
-  Edit as EditIcon,
-  Backup as BackupIcon,
-  Settings as SettingsIcon,
-  Add as AddIcon,
-} from '@mui/icons-material';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography } from '@mui/material';
+import { Link, useLocation } from 'react-router-dom';
+import { Add, Settings, Storage, Backup } from '@mui/icons-material';
+import KeySelector from './KeySelector';
 
 function Navigation() {
-  const navigate = useNavigate();
   const location = useLocation();
 
   const menuItems = [
-    { path: '/zones', label: 'Zone Editor', icon: <EditIcon /> },
-    { path: '/add', label: 'Add DNS Record', icon: <AddIcon /> },
-    { path: '/backup', label: 'Backup & Import', icon: <BackupIcon /> },
-    { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
+    { text: 'Add DNS Record', icon: <Add />, path: '/' },
+    { text: 'Zone Editor', icon: <Storage />, path: '/zones' },
+    { text: 'Snapshots', icon: <Backup />, path: '/snapshots' },
+    { text: 'Settings', icon: <Settings />, path: '/settings' },
   ];
 
   return (
-    <List>
-      {menuItems.map((item, index) => (
-        <React.Fragment key={item.path}>
-          {index > 0 && <Divider />}
+    <>
+      <Box 
+        sx={{ 
+          p: 2, 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          gap: 1 
+        }}
+      >
+        <img src="/logo192.png" alt="SnapDNS" style={{ width: 32, height: 32 }} />
+        <Typography variant="h6" sx={{ fontWeight: 500 }}>
+          SnapDNS
+        </Typography>
+      </Box>
+      <Divider />
+      <List>
+        {menuItems.map((item) => (
           <ListItem
-            button
+            key={item.path}
+            component={Link}
+            to={item.path}
             selected={location.pathname === item.path}
-            onClick={() => navigate(item.path)}
+            sx={{
+              color: 'text.primary',
+              textDecoration: 'none',
+              '&.Mui-selected': {
+                backgroundColor: 'action.selected',
+              },
+              '&:hover': {
+                backgroundColor: 'action.hover',
+              },
+            }}
           >
             <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} />
+            <ListItemText primary={item.text} />
           </ListItem>
-        </React.Fragment>
-      ))}
-    </List>
+        ))}
+      </List>
+      <Divider />
+      <KeySelector />
+    </>
   );
 }
 

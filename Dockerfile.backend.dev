@@ -7,20 +7,12 @@ RUN apt-get update && \
     apt-get install -y dnsutils iputils-ping net-tools && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy package files first to leverage Docker cache
-COPY backend/package.json ./
-
-# Install dependencies
-RUN npm install
+# Install TypeScript and ts-node globally
+RUN npm install -g typescript ts-node ts-node-dev
 
 # Create temp directory with proper permissions
 RUN mkdir -p /tmp/snap-dns && \
     chmod 700 /tmp/snap-dns
-
-# Copy source code and config files
-COPY backend/tsconfig.json ./
-COPY backend/src ./src
-COPY backend/.env* ./
 
 # Environment variables
 ENV BACKEND_HOST=0.0.0.0
@@ -30,5 +22,5 @@ ENV NODE_ENV=development
 # Expose the port
 EXPOSE ${BACKEND_PORT}
 
-# Start in development mode with hot reloading
+# Start in development mode
 CMD ["npm", "run", "docker:dev"] 
