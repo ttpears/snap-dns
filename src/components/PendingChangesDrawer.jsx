@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Drawer,
   Box,
@@ -39,6 +39,10 @@ function PendingChangesDrawer({
   const [error, setError] = useState(null);
   const [draggingIndex, setDraggingIndex] = useState(null);
   const [expandedItems, setExpandedItems] = useState({});
+
+  useEffect(() => {
+    setExpandedItems({});
+  }, [pendingChanges.length]);
 
   const handleDragStart = (e, index) => {
     setDraggingIndex(index);
@@ -243,7 +247,7 @@ function PendingChangesDrawer({
 
         <List>
           {pendingChanges.map((change, index) => (
-            <React.Fragment key={typeof change.id === 'undefined' ? index : change.id}>
+            <React.Fragment key={change.id || `change-${index}`}>
               <ListItem
                 draggable
                 onDragStart={(e) => handleDragStart(e, index)}
@@ -329,7 +333,11 @@ function PendingChangesDrawer({
                   <DeleteIcon />
                 </IconButton>
               </ListItem>
-              <Collapse in={expandedItems[change.id || `temp-${index}`]} timeout="auto" unmountOnExit>
+              <Collapse 
+                in={Boolean(expandedItems[change.id || `temp-${index}`])} 
+                timeout="auto" 
+                unmountOnExit
+              >
                 <Box sx={{ p: 2, pl: 6, bgcolor: 'action.hover' }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Full Change Details:
