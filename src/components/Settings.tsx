@@ -75,7 +75,15 @@ const WEBHOOK_PROVIDERS: Array<{
 interface ImportData {
   dns_manager_config: {
     zones?: string[];
-    keys?: Key[];
+    keys?: Array<{
+      id: string;
+      name: string;
+      algorithm: string;
+      secret: string;
+      server: string;
+      zones: string[];
+      created?: number;
+    }>;
     defaultTTL?: number;
     webhookUrl?: string | null;
     webhookProvider?: WebhookProvider;
@@ -304,7 +312,7 @@ function Settings() {
           ...(importedData.dns_manager_config.zones || [])
         ]));
 
-        // Update the key's zones
+        // Update the key's zones while preserving server and other fields
         keyToUpdate.zones = newZones;
 
         // Update config
@@ -314,18 +322,29 @@ function Settings() {
         // Handle full backup import
         const currentConfig = JSON.parse(localStorage.getItem('dns_manager_config') || '{}');
         
-        // Merge configurations
+        // Ensure imported keys have server field
+        const importedKeys = importedData.dns_manager_config.keys?.map(key => ({
+          ...key,
+          server: key.server || currentConfig.keys?.find((k: Key) => k.id === key.id)?.server || '',
+        }));
+
+        // Merge configurations, ensuring server field is preserved
         const newConfig = ensureValidConfig({
           ...currentConfig,
           ...importedData.dns_manager_config,
+          keys: importedKeys,
           webhookProvider: importedData.dns_manager_config.webhookProvider || null
         });
 
         await updateConfig(newConfig);
 
-        // Import backups if present
+        // Import backups if present, ensuring server field is preserved
         if (importedData.dnsBackups?.length) {
-          localStorage.setItem('dnsBackups', JSON.stringify(importedData.dnsBackups));
+          const backups = importedData.dnsBackups.map(backup => ({
+            ...backup,
+            server: backup.server || '' // Ensure server field exists
+          }));
+          localStorage.setItem('dnsBackups', JSON.stringify(backups));
         }
 
         setSuccess('Configuration and backups imported successfully');

@@ -34,6 +34,7 @@ function KeyManagement() {
     name: '',
     algorithm: 'hmac-sha256',
     secret: '',
+    server: '',
     zones: []
   });
   const [zoneInput, setZoneInput] = useState('');
@@ -49,6 +50,7 @@ function KeyManagement() {
         name: '',
         algorithm: 'hmac-sha256',
         secret: '',
+        server: '',
         zones: []
       });
     }
@@ -74,7 +76,7 @@ function KeyManagement() {
 
   const handleSaveKey = () => {
     try {
-      if (!newKey.name || !newKey.algorithm || !newKey.secret) {
+      if (!newKey.name || !newKey.algorithm || !newKey.secret || !newKey.server) {
         throw new Error('All fields are required');
       }
       
@@ -95,6 +97,7 @@ function KeyManagement() {
         name: '',
         algorithm: 'hmac-sha256',
         secret: '',
+        server: '',
         zones: []
       });
       setError(null);
@@ -136,41 +139,76 @@ function KeyManagement() {
                 </Tooltip>
               </Box>
             }
+            sx={{ 
+              flexDirection: 'column', 
+              alignItems: 'flex-start',
+              borderBottom: '1px solid',
+              borderColor: 'divider'
+            }}
           >
-            <ListItemText
-              primary={key.name}
-              secondary={
-                <Box component="span" sx={{ display: 'block' }}>
-                  <Typography 
-                    variant="body2" 
-                    color="text.secondary" 
-                    component="span"
-                  >
-                    {key.algorithm}
-                    {key.created && ` • Created: ${new Date(key.created).toLocaleDateString()}`}
-                  </Typography>
-                  <Box component="span" sx={{ display: 'block', mt: 1 }}>
-                    <Stack 
-                      direction="row" 
-                      spacing={1} 
-                      component="span" 
-                      sx={{ display: 'inline-flex', flexWrap: 'wrap', gap: 1 }}
-                    >
-                      {key.zones.map((zone) => (
-                        <Chip
-                          key={zone}
-                          label={zone}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                          component="span"
-                        />
-                      ))}
-                    </Stack>
-                  </Box>
+            <Box sx={{ width: '100%', mb: 1 }}>
+              <Typography variant="subtitle1" component="div">
+                {key.name}
+              </Typography>
+              <Typography 
+                variant="body2" 
+                color="text.secondary"
+                sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+              >
+                <span>{key.algorithm}</span>
+                <span>•</span>
+                <span>{key.server}</span>
+                {key.created && (
+                  <>
+                    <span>•</span>
+                    <span>Created: {new Date(key.created).toLocaleDateString()}</span>
+                  </>
+                )}
+              </Typography>
+            </Box>
+            
+            {key.zones.length > 0 && (
+              <Box sx={{ width: '100%' }}>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  sx={{ mb: 0.5 }}
+                >
+                  Managed Zones ({key.zones.length}):
+                </Typography>
+                <Box 
+                  sx={{ 
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                    gap: 1,
+                    maxHeight: key.zones.length > 6 ? '120px' : 'auto',
+                    overflowY: key.zones.length > 6 ? 'auto' : 'visible',
+                    p: 1,
+                    bgcolor: 'background.default',
+                    borderRadius: 1,
+                  }}
+                >
+                  {key.zones.sort().map((zone) => (
+                    <Chip
+                      key={zone}
+                      label={zone}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      sx={{ 
+                        width: 'fit-content',
+                        maxWidth: '100%',
+                        '.MuiChip-label': {
+                          whiteSpace: 'normal',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }
+                      }}
+                    />
+                  ))}
                 </Box>
-              }
-            />
+              </Box>
+            )}
           </ListItem>
         ))}
       </List>
@@ -203,6 +241,14 @@ function KeyManagement() {
             fullWidth
             value={newKey.name}
             onChange={(e) => setNewKey(prev => ({ ...prev, name: e.target.value }))}
+          />
+          <TextField
+            margin="dense"
+            label="DNS Server"
+            fullWidth
+            value={newKey.server}
+            onChange={(e) => setNewKey(prev => ({ ...prev, server: e.target.value }))}
+            helperText="DNS server hostname or IP address"
           />
           <FormControl fullWidth sx={{ mt: 2 }}>
             <InputLabel>Algorithm</InputLabel>

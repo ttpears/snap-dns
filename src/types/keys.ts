@@ -3,6 +3,7 @@ export interface Key {
   name: string;
   algorithm: string;
   secret: string;
+  server: string;
   zones: string[];
   created?: number;
 }
@@ -12,6 +13,7 @@ export interface KeyConfig {
   name: string;
   algorithm: string;
   secret: string;
+  server: string;
   zones: string[];
   created: number;
 } 
