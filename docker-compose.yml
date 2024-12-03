@@ -31,10 +31,12 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - BACKEND_HOST=0.0.0.0
       - BACKEND_PORT=3002
-      - TS_NODE_PROJECT=tsconfig.json
     volumes:
       - ./backend/src:/app/src:delegated
       - ./backend/tsconfig.json:/app/tsconfig.json:delegated
+      - ./backend/.env:/app/.env:delegated
+      - ./backend/.env.development:/app/.env.development:delegated
+      - ./backend/.env.production:/app/.env.production:delegated
       - backend_node_modules:/app/node_modules
       - temp-keys:/tmp/snap-dns
     networks:

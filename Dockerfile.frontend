@@ -9,8 +9,10 @@ RUN npm install
 # Install react-scripts globally
 RUN npm install -g react-scripts serve
 
-# Copy the rest of the application
+# Copy the rest of the application including env files
 COPY . .
+COPY .env* ./          # Copy all .env files
+COPY .env.* ./         # Copy all .env.* files
 
 # Expose the port
 EXPOSE ${PORT}
