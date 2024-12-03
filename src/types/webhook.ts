@@ -1,7 +1,7 @@
-export type WebhookProvider = 'mattermost' | 'slack' | 'discord' | 'teams' | 'generic';
+export type WebhookProvider = 'mattermost' | 'slack' | 'discord' | 'teams' | 'generic' | null | undefined;
 
 export interface WebhookConfig {
-  provider: WebhookProvider;
+  provider: Exclude<WebhookProvider, null | undefined>;
   url: string;
   name?: string;
   icon?: string;
@@ -20,6 +20,7 @@ export interface WebhookPayload {
   username?: string;
   icon_emoji?: string;
   icon_url?: string;
+  channel?: string;
 }
 
 export interface WebhookResponse {

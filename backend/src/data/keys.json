@@ -1,0 +1,9 @@
+[
+  {
+    "id": "test-key",
+    "server": "localhost",
+    "keyName": "test-key",
+    "keyValue": "test-secret",
+    "algorithm": "hmac-sha256"
+  }
+]

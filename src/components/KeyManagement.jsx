@@ -78,10 +78,15 @@ function KeyManagement() {
         throw new Error('All fields are required');
       }
       
+      const keyWithTimestamp = {
+        ...newKey,
+        created: editingKey?.created || Date.now()
+      };
+      
       if (editingKey) {
-        updateKey(editingKey.id, newKey);
+        updateKey(editingKey.id, keyWithTimestamp);
       } else {
-        addKey(newKey);
+        addKey(keyWithTimestamp);
       }
       
       setDialogOpen(false);
@@ -141,7 +146,8 @@ function KeyManagement() {
                     color="text.secondary" 
                     component="span"
                   >
-                    {key.algorithm} • Created: {new Date(key.created).toLocaleDateString()}
+                    {key.algorithm}
+                    {key.created && ` • Created: ${new Date(key.created).toLocaleDateString()}`}
                   </Typography>
                   <Box component="span" sx={{ display: 'block', mt: 1 }}>
                     <Stack 

@@ -1,7 +1,8 @@
-import { WebhookConfig, WebhookPayload, WebhookProvider, WebhookResponse } from '../types/webhook';
+import { WebhookConfig, WebhookPayload, WebhookResponse } from '../types/webhook';
+import fetch from 'node-fetch';
 
 class WebhookService {
-  private formatPayload(provider: WebhookProvider, payload: WebhookPayload): any {
+  private formatPayload(provider: string, payload: WebhookPayload): any {
     switch (provider) {
       case 'slack':
         return {
@@ -49,12 +50,12 @@ class WebhookService {
 
       case 'mattermost':
       default:
-        // Keep existing Mattermost format for backward compatibility
         return {
           text: payload.text,
           username: payload.username,
           icon_emoji: payload.icon_emoji,
-          icon_url: payload.icon_url
+          icon_url: payload.icon_url,
+          channel: payload.channel
         };
     }
   }
@@ -62,6 +63,12 @@ class WebhookService {
   async send(config: WebhookConfig, payload: WebhookPayload): Promise<WebhookResponse> {
     try {
       const formattedPayload = this.formatPayload(config.provider, payload);
+
+      console.log('Sending webhook request:', {
+        url: config.url,
+        provider: config.provider,
+        payload: formattedPayload
+      });
 
       const response = await fetch(config.url, {
         method: 'POST',
@@ -71,8 +78,23 @@ class WebhookService {
         body: JSON.stringify(formattedPayload)
       });
 
+      let responseText;
+      try {
+        responseText = await response.text();
+      } catch (e) {
+        responseText = 'No response body';
+      }
+
       if (!response.ok) {
-        throw new Error(`Webhook responded with status: ${response.status}`);
+        console.error('Webhook request failed:', {
+          status: response.status,
+          response: responseText
+        });
+        return {
+          success: false,
+          error: 'Webhook request failed',
+          details: `Status ${response.status}: ${responseText}`
+        };
       }
 
       return { success: true };
@@ -81,7 +103,7 @@ class WebhookService {
       return {
         success: false,
         error: 'Failed to send webhook notification',
-        details: (error as Error).message
+        details: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }

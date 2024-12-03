@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { WebhookConfig, WebhookPayload } from '../types/webhook';
-import { notificationService } from '../services';
+import { webhookService } from '../services/webhookService';
 
 const router = Router();
 
@@ -20,12 +20,22 @@ router.post('/notify', async (req: Request<{}, any, WebhookRequestBody>, res: Re
       });
     }
 
-    const result = await notificationService.send(config, payload);
-    res.json(result);
+    console.log('Processing webhook request:', {
+      provider: config.provider,
+      payload: payload
+    });
+
+    const result = await webhookService.send(config, payload);
+    
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
   } catch (err: unknown) {
     const error = err as Error;
     console.error('Failed to send webhook notification:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to send webhook notification',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined

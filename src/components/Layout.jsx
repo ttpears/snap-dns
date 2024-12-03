@@ -1,16 +1,18 @@
 import React from 'react';
-import { Box, Typography, IconButton, useTheme, Toolbar, Divider, Button } from '@mui/material';
+import { Box, Typography, IconButton, Toolbar, Divider, Button } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import Navigation from './Navigation';
 import PendingChangesDrawer from './PendingChangesDrawer';
 import { useConfig } from '../context/ConfigContext';
 import { usePendingChanges } from '../context/PendingChangesContext';
+import Footer from './Footer';
+import { useTheme } from '../context/ThemeContext';
 
 function Layout({ children }) {
   const location = useLocation();
-  const theme = useTheme();
-  const { toggleDarkMode } = useConfig();
+  const { darkMode, toggleDarkMode } = useTheme();
+  const { config } = useConfig();
   const { 
     pendingChanges, 
     setPendingChanges,
@@ -61,7 +63,8 @@ function Layout({ children }) {
       <Box sx={{ 
         flexGrow: 1, 
         ml: '240px', // Match drawer width
-        p: 3 
+        p: 3,
+        pb: 8 // Add padding at bottom to prevent content from being hidden behind footer
       }}>
         <Box sx={{ 
           display: 'flex', 
@@ -84,12 +87,13 @@ function Layout({ children }) {
               </Button>
             )}
             <IconButton onClick={toggleDarkMode} color="inherit">
-              {theme.palette.mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
+              {darkMode ? <Brightness7 /> : <Brightness4 />}
             </IconButton>
           </Box>
         </Box>
         {children}
       </Box>
+      <Footer />
       <PendingChangesDrawer 
         open={showPendingDrawer}
         onClose={() => setShowPendingDrawer(false)}

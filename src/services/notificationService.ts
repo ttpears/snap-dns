@@ -105,53 +105,47 @@ class NotificationService {
       return;
     }
 
-    const endpoint = `${this.apiUrl}/webhook/${this.webhookProvider}`;
-    console.log('Sending webhook to:', endpoint, {
-      webhookUrl: this.webhookUrl,
+    const config = {
       provider: this.webhookProvider,
-      payload
-    });
+      url: this.webhookUrl
+    };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch('http://localhost:3002/api/webhook/notify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          webhookUrl: this.webhookUrl,
+          config,
           payload
-        })
+        }),
+        signal: controller.signal
       });
 
-      let responseData;
-      const textResponse = await response.text();
+      const responseClone = response.clone();
+      
       try {
-        responseData = JSON.parse(textResponse);
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || data.details || `HTTP error! status: ${response.status}`);
+        }
+        return data;
       } catch (e) {
-        console.error('Failed to parse response as JSON:', textResponse);
-        throw new Error('Invalid JSON response from server');
+        const text = await responseClone.text();
+        throw new Error(text || `HTTP error! status: ${response.status}`);
       }
-
-      console.log('Webhook response:', {
-        status: response.status,
-        ok: response.ok,
-        data: responseData
-      });
-
-      if (!response.ok) {
-        throw new Error(responseData.error || `HTTP error! status: ${response.status}`);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request timed out after 10 seconds');
       }
-
-      return responseData;
-    } catch (error) {
-      console.error('Webhook error details:', {
-        error,
-        apiUrl: this.apiUrl,
-        provider: this.webhookProvider,
-        endpoint: `${this.apiUrl}/webhook/${this.webhookProvider}`
-      });
+      console.error('Webhook error:', error);
       throw error;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -161,56 +155,113 @@ class NotificationService {
       return 'Invalid changes format';
     }
 
-    return changes.map(change => {
+    const sections: { [key: string]: string[] } = {
+      added: [],
+      modified: [],
+      deleted: []
+    };
+
+    changes.forEach(change => {
       if (!change || !change.type) {
         console.error('Invalid change object:', change);
-        return '- Invalid change entry';
+        return;
       }
 
       try {
         switch (change.type) {
           case 'DELETE':
-            return change.record
-              ? `- Deleted: ${change.record.name} ${change.record.type} ${change.record.value}`
-              : `- Deleted: <incomplete record>`;
+            if (change.record) {
+              sections.deleted.push(
+                `• \`${change.record.name}\` ${change.record.type} record\n` +
+                `  Value: \`${change.record.value}\``
+              );
+            }
+            break;
             
           case 'MODIFY':
-            return change.originalRecord && change.newRecord
-              ? `- Modified: ${change.originalRecord.name} ${change.originalRecord.type}\n    From: ${change.originalRecord.value}\n    To: ${change.newRecord.value}`
-              : `- Modified: <incomplete record>`;
+            if (change.originalRecord && change.newRecord) {
+              sections.modified.push(
+                `• \`${change.originalRecord.name}\` ${change.originalRecord.type} record\n` +
+                `  From: \`${change.originalRecord.value}\`\n` +
+                `  To:   \`${change.newRecord.value}\``
+              );
+            }
+            break;
             
           case 'ADD':
-            return change.name && change.recordType && change.value
-              ? `- Added: ${change.name} ${change.recordType} ${change.value}`
-              : `- Added: <incomplete record>`;
-            
-          default:
-            return `- Unknown change type: ${change.type}`;
+            if (change.record) {
+              sections.added.push(
+                `• \`${change.record.name}\` ${change.record.type} record\n` +
+                `  Value: \`${change.record.value}\``
+              );
+            }
+            break;
         }
       } catch (error) {
         console.error('Error formatting change:', error, change);
-        return '- Error formatting change';
       }
-    }).join('\n');
+    });
+
+    const parts: string[] = [];
+    
+    if (sections.added.length > 0) {
+      parts.push(
+        `🟢 **Added Records**\n${sections.added.join('\n\n')}`
+      );
+    }
+    
+    if (sections.modified.length > 0) {
+      parts.push(
+        `🟡 **Modified Records**\n${sections.modified.join('\n\n')}`
+      );
+    }
+    
+    if (sections.deleted.length > 0) {
+      parts.push(
+        `🔴 **Deleted Records**\n${sections.deleted.join('\n\n')}`
+      );
+    }
+
+    return parts.join('\n\n');
   }
 
   private formatMessage(zone: string, changesSummary: string, timestamp: number): string {
-    return `### DNS Changes Applied - ${zone}
-**Time:** ${new Date(timestamp).toLocaleString()}
+    const timeString = new Date(timestamp).toLocaleString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
 
-**Changes:**
-\`\`\`
+    return `## 🔄 DNS Changes Applied
+
+### Zone: \`${zone}\`
+**Time:** ${timeString}
+
 ${changesSummary}
-\`\`\`
 
-[View Zone Records](${window.location.origin}/zones)`;
+---
+📋 [View Zone Records](${window.location.origin}/zones)`;
   }
 
   async testWebhook(): Promise<boolean> {
     try {
       const testPayload: WebhookPayload = {
-        text: '### DNS Manager Test Notification\nIf you see this message, webhooks are working correctly!',
-        username: 'DNS Manager Test',
+        text: `## 🧪 DNS Manager Test Notification
+
+### Connection Test Successful! 
+If you see this message, your webhook integration is working correctly.
+
+#### Configuration Details:
+• **Provider:** ${this.webhookProvider}
+• **Time:** ${new Date().toLocaleString()}
+
+---
+This is a test message sent from the DNS Manager application.`,
+        username: 'DNS Manager',
         icon_emoji: ':test_tube:'
       };
 

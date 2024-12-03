@@ -58,6 +58,24 @@ class DNSService {
       throw new Error(error.error || 'Failed to delete record');
     }
   }
+
+  async updateRecord(
+    zone: string,
+    oldRecord: any,
+    newRecord: any,
+    keyConfig: any
+  ): Promise<any> {
+    try {
+      // First delete the old record
+      await this.deleteRecord(zone, oldRecord, keyConfig);
+      
+      // Then add the new record
+      return await this.addRecord(zone, newRecord, keyConfig);
+    } catch (error) {
+      console.error('Failed to update record:', error);
+      throw new Error(`Failed to update record: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 export const dnsService = new DNSService();

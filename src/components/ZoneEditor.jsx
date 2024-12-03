@@ -159,6 +159,9 @@ function ZoneEditor() {
   const [copyingRecord, setCopyingRecord] = useState(null);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
 
+  // Add loading state for initial data
+  const [isInitializing, setIsInitializing] = useState(true);
+
   const availableZones = useMemo(() => {
     const zones = new Set();
     config.keys?.forEach(key => {
@@ -172,21 +175,21 @@ function ZoneEditor() {
     return config.keys?.filter(key => key.zones?.includes(selectedZone)) || [];
   }, [selectedZone, config.keys]);
 
+  // Add initialization effect
+  useEffect(() => {
+    if (config.keys && availableZones.length > 0) {
+      setIsInitializing(false);
+    }
+  }, [config.keys, availableZones]);
+
   const loadZoneRecords = useCallback(async () => {
     if (!selectedZone || !selectedKey) return;
     
-    console.log('Loading records for zone:', selectedZone);
     setRefreshing(true);
     setError(null);
     
     try {
-      if (!selectedKey) {
-        throw new Error('No key configuration found');
-      }
-
-      console.log('Fetching zone records...');
       const records = await dnsService.fetchZoneRecords(selectedZone, selectedKey);
-      console.log('Received records:', records);
       setRecords(records);
     } catch (err) {
       console.error('Failed to load zone records:', err);
@@ -197,10 +200,15 @@ function ZoneEditor() {
   }, [selectedZone, selectedKey]);
 
   useEffect(() => {
-    if (selectedZone && selectedKey) {
+    // Only load if we have all required data and zone is valid
+    if (selectedZone && 
+        selectedKey && 
+        availableZones.includes(selectedZone) && 
+        !isInitializing) {
+      console.log('Loading records for zone:', selectedZone);
       loadZoneRecords();
     }
-  }, [selectedZone, selectedKey, loadZoneRecords]);
+  }, [selectedZone, selectedKey, availableZones, isInitializing, loadZoneRecords]);
 
   const handleSelectAllClick = (event) => {
     if (event.target.checked) {
@@ -436,7 +444,7 @@ function ZoneEditor() {
     <Paper sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
         <Select
-          value={selectedZone || ''}
+          value={isInitializing ? '' : (selectedZone || '')}
           onChange={handleZoneChange}
           displayEmpty
           fullWidth
@@ -452,11 +460,11 @@ function ZoneEditor() {
         </Select>
 
         <Select
-          value={selectedKey?.id || ''}
+          value={isInitializing ? '' : (selectedKey?.id || '')}
           onChange={handleKeyChange}
           displayEmpty
           fullWidth
-          disabled={!selectedZone}
+          disabled={!selectedZone || availableKeys.length === 0}
         >
           <MenuItem value="" disabled>
             Select a DNS Key
