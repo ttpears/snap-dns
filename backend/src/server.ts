@@ -50,13 +50,17 @@ const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
-    'Content-Type', 
+    'Content-Type',
     'Authorization', 
-    'Accept', 
-    'Origin', 
+    'Accept',
+    'Origin',
     'X-Requested-With',
+    'x-dns-server',
+    'x-dns-key-id',
     'x-dns-key-name',
     'x-dns-key-secret',
+    'x-dns-key-value',
+    'x-dns-algorithm',
     'x-dns-key-algorithm'
   ],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
