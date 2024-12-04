@@ -2,18 +2,20 @@ import type { WebhookProvider } from './webhook';
 import { Key } from './keys';
 
 export interface Config {
-  defaultTTL: number;
-  webhookUrl: string | null;
-  webhookProvider: WebhookProvider;
   keys: Key[];
+  defaultTTL?: number;
+  webhookUrl?: string | null;
+  webhookProvider?: WebhookProvider;
+  rowsPerPage?: number;
 }
 
 export function ensureValidConfig(config: Partial<Config>): Config {
   return {
-    defaultTTL: config.defaultTTL ?? 3600,
-    webhookUrl: config.webhookUrl ?? null,
-    webhookProvider: config.webhookProvider ?? null,
-    keys: config.keys ?? []
+    keys: config.keys || [],
+    defaultTTL: config.defaultTTL || 3600,
+    webhookUrl: config.webhookUrl || null,
+    webhookProvider: config.webhookProvider || null,
+    rowsPerPage: config.rowsPerPage || 10,
   };
 }
 

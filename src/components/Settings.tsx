@@ -414,6 +414,27 @@ function Settings() {
             placeholder={selectedProvider?.urlPattern}
           />
 
+          <FormControl>
+            <InputLabel>Default Rows Per Page</InputLabel>
+            <Select
+              value={config.rowsPerPage || 10}
+              onChange={(e) => {
+                updateConfig({
+                  ...config,
+                  rowsPerPage: Number(e.target.value)
+                });
+              }}
+              label="Default Rows Per Page"
+            >
+              <MenuItem value={5}>5</MenuItem>
+              <MenuItem value={10}>10</MenuItem>
+              <MenuItem value={25}>25</MenuItem>
+              <MenuItem value={50}>50</MenuItem>
+              <MenuItem value={100}>100</MenuItem>
+            </Select>
+            <FormHelperText>Default number of records to show per page in tables</FormHelperText>
+          </FormControl>
+
           {success && (
             <Alert severity="success" onClose={() => setSuccess(null)}>
               {success}

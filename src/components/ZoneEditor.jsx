@@ -26,7 +26,8 @@ import {
   InputAdornment,
   TablePagination,
   Chip,
-  Tooltip
+  Tooltip,
+  TableSortLabel
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -124,7 +125,7 @@ function MultilineRecordDialog({ record, open, onClose }) {
 }
 
 function ZoneEditor() {
-  const { config } = useConfig();
+  const { config, updateConfig } = useConfig();
   const { 
     pendingChanges, 
     addPendingChange, 
@@ -147,7 +148,7 @@ function ZoneEditor() {
   const [showPreview, setShowPreview] = useState(false);
   const [filter, setFilter] = useState('');
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(config.rowsPerPage || 10);
   const [selectedTypes, setSelectedTypes] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [filterType, setFilterType] = useState('ALL');
@@ -164,6 +165,8 @@ function ZoneEditor() {
   const [copyingRecord, setCopyingRecord] = useState(null);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [orderBy, setOrderBy] = useState('name');
+  const [order, setOrder] = useState('asc');
 
   // Update initialization effect
   useEffect(() => {
@@ -317,8 +320,45 @@ function ZoneEditor() {
     return false;
   };
 
+  const handleRequestSort = (property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  const sortRecords = (records) => {
+    return records.sort((a, b) => {
+      let aValue = a[orderBy];
+      let bValue = b[orderBy];
+
+      // Special handling for different types of values
+      if (orderBy === 'value') {
+        if (typeof aValue === 'object') aValue = JSON.stringify(aValue);
+        if (typeof bValue === 'object') bValue = JSON.stringify(bValue);
+      }
+
+      // Convert to strings for comparison
+      aValue = String(aValue).toLowerCase();
+      bValue = String(bValue).toLowerCase();
+
+      // Handle numeric parts in strings
+      if (aValue.match(/^\d+/) && bValue.match(/^\d+/)) {
+        const aNum = parseInt(aValue.match(/^\d+/)[0]);
+        const bNum = parseInt(bValue.match(/^\d+/)[0]);
+        if (aNum !== bNum) {
+          return order === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+      }
+
+      if (order === 'desc') {
+        return bValue.localeCompare(aValue);
+      }
+      return aValue.localeCompare(bValue);
+    });
+  };
+
   const filteredRecords = useMemo(() => {
-    return records.filter(record => {
+    const filtered = records.filter(record => {
       const searchLower = searchText.toLowerCase();
       
       // Type filter
@@ -332,7 +372,9 @@ function ZoneEditor() {
              record.type.toLowerCase().includes(searchLower) ||
              String(record.value).toLowerCase().includes(searchLower);
     });
-  }, [records, searchText, filterType]);
+
+    return sortRecords(filtered);
+  }, [records, searchText, filterType, order, orderBy]);
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < changeHistory.length - 1;
@@ -418,6 +460,17 @@ function ZoneEditor() {
     setCopyDialogOpen(false);
     setCopyingRecord(null);
     setShowPendingDrawer(true);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    setRowsPerPage(newRowsPerPage);
+    setPage(0);
+    // Save to config
+    updateConfig({
+      ...config,
+      rowsPerPage: newRowsPerPage
+    });
   };
 
   return (
@@ -546,10 +599,42 @@ function ZoneEditor() {
                       onChange={handleSelectAllClick}
                     />
                   </TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Value</TableCell>
-                  <TableCell>TTL</TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={orderBy === 'name'}
+                      direction={orderBy === 'name' ? order : 'asc'}
+                      onClick={() => handleRequestSort('name')}
+                    >
+                      Name
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={orderBy === 'type'}
+                      direction={orderBy === 'type' ? order : 'asc'}
+                      onClick={() => handleRequestSort('type')}
+                    >
+                      Type
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={orderBy === 'value'}
+                      direction={orderBy === 'value' ? order : 'asc'}
+                      onClick={() => handleRequestSort('value')}
+                    >
+                      Value
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={orderBy === 'ttl'}
+                      direction={orderBy === 'ttl' ? order : 'asc'}
+                      onClick={() => handleRequestSort('ttl')}
+                    >
+                      TTL
+                    </TableSortLabel>
+                  </TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -640,10 +725,8 @@ function ZoneEditor() {
             page={page}
             onPageChange={(e, newPage) => setPage(newPage)}
             rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[5, 10, 25, 50, 100]}
           />
         </>
       )}
