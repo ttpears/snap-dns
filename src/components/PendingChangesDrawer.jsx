@@ -26,20 +26,24 @@ import {
   KeyboardArrowUp as ExpandLessIcon
 } from '@mui/icons-material';
 import { dnsService } from '../services/dnsService';
+import { notificationService } from '../services/notificationService';
+import { usePendingChanges } from '../context/PendingChangesContext';
 
 function PendingChangesDrawer({ 
   open, 
   onClose,
-  pendingChanges,
-  setPendingChanges,
   removePendingChange,
   clearPendingChanges
 }) {
+  const { 
+    pendingChanges, 
+    setPendingChanges, 
+    setShowPendingDrawer 
+  } = usePendingChanges();
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState(null);
   const [draggingIndex, setDraggingIndex] = useState(null);
   const [expandedItems, setExpandedItems] = useState({});
-  const [showPendingDrawer, setShowPendingDrawer] = useState(false);
 
   useEffect(() => {
     setExpandedItems({});
@@ -49,7 +53,7 @@ function PendingChangesDrawer({
     if (pendingChanges.length > 0) {
       setShowPendingDrawer(true);
     }
-  }, [pendingChanges.length]);
+  }, [pendingChanges.length, setShowPendingDrawer]);
 
   const handleDragStart = (e, index) => {
     setDraggingIndex(index);
@@ -87,12 +91,13 @@ function PendingChangesDrawer({
         return acc;
       }, {});
 
+      // Track all successful changes for notification
+      const allSuccessfulChanges = [];
+      const affectedZones = [];
+
       // Apply changes zone by zone
       for (const [zone, changes] of Object.entries(changesByZone)) {
-        // Get the key configuration from the first change
         const firstChange = changes[0];
-        
-        // Get the full key configuration from localStorage
         const config = JSON.parse(localStorage.getItem('dns_manager_config') || '{}');
         const keyConfig = config.keys.find(k => k.id === firstChange.keyId);
         
@@ -100,46 +105,40 @@ function PendingChangesDrawer({
           throw new Error(`No key configuration found for ID: ${firstChange.keyId}`);
         }
 
-        // Create backup before applying changes
-        const backup = {
-          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          timestamp: Date.now(),
-          zone: zone,
-          server: keyConfig.server,
-          records: [], // Will be populated by current records
-          type: 'auto',
-          description: 'Automatic backup before changes',
-          version: '1.0'
-        };
-
         try {
-          // Get current records for backup
-          const currentRecords = await dnsService.fetchZoneRecords(zone, keyConfig);
-          backup.records = currentRecords;
-
-          // Save backup
-          const backups = JSON.parse(localStorage.getItem('dnsBackups') || '[]');
-          backups.unshift(backup);
-          localStorage.setItem('dnsBackups', JSON.stringify(backups));
-
           // Apply changes in order
           for (const change of changes) {
-            switch (change.type) {
-              case 'ADD':
-                await dnsService.addRecord(change.zone, change.record, keyConfig);
-                break;
-              case 'DELETE':
-                await dnsService.deleteRecord(change.zone, change.record, keyConfig);
-                break;
-              case 'MODIFY':
-                await dnsService.updateRecord(change.zone, change.originalRecord, change.newRecord, keyConfig);
-                break;
-              case 'RESTORE':
-                await dnsService.addRecord(change.zone, change.record, keyConfig);
-                break;
-              default:
-                console.warn(`Unknown change type: ${change.type}`);
+            try {
+              switch (change.type) {
+                case 'ADD':
+                case 'RESTORE':
+                  await dnsService.addRecord(zone, change.record, keyConfig);
+                  allSuccessfulChanges.push({
+                    ...change,
+                    type: change.type === 'RESTORE' ? 'RESTORE' : 'ADD'
+                  });
+                  break;
+                case 'DELETE':
+                  await dnsService.deleteRecord(zone, change.record, keyConfig);
+                  allSuccessfulChanges.push(change);
+                  break;
+                case 'MODIFY':
+                  await dnsService.deleteRecord(zone, change.originalRecord, keyConfig);
+                  await dnsService.addRecord(zone, change.newRecord, keyConfig);
+                  allSuccessfulChanges.push(change);
+                  break;
+                default:
+                  console.warn(`Unknown change type: ${change.type}`);
+              }
+            } catch (changeError) {
+              console.error(`Failed to apply change:`, changeError);
+              throw new Error(`Failed to apply change: ${changeError.message}`);
             }
+          }
+
+          // Add zone to affected zones
+          if (!affectedZones.includes(zone)) {
+            affectedZones.push(zone);
           }
 
           // Dispatch event to notify components that changes were applied
@@ -148,7 +147,21 @@ function PendingChangesDrawer({
           }));
         } catch (error) {
           console.error(`Failed to process changes for zone ${zone}:`, error);
-          throw new Error(`Failed to process changes for zone ${zone}: ${error.message}`);
+          throw error;
+        }
+      }
+
+      // Send a single notification for all successful changes
+      if (allSuccessfulChanges.length > 0) {
+        try {
+          await notificationService.sendNotification('Multiple Zones', {
+            changes: allSuccessfulChanges,
+            zones: affectedZones,
+            timestamp: Date.now(),
+            totalChanges: allSuccessfulChanges.length
+          });
+        } catch (notifyError) {
+          console.warn('Failed to send notification:', notifyError);
         }
       }
 

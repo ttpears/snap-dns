@@ -124,35 +124,21 @@ function Settings() {
   const handleSave = async () => {
     setSaving(true);
     setError(null);
-    setSuccess(null);
-
+    
     try {
-      const trimmedUrl = webhookUrl.trim();
-      const provider = webhookProvider || 'mattermost';
-      
-      // First update the notification service
-      notificationService.setWebhookConfig(
-        trimmedUrl || '',
-        provider as Exclude<WebhookProvider, null | undefined>
-      );
-
-      // Then save to config
-      await updateConfig(ensureValidConfig({
+      const updatedConfig = {
         ...config,
         defaultTTL,
-        webhookUrl: trimmedUrl || null,
-        webhookProvider: provider
-      }));
+        webhookUrl,
+        webhookProvider
+      };
       
+      await updateConfig(updatedConfig);
+      notificationService.setWebhookConfig(webhookUrl, webhookProvider);
       setSuccess('Settings saved successfully');
-    } catch (error) {
-      setError(`Failed to save settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      
-      // Revert notification service config on error
-      notificationService.setWebhookConfig(
-        config.webhookUrl || '',
-        (config.webhookProvider || 'mattermost') as Exclude<WebhookProvider, null | undefined>
-      );
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(`Failed to save settings: ${errorMessage}`);
     } finally {
       setSaving(false);
     }
@@ -164,8 +150,9 @@ function Settings() {
     try {
       await notificationService.testWebhook();
       setSuccess('Test notification sent successfully!');
-    } catch (error) {
-      setError(`Failed to send test notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(`Failed to send test notification: ${errorMessage}`);
     } finally {
       setTesting(false);
     }

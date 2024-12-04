@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState } from 'react';
 
-const PendingChangesContext = createContext();
+const PendingChangesContext = createContext({
+  pendingChanges: [],
+  setPendingChanges: () => {},
+  addPendingChange: () => {},
+  removePendingChange: () => {},
+  clearPendingChanges: () => {},
+  showPendingDrawer: false,
+  setShowPendingDrawer: () => {}
+});
 
 export function PendingChangesProvider({ children }) {
   const [pendingChanges, setPendingChanges] = useState([]);
@@ -8,6 +16,7 @@ export function PendingChangesProvider({ children }) {
 
   const addPendingChange = (change) => {
     setPendingChanges(prev => [...prev, change]);
+    setShowPendingDrawer(true);
   };
 
   const removePendingChange = (changeId) => {
@@ -16,6 +25,7 @@ export function PendingChangesProvider({ children }) {
 
   const clearPendingChanges = () => {
     setPendingChanges([]);
+    setShowPendingDrawer(false);
   };
 
   return (

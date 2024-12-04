@@ -44,6 +44,7 @@ import RedoIcon from '@mui/icons-material/Redo';
 import RecordEditor from './RecordEditor';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useKey } from '../context/KeyContext';
+import PendingChangesDrawer from './PendingChangesDrawer';
 
 const recordTypes = [
   'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP', 'SOA'
@@ -128,12 +129,12 @@ function ZoneEditor() {
   const { config, updateConfig } = useConfig();
   const { 
     pendingChanges, 
+    setPendingChanges,
     addPendingChange, 
     removePendingChange, 
-    clearPendingChanges, 
-    showPendingDrawer, 
-    setShowPendingDrawer,
-    setPendingChanges 
+    clearPendingChanges,
+    showPendingDrawer,
+    setShowPendingDrawer
   } = usePendingChanges();
 
   const { 
@@ -789,6 +790,13 @@ function ZoneEditor() {
           Redo ({changeHistory.length - historyIndex - 1})
         </Button>
       </Box>
+
+      <PendingChangesDrawer
+        open={showPendingDrawer}
+        onClose={() => setShowPendingDrawer(false)}
+        removePendingChange={removePendingChange}
+        clearPendingChanges={clearPendingChanges}
+      />
     </Paper>
   );
 }
