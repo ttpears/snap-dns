@@ -39,9 +39,16 @@ function PendingChangesDrawer({
   const [error, setError] = useState(null);
   const [draggingIndex, setDraggingIndex] = useState(null);
   const [expandedItems, setExpandedItems] = useState({});
+  const [showPendingDrawer, setShowPendingDrawer] = useState(false);
 
   useEffect(() => {
     setExpandedItems({});
+  }, [pendingChanges.length]);
+
+  useEffect(() => {
+    if (pendingChanges.length > 0) {
+      setShowPendingDrawer(true);
+    }
   }, [pendingChanges.length]);
 
   const handleDragStart = (e, index) => {

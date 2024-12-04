@@ -25,7 +25,8 @@ import {
   TextField,
   InputAdornment,
   TablePagination,
-  Chip
+  Chip,
+  Tooltip
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -237,6 +238,8 @@ function ZoneEditor() {
 
       addPendingChange(change);
       setShowPendingDrawer(true);
+      setEditDialogOpen(false);
+      setEditingRecord(null);
     } catch (error) {
       setError(`Failed to delete record: ${error.message}`);
     }
@@ -257,6 +260,8 @@ function ZoneEditor() {
 
       setShowPendingDrawer(true);
       setSelectedRecords([]);
+      setEditDialogOpen(false);
+      setEditingRecord(null);
     } catch (error) {
       setError(`Failed to delete records: ${error.message}`);
     }
@@ -282,6 +287,8 @@ function ZoneEditor() {
       setShowPendingDrawer(true);
       setEditDialogOpen(false);
       setEditingRecord(null);
+      setCopyDialogOpen(false);
+      setCopyingRecord(null);
     } catch (error) {
       setError(error.message);
     }
@@ -401,7 +408,6 @@ function ZoneEditor() {
   };
 
   const handleCopySave = (newRecord) => {
-    // Add the new record to pending changes
     addPendingChange({
       type: 'ADD',
       zone: selectedZone,
@@ -409,20 +415,30 @@ function ZoneEditor() {
       record: newRecord
     });
 
-    // Close the dialog
     setCopyDialogOpen(false);
-
-    // Show the pending changes drawer
+    setCopyingRecord(null);
     setShowPendingDrawer(true);
   };
 
   return (
     <Paper sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        gap: 2, 
+        mb: 3,
+        p: 2,
+        backgroundColor: 'background.paper',
+        borderRadius: 1,
+        border: 1,
+        borderColor: 'divider',
+        boxShadow: 1
+      }}>
         <TextField
+          fullWidth
           value={searchText || ''}
           onChange={(e) => setSearchText(e.target.value)}
           placeholder="Search records..."
+          size="small"
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -432,27 +448,34 @@ function ZoneEditor() {
           }}
         />
 
-        <Select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          sx={{ minWidth: 120 }}
-        >
-          <MenuItem value="ALL">All Types</MenuItem>
-          {recordTypes.map(type => (
-            <MenuItem key={type} value={type}>{type}</MenuItem>
-          ))}
-        </Select>
+        <FormControl sx={{ minWidth: 200 }}>
+          <Select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            size="small"
+            displayEmpty
+          >
+            <MenuItem value="ALL">All Record Types</MenuItem>
+            {recordTypes.map(type => (
+              <MenuItem key={type} value={type}>{type}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
-        <IconButton 
-          onClick={loadZoneRecords} 
-          disabled={!selectedZone || !selectedKey || refreshing}
-        >
-          {refreshing ? (
-            <CircularProgress size={24} />
-          ) : (
-            <RefreshIcon />
-          )}
-        </IconButton>
+        <Tooltip title="Refresh Records">
+          <IconButton 
+            onClick={loadZoneRecords} 
+            disabled={!selectedZone || !selectedKey || refreshing}
+            size="small"
+            sx={{ alignSelf: 'center' }}
+          >
+            {refreshing ? (
+              <CircularProgress size={20} />
+            ) : (
+              <RefreshIcon />
+            )}
+          </IconButton>
+        </Tooltip>
       </Box>
 
       {error && (
@@ -502,13 +525,11 @@ function ZoneEditor() {
             {selectedZone && selectedKey && (
               <AddDNSRecord 
                 zone={selectedZone}
-                selectedKey={selectedKey}
-                onRecordAdded={() => {
+                onSuccess={() => {
                   setAddRecordDialogOpen(false);
                   loadZoneRecords();
                 }}
-                addPendingChange={addPendingChange}
-                setShowPendingDrawer={setShowPendingDrawer}
+                onClose={() => setAddRecordDialogOpen(false)}
               />
             )}
           </Dialog>

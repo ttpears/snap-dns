@@ -22,7 +22,8 @@ import {
   Chip,
   Stack,
   Tooltip,
-  InputAdornment
+  InputAdornment,
+  Autocomplete
 } from '@mui/material';
 import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon } from '@mui/icons-material';
 import { useKey } from '../context/KeyContext';
@@ -32,6 +33,7 @@ import { useConfig } from '../context/ConfigContext';
 
 function KeyManagement() {
   const { config, updateConfig } = useConfig();
+  const { availableZones } = useKey();
   const { keys = [] } = config;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingKey, setEditingKey] = useState(null);
@@ -74,12 +76,13 @@ function KeyManagement() {
     setError(null);
   };
 
-  const handleAddZone = () => {
-    if (!zoneInput.trim()) return;
+  const handleAddZone = (zone) => {
+    const trimmedZone = (typeof zone === 'string' ? zone : zoneInput).trim();
+    if (!trimmedZone) return;
     
     setNewKey(prev => ({
       ...prev,
-      zones: [...new Set([...prev.zones, zoneInput.trim()])]
+      zones: [...new Set([...prev.zones, trimmedZone])]
     }));
     setZoneInput('');
   };
@@ -157,26 +160,44 @@ function KeyManagement() {
           Managed Zones
         </Typography>
         <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-          <TextField
+          <Autocomplete
+            freeSolo
+            fullWidth
             size="small"
-            label="Add Zone"
+            options={availableZones || []}
             value={zoneInput}
-            onChange={(e) => setZoneInput(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAddZone();
+            onChange={(_, newValue) => {
+              if (newValue) {
+                setZoneInput(newValue);
+                handleAddZone(newValue);
               }
             }}
-            sx={{ flexGrow: 1 }}
+            onInputChange={(_, newInputValue, reason) => {
+              setZoneInput(newInputValue);
+            }}
+            inputValue={zoneInput}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Add Zone"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && zoneInput.trim()) {
+                    e.preventDefault();
+                    handleAddZone();
+                  }
+                }}
+              />
+            )}
+            filterOptions={(options, { inputValue }) => {
+              const filtered = options.filter(option =>
+                option.toLowerCase().includes(inputValue.toLowerCase())
+              );
+              if (inputValue !== '' && !filtered.includes(inputValue)) {
+                filtered.push(inputValue);
+              }
+              return filtered.sort((a, b) => a.localeCompare(b));
+            }}
           />
-          <Button 
-            variant="outlined" 
-            onClick={handleAddZone}
-            disabled={!zoneInput.trim()}
-          >
-            Add
-          </Button>
         </Box>
 
         {newKey.zones.length > 0 && (

@@ -177,7 +177,7 @@ const RECORD_TYPES = {
   }
 };
 
-function AddDNSRecord({ zone, onSuccess }) {
+function AddDNSRecord({ zone, onSuccess, onClose }) {
   const { selectedKey, selectedZone } = useKey();
   const { addPendingChange, setShowPendingDrawer, pendingChanges } = usePendingChanges();
   const { config } = useConfig();
@@ -350,7 +350,6 @@ function AddDNSRecord({ zone, onSuccess }) {
         return;
       }
 
-      // Create a clean record object with only the necessary fields
       const cleanRecord = getRecordForSubmission(record);
       const formattedRecord = DNSRecordFormatter.formatRecord(cleanRecord, selectedZone);
 
@@ -395,9 +394,17 @@ function AddDNSRecord({ zone, onSuccess }) {
         fingerprint: ''
       });
       
-      setSuccess('Record added successfully');
+      // Close the dialog if it's in a dialog
+      if (onClose) {
+        onClose();
+      }
+
+      // Call onSuccess if provided
+      if (onSuccess) {
+        onSuccess();
+      }
+      
     } catch (error) {
-      // Handle specific error messages
       if (error.message.includes('Record already exists')) {
         setError('This record already exists in the zone');
       } else {

@@ -1,13 +1,21 @@
 :root {
-  --background-color: #ffffff;
-  --text-color: #000000;
+  --background-color: #f8fafc;
+  --text-color: #334155;
   --paper-background: #ffffff;
+  --border-color: #e2e8f0;
+  --hover-color: #f1f5f9;
+  --secondary-text: #64748b;
+  --shadow-color: rgba(0, 0, 0, 0.06);
 }
 
 [data-theme='dark'] {
   --background-color: #121212;
   --text-color: #ffffff;
   --paper-background: #1e1e1e;
+  --border-color: #2d3748;
+  --hover-color: #2d3748;
+  --secondary-text: #a0aec0;
+  --shadow-color: rgba(0, 0, 0, 0.2);
 }
 
 body {
@@ -21,9 +29,105 @@ body {
   color: var(--text-color);
 }
 
-/* Add any additional dark mode specific styles here */
+/* Soften table appearance */
+.MuiTableCell-root {
+  border-color: var(--border-color) !important;
+}
+
+.MuiTableRow-root:hover {
+  background-color: var(--hover-color) !important;
+}
+
+/* Soften Paper components */
+.MuiPaper-root {
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 4px 6px -1px var(--shadow-color), 
+              0 2px 4px -1px var(--shadow-color) !important;
+}
+
+/* Improve readability of secondary text */
+.MuiTypography-colorTextSecondary {
+  color: var(--secondary-text) !important;
+}
+
+/* Subtle transitions */
+.MuiButton-root,
+.MuiIconButton-root,
+.MuiChip-root {
+  transition: all 0.2s ease-in-out !important;
+}
+
+/* Soften input fields */
+.MuiOutlinedInput-root {
+  background-color: var(--paper-background);
+  transition: all 0.2s ease-in-out;
+}
+
+.MuiOutlinedInput-root:hover {
+  background-color: var(--hover-color);
+}
+
+/* Add subtle hover effects */
+.MuiIconButton-root:hover {
+  background-color: var(--hover-color) !important;
+}
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* Improve scrollbar appearance */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--secondary-text);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-color);
+}
+
+/* Additional styles for search area */
+.search-container {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--paper-background);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 24px;
+}
+
+.search-container .MuiTextField-root {
+  flex-grow: 1;
+}
+
+.search-container .MuiSelect-root {
+  min-width: 160px;
+}
+
+/* Improve button aesthetics */
+.MuiButton-root {
+  text-transform: none !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.3px !important;
+}
+
+/* Improve table aesthetics */
+.MuiTableCell-head {
+  background-color: var(--paper-background) !important;
+  font-weight: 600 !important;
+}
+
+.MuiTableRow-root {
+  transition: background-color 0.2s ease-in-out;
 } 
