@@ -106,16 +106,49 @@ function PendingChangesDrawer({
         }
 
         try {
+          // Create backup before applying changes
+          const currentRecords = await dnsService.fetchZoneRecords(zone, keyConfig);
+          const backup = {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: Date.now(),
+            zone: zone,
+            server: keyConfig.server,
+            records: currentRecords,
+            type: 'auto',
+            description: 'Automatic backup before changes',
+            version: '1.0'
+          };
+
+          // Save backup
+          const backups = JSON.parse(localStorage.getItem('dnsBackups') || '[]');
+          backups.unshift(backup);
+          localStorage.setItem('dnsBackups', JSON.stringify(backups));
+
           // Apply changes in order
           for (const change of changes) {
             try {
               switch (change.type) {
                 case 'ADD':
-                case 'RESTORE':
                   await dnsService.addRecord(zone, change.record, keyConfig);
                   allSuccessfulChanges.push({
                     ...change,
-                    type: change.type === 'RESTORE' ? 'RESTORE' : 'ADD'
+                    type: 'ADD'
+                  });
+                  break;
+                case 'RESTORE':
+                  // For restore, we need to ensure the record is properly formatted
+                  const recordToRestore = {
+                    ...change.record,
+                    name: change.record.name,
+                    type: change.record.type,
+                    value: change.record.value,
+                    ttl: change.record.ttl || 3600  // Ensure TTL exists
+                  };
+                  await dnsService.addRecord(zone, recordToRestore, keyConfig);
+                  allSuccessfulChanges.push({
+                    ...change,
+                    type: 'RESTORE',
+                    record: recordToRestore
                   });
                   break;
                 case 'DELETE':
