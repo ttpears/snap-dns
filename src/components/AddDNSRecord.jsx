@@ -10,12 +10,15 @@ import {
   InputLabel,
   Typography,
   FormHelperText,
-  Grid
+  Grid,
+  CircularProgress
 } from '@mui/material';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { useKey } from '../context/KeyContext';
 import { dnsService } from '../services/dnsService';
 import { useConfig } from '../context/ConfigContext';
+import { DNSValidationService } from '../services/dnsValidationService';
+import { DNSRecordFormatter } from '../services/dnsRecordFormatter';
 
 // Record type definitions with their specific fields and validations
 const RECORD_TYPES = {
@@ -176,11 +179,11 @@ const RECORD_TYPES = {
 
 function AddDNSRecord({ zone, onSuccess }) {
   const { selectedKey, selectedZone } = useKey();
-  const { addPendingChange, setShowPendingDrawer } = usePendingChanges();
+  const { addPendingChange, setShowPendingDrawer, pendingChanges } = usePendingChanges();
   const { config } = useConfig();
   const [record, setRecord] = useState({
     name: '',
-    ttl: 3600,
+    ttl: config.defaultTTL || 3600,
     type: 'A',
     value: '',
     priority: 0,
@@ -196,6 +199,8 @@ function AddDNSRecord({ zone, onSuccess }) {
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [validationErrors, setValidationErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(null);
 
   const currentTypeFields = useMemo(() => {
     return RECORD_TYPES[record.type]?.fields || [];
@@ -287,41 +292,117 @@ function AddDNSRecord({ zone, onSuccess }) {
     return true;
   };
 
+  const getRecordForSubmission = (record) => {
+    // Base record fields that are always included
+    const baseRecord = {
+      name: record.name,
+      ttl: record.ttl,
+      type: record.type
+    };
+
+    // Add type-specific fields
+    switch (record.type) {
+      case 'A':
+      case 'AAAA':
+      case 'CNAME':
+      case 'TXT':
+        return {
+          ...baseRecord,
+          value: record.value
+        };
+      case 'MX':
+        return {
+          ...baseRecord,
+          value: `${record.priority} ${record.value}`
+        };
+      case 'SRV':
+        return {
+          ...baseRecord,
+          value: `${record.priority} ${record.weight} ${record.port} ${record.target}`
+        };
+      case 'CAA':
+        return {
+          ...baseRecord,
+          value: `${record.flags} ${record.tag} "${record.value}"`
+        };
+      case 'SSHFP':
+        return {
+          ...baseRecord,
+          value: `${record.algorithm} ${record.fptype} ${record.fingerprint}`
+        };
+      default:
+        return {
+          ...baseRecord,
+          value: record.value
+        };
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    setSuccess(null);
 
     try {
-      const keyConfig = {
-        server: selectedKey.server,
-        keyName: selectedKey.name,
-        keyValue: selectedKey.secret,
-        algorithm: selectedKey.algorithm
+      if (!validateFields()) {
+        setSubmitting(false);
+        return;
+      }
+
+      // Create a clean record object with only the necessary fields
+      const cleanRecord = getRecordForSubmission(record);
+      const formattedRecord = DNSRecordFormatter.formatRecord(cleanRecord, selectedZone);
+
+      // Check for duplicate records in pending changes
+      const isDuplicatePending = pendingChanges.some(change => 
+        change.type === 'ADD' && 
+        change.record.name === formattedRecord.name &&
+        change.record.type === formattedRecord.type &&
+        change.record.value === formattedRecord.value
+      );
+
+      if (isDuplicatePending) {
+        setError('This record is already in pending changes');
+        setSubmitting(false);
+        return;
+      }
+
+      const change = {
+        type: 'ADD',
+        zone: selectedZone,
+        keyId: selectedKey.id,
+        record: formattedRecord
       };
 
-      const record = {
-        name: recordName.trim(),
-        type: recordType,
-        value: recordValue.trim(),
-        ttl: parseInt(ttl, 10),
-        class: 'IN'
-      };
-
-      await dnsService.addRecord(zone, record, keyConfig);
+      addPendingChange(change);
+      setShowPendingDrawer(true);
       
       // Reset form
-      setRecordName('');
-      setRecordValue('');
-      setTtl(config.defaultTTL || 3600);
-      setRecordType('A');
+      setRecord({
+        name: '',
+        ttl: config.defaultTTL || 3600,
+        type: 'A',
+        value: '',
+        priority: 0,
+        weight: 0,
+        port: 0,
+        target: '',
+        flags: 0,
+        tag: 'issue',
+        algorithm: 1,
+        fptype: 1,
+        fingerprint: ''
+      });
       
-      if (onSuccess) {
-        onSuccess();
-      }
       setSuccess('Record added successfully');
     } catch (error) {
-      setError(`Failed to add record: ${error.message}`);
+      // Handle specific error messages
+      if (error.message.includes('Record already exists')) {
+        setError('This record already exists in the zone');
+      } else {
+        setError(`Failed to add record: ${error.message}`);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -421,13 +502,24 @@ function AddDNSRecord({ zone, onSuccess }) {
         </Alert>
       )}
 
+      {success && (
+        <Alert severity="success" sx={{ mt: 2 }}>
+          {success}
+        </Alert>
+      )}
+
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 3 }}>
         <Button 
           type="submit" 
           variant="contained" 
           color="primary"
+          disabled={submitting}
         >
-          Add Record
+          {submitting ? (
+            <CircularProgress size={24} color="inherit" />
+          ) : (
+            'Add Record'
+          )}
         </Button>
       </Box>
     </Box>

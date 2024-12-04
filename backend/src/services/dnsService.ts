@@ -152,8 +152,22 @@ class DNSService {
     }
   }
 
-  async addRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<ZoneOperationResult> {
+  async addRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<void> {
     try {
+      // Get existing records first
+      const existingRecords = await this.fetchZoneRecords(zone, keyConfig);
+      
+      // Check for duplicate records
+      const isDuplicate = existingRecords.some(existing => 
+        existing.name === record.name && 
+        existing.type === record.type &&
+        existing.value === record.value
+      );
+
+      if (isDuplicate) {
+        throw new Error('DUPLICATE_RECORD');
+      }
+
       const updateFile = await this.createNSUpdateFile(zone, record, keyConfig);
       
       try {
@@ -172,8 +186,10 @@ class DNSService {
         await unlink(updateFile).catch(console.error);
       }
     } catch (error) {
-      console.error('Error adding record:', error);
-      throw new Error(`Failed to add record: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error.message === 'DUPLICATE_RECORD') {
+        throw new Error(`Record already exists: ${record.name} ${record.type} ${record.value}`);
+      }
+      throw error;
     }
   }
 

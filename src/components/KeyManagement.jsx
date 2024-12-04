@@ -40,7 +40,8 @@ function KeyManagement() {
     algorithm: 'hmac-sha256',
     secret: '',
     server: '',
-    zones: []
+    zones: [],
+    created: null
   });
   const [zoneInput, setZoneInput] = useState('');
   const [error, setError] = useState(null);
@@ -49,7 +50,14 @@ function KeyManagement() {
   const handleOpenDialog = (key = null) => {
     if (key) {
       setEditingKey(key);
-      setNewKey({ ...key });
+      setNewKey({
+        name: key.name || '',
+        algorithm: key.algorithm || 'hmac-sha256',
+        secret: key.secret || '',
+        server: key.server || '',
+        zones: key.zones || [],
+        created: key.created || null
+      });
     } else {
       setEditingKey(null);
       setNewKey({
@@ -57,10 +65,13 @@ function KeyManagement() {
         algorithm: 'hmac-sha256',
         secret: '',
         server: '',
-        zones: []
+        zones: [],
+        created: null
       });
     }
     setDialogOpen(true);
+    setZoneInput('');
+    setError(null);
   };
 
   const handleAddZone = () => {
@@ -109,7 +120,8 @@ function KeyManagement() {
         algorithm: 'hmac-sha256',
         secret: '',
         server: '',
-        zones: []
+        zones: [],
+        created: null
       });
       setZoneInput('');
       setZoneSearchText('');
@@ -293,6 +305,55 @@ function KeyManagement() {
         </Box>
       </Box>
     );
+  };
+
+  const addKey = (newKey) => {
+    try {
+      const currentConfig = { ...config };
+      const keyWithId = {
+        ...newKey,
+        id: `key-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      };
+      
+      currentConfig.keys = [...(currentConfig.keys || []), keyWithId];
+      updateConfig(currentConfig);
+      return keyWithId;
+    } catch (error) {
+      setError(`Failed to add key: ${error.message}`);
+      throw error;
+    }
+  };
+
+  const updateKey = (keyId, updatedKey) => {
+    try {
+      const currentConfig = { ...config };
+      const keyIndex = currentConfig.keys?.findIndex(k => k.id === keyId);
+      
+      if (keyIndex === -1 || keyIndex === undefined) {
+        throw new Error('Key not found');
+      }
+
+      currentConfig.keys[keyIndex] = {
+        ...currentConfig.keys[keyIndex],
+        ...updatedKey,
+        id: keyId // Ensure ID remains unchanged
+      };
+
+      updateConfig(currentConfig);
+    } catch (error) {
+      setError(`Failed to update key: ${error.message}`);
+      throw error;
+    }
+  };
+
+  const removeKey = (keyId) => {
+    try {
+      const currentConfig = { ...config };
+      currentConfig.keys = currentConfig.keys?.filter(k => k.id !== keyId) || [];
+      updateConfig(currentConfig);
+    } catch (error) {
+      setError(`Failed to remove key: ${error.message}`);
+    }
   };
 
   return (
