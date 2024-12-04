@@ -160,62 +160,80 @@ function KeyManagement() {
           Managed Zones
         </Typography>
         <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-          <Autocomplete
-            freeSolo
+          <TextField
             fullWidth
             size="small"
-            options={availableZones || []}
+            label="Add Zone"
             value={zoneInput}
-            onChange={(_, newValue) => {
-              if (newValue) {
-                setZoneInput(newValue);
-                handleAddZone(newValue);
+            onChange={(e) => setZoneInput(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && zoneInput.trim()) {
+                e.preventDefault();
+                handleAddZone();
               }
             }}
-            onInputChange={(_, newInputValue, reason) => {
-              setZoneInput(newInputValue);
-            }}
-            inputValue={zoneInput}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Add Zone"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && zoneInput.trim()) {
-                    e.preventDefault();
-                    handleAddZone();
-                  }
-                }}
-              />
-            )}
-            filterOptions={(options, { inputValue }) => {
-              const filtered = options.filter(option =>
-                option.toLowerCase().includes(inputValue.toLowerCase())
-              );
-              if (inputValue !== '' && !filtered.includes(inputValue)) {
-                filtered.push(inputValue);
-              }
-              return filtered.sort((a, b) => a.localeCompare(b));
+            InputProps={{
+              endAdornment: zoneInput && (
+                <InputAdornment position="end">
+                  <Button
+                    size="small"
+                    onClick={() => handleAddZone()}
+                    sx={{ minWidth: 'auto' }}
+                  >
+                    Add
+                  </Button>
+                </InputAdornment>
+              )
             }}
           />
         </Box>
 
-        {newKey.zones.length > 0 && (
-          <TextField
-            size="small"
-            fullWidth
-            placeholder="Search zones..."
-            value={zoneSearchText}
-            onChange={(e) => setZoneSearchText(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
+        {zoneInput && (
+          <Box 
+            sx={{ 
+              mt: 1,
+              mb: 2,
+              maxHeight: '200px',
+              overflowY: 'auto',
+              bgcolor: 'background.paper',
+              borderRadius: 1,
+              border: 1,
+              borderColor: 'divider',
+              p: 1
             }}
-            sx={{ mb: 1 }}
-          />
+          >
+            {availableZones
+              .filter(zone => zone.toLowerCase().includes(zoneInput.toLowerCase()))
+              .sort((a, b) => {
+                const aExact = a.toLowerCase() === zoneInput.toLowerCase();
+                const bExact = b.toLowerCase() === zoneInput.toLowerCase();
+                if (aExact && !bExact) return -1;
+                if (!aExact && bExact) return 1;
+
+                const aStarts = a.toLowerCase().startsWith(zoneInput.toLowerCase());
+                const bStarts = b.toLowerCase().startsWith(zoneInput.toLowerCase());
+                if (aStarts && !bStarts) return -1;
+                if (!aStarts && bStarts) return 1;
+
+                return a.localeCompare(b);
+              })
+              .map(zone => (
+                <Chip
+                  key={zone}
+                  label={zone}
+                  onClick={() => handleAddZone(zone)}
+                  size="small"
+                  sx={{ 
+                    m: 0.5,
+                    cursor: 'pointer',
+                    '&:hover': {
+                      bgcolor: 'action.hover'
+                    }
+                  }}
+                />
+              ))
+            }
+          </Box>
         )}
 
         <Box 
@@ -232,8 +250,8 @@ function KeyManagement() {
             borderColor: 'divider'
           }}
         >
-          {filteredZones.length > 0 ? (
-            filteredZones.map((zone) => (
+          {newKey.zones.length > 0 ? (
+            newKey.zones.map((zone) => (
               <Chip
                 key={zone}
                 label={zone}
@@ -259,9 +277,7 @@ function KeyManagement() {
                 py: 2 
               }}
             >
-              {newKey.zones.length === 0 
-                ? 'No zones added yet' 
-                : 'No zones match your search'}
+              No zones added yet
             </Typography>
           )}
         </Box>
@@ -273,7 +289,6 @@ function KeyManagement() {
             sx={{ display: 'block', mt: 1 }}
           >
             {newKey.zones.length} zone{newKey.zones.length !== 1 ? 's' : ''} managed
-            {zoneSearchText && ` • ${filteredZones.length} matching filter`}
           </Typography>
         )}
       </Box>

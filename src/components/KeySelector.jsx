@@ -1,94 +1,147 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Box,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
+  TextField,
   Typography,
-  Stack,
+  InputAdornment,
   Paper
 } from '@mui/material';
 import { useKey } from '../context/KeyContext';
-import { useConfig } from '../context/ConfigContext';
+import SearchIcon from '@mui/icons-material/Search';
 
 function KeySelector() {
-  const { config } = useConfig();
   const { 
     selectedKey, 
     selectedZone, 
     selectKey, 
-    selectZone,
-    availableZones = []
+    selectZone, 
+    availableZones, 
+    availableKeys 
   } = useKey();
+  const [zoneFilter, setZoneFilter] = useState('');
 
-  const allKeys = config.keys || [];
+  // Sort zones: numeric first, then alphabetical
+  const sortedZones = useMemo(() => {
+    return [...availableZones].sort((a, b) => {
+      const aIsNumeric = /^\d+$/.test(a.split('.')[0]);
+      const bIsNumeric = /^\d+$/.test(b.split('.')[0]);
+      
+      if (aIsNumeric && !bIsNumeric) return -1;
+      if (!aIsNumeric && bIsNumeric) return 1;
+      
+      return a.localeCompare(b, undefined, { numeric: true });
+    });
+  }, [availableZones]);
 
-  const handleKeyChange = (event) => {
-    const keyId = event.target.value;
-    const key = allKeys.find(k => k.id === keyId);
-    selectKey(key);
-    selectZone('');
-  };
+  // Filter and sort zones
+  const filteredZones = useMemo(() => {
+    if (!zoneFilter) return sortedZones;
+    
+    return sortedZones.filter(zone => 
+      zone.toLowerCase().includes(zoneFilter.toLowerCase())
+    );
+  }, [sortedZones, zoneFilter]);
 
-  const handleZoneChange = (event) => {
-    const newZone = event.target.value;
-    selectZone(newZone);
-  };
-
-  const keyZones = selectedKey?.zones || [];
+  // Validate selected zone is in available zones
+  const validSelectedZone = selectedZone && availableZones.includes(selectedZone) ? selectedZone : '';
 
   return (
-    <Paper sx={{ p: 2, mb: 2 }}>
-      <Typography 
-        variant="subtitle2" 
-        gutterBottom
-        sx={{ 
-          fontWeight: 500,
-          color: 'text.primary',
+    <Paper 
+      sx={{ 
+        p: 3,
+        mb: 2,
+        '& .MuiFormControl-root': {
           mb: 2
+        }
+      }}
+    >
+      <Typography 
+        variant="h6" 
+        gutterBottom 
+        sx={{ 
+          mb: 3,
+          fontWeight: 500
         }}
       >
         TSIG Key Selection
       </Typography>
       
-      <Stack spacing={2}>
-        <FormControl fullWidth size="small">
-          <InputLabel>Key</InputLabel>
-          <Select
-            value={selectedKey?.id || ''}
-            onChange={handleKeyChange}
-            label="Key"
-          >
-            <MenuItem value="">
-              <em>Select a key</em>
+      <FormControl fullWidth>
+        <InputLabel>Select Key</InputLabel>
+        <Select
+          value={selectedKey?.id || ''}
+          onChange={(e) => {
+            const key = availableKeys.find(k => k.id === e.target.value);
+            selectKey(key || null);
+          }}
+          label="Select Key"
+        >
+          <MenuItem value="">
+            <em>None</em>
+          </MenuItem>
+          {availableKeys.map((key) => (
+            <MenuItem key={key.id} value={key.id}>
+              {key.name}
             </MenuItem>
-            {allKeys.map((key) => (
-              <MenuItem key={key.id} value={key.id}>
-                {key.name || key.id}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+          ))}
+        </Select>
+      </FormControl>
 
-        <FormControl fullWidth size="small" disabled={!selectedKey}>
-          <InputLabel>Zone</InputLabel>
-          <Select
-            value={selectedZone || ''}
-            onChange={handleZoneChange}
-            label="Zone"
-          >
-            <MenuItem value="">
-              <em>Select a zone</em>
+      {availableZones.length > 10 && (
+        <Box sx={{ mb: 2 }}>
+          <TextField
+            fullWidth
+            size="small"
+            label="Filter Zones"
+            value={zoneFilter}
+            onChange={(e) => setZoneFilter(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Box>
+      )}
+
+      <FormControl fullWidth>
+        <InputLabel>Select Zone</InputLabel>
+        <Select
+          value={validSelectedZone}
+          onChange={(e) => selectZone(e.target.value || null)}
+          label="Select Zone"
+        >
+          <MenuItem value="">
+            <em>None</em>
+          </MenuItem>
+          {filteredZones.map((zone) => (
+            <MenuItem key={zone} value={zone}>
+              {zone}
             </MenuItem>
-            {keyZones.map((zone) => (
-              <MenuItem key={zone} value={zone}>
-                {zone}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Stack>
+          ))}
+        </Select>
+      </FormControl>
+
+      {selectedKey && (
+        <Typography 
+          variant="caption" 
+          color="text.secondary"
+          sx={{ 
+            display: 'block',
+            mt: 1,
+            fontStyle: 'italic',
+            textAlign: 'right'
+          }}
+        >
+          Server: {selectedKey.server}
+        </Typography>
+      )}
     </Paper>
   );
 }
