@@ -1,129 +1,77 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useConfig } from './ConfigContext';
 
-const KeyContext = createContext();
-const CONFIG_KEY = 'dns_manager_config';
-const SELECTED_KEY_ID = 'dns_manager_selected_key';
-const SELECTED_ZONE = 'dns_manager_selected_zone';
+const KeyContext = createContext({
+  selectedKey: null,
+  selectedZone: null,
+  selectKey: () => {},
+  selectZone: () => {},
+  availableZones: [],
+  availableKeys: []
+});
 
 export function KeyProvider({ children }) {
-  // Initialize state from localStorage, using the existing config structure
-  const [keys, setKeys] = useState(() => {
-    const saved = localStorage.getItem(CONFIG_KEY);
-    if (saved) {
-      const config = JSON.parse(saved);
-      return config.keys || [];
-    }
-    return [];
-  });
+  const { config } = useConfig();
+  const [selectedKey, setSelectedKey] = useState(null);
+  const [selectedZone, setSelectedZone] = useState(null);
 
-  const [selectedKey, setSelectedKey] = useState(() => {
-    const savedSelectedId = localStorage.getItem(SELECTED_KEY_ID);
-    if (savedSelectedId) {
-      const saved = localStorage.getItem(CONFIG_KEY);
-      if (saved) {
-        const config = JSON.parse(saved);
-        return config.keys?.find(k => k.id === savedSelectedId) || null;
-      }
-    }
-    return null;
-  });
-
-  const [selectedZone, setSelectedZone] = useState(() => {
-    const savedZone = localStorage.getItem(SELECTED_ZONE);
-    if (savedZone && selectedKey) {
-      return selectedKey.zones?.includes(savedZone) ? savedZone : null;
-    }
-    return null;
-  });
-
-  const addKey = (keyData) => {
-    const newKey = {
-      id: Date.now().toString(),
-      ...keyData,
-      zones: keyData.zones || [],
-      created: new Date().toISOString()
-    };
-    
-    setKeys(prev => {
-      const updated = [...prev, newKey];
-      // Update the entire config object
-      const config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
-      config.keys = updated;
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-      return updated;
+  const availableZones = React.useMemo(() => {
+    const zones = new Set();
+    config.keys?.forEach(key => {
+      key.zones?.forEach(zone => zones.add(zone));
     });
-    
-    // If this is the first key, select it automatically
-    if (keys.length === 0) {
-      selectKey(newKey);
-    }
-    
-    return newKey;
-  };
+    return Array.from(zones);
+  }, [config.keys]);
 
-  const removeKey = (keyId) => {
-    setKeys(prev => {
-      const updated = prev.filter(key => key.id !== keyId);
-      // Update the entire config object
-      const config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
-      config.keys = updated;
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-      
-      // If we removed the selected key, clear selections
-      if (selectedKey?.id === keyId) {
-        selectKey(updated[0] || null);
+  const availableKeys = React.useMemo(() => {
+    if (!selectedZone) return [];
+    return config.keys?.filter(key => key.zones?.includes(selectedZone)) || [];
+  }, [selectedZone, config.keys]);
+
+  // Reset selections if config changes
+  useEffect(() => {
+    if (!config.keys?.length) {
+      setSelectedKey(null);
+      setSelectedZone(null);
+      return;
+    }
+
+    // Validate current selections
+    if (selectedKey && selectedZone) {
+      const keyStillExists = config.keys.find(k => k.id === selectedKey.id);
+      const zoneStillValid = keyStillExists?.zones?.includes(selectedZone);
+
+      if (!keyStillExists || !zoneStillValid) {
+        setSelectedKey(null);
         setSelectedZone(null);
       }
-      
-      return updated;
-    });
-  };
+    }
+  }, [config.keys, selectedKey, selectedZone]);
 
   const selectKey = (key) => {
     setSelectedKey(key);
-    localStorage.setItem(SELECTED_KEY_ID, key?.id || '');
-    // Clear zone selection when changing keys
-    setSelectedZone(null);
-    localStorage.removeItem(SELECTED_ZONE);
+    // If key changes and current zone isn't valid for new key, reset zone
+    if (key && (!key.zones?.includes(selectedZone))) {
+      setSelectedZone(null);
+    }
   };
 
   const selectZone = (zone) => {
     setSelectedZone(zone);
-    localStorage.setItem(SELECTED_ZONE, zone || '');
-  };
-
-  const updateKey = (keyId, updatedData) => {
-    setKeys(prev => {
-      const updated = prev.map(key => 
-        key.id === keyId 
-          ? { ...key, ...updatedData, id: key.id, created: key.created }
-          : key
-      );
-      // Update the entire config object
-      const config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
-      config.keys = updated;
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-      
-      // Update selected key if it was the one being edited
-      if (selectedKey?.id === keyId) {
-        const updatedKey = updated.find(k => k.id === keyId);
-        selectKey(updatedKey);
-      }
-      
-      return updated;
-    });
+    // If zone changes and current key isn't valid for new zone, reset key
+    if (zone && selectedKey && !selectedKey.zones?.includes(zone)) {
+      setSelectedKey(null);
+    }
   };
 
   return (
-    <KeyContext.Provider value={{ 
-      keys,
+    <KeyContext.Provider value={{
       selectedKey,
       selectedZone,
-      addKey,
-      removeKey,
-      updateKey,
       selectKey,
-      selectZone
+      selectZone,
+      availableZones,
+      availableKeys
     }}>
       {children}
     </KeyContext.Provider>

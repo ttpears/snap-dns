@@ -21,13 +21,18 @@ import {
   Alert,
   Chip,
   Stack,
-  Tooltip
+  Tooltip,
+  InputAdornment
 } from '@mui/material';
 import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon } from '@mui/icons-material';
 import { useKey } from '../context/KeyContext';
+import SearchIcon from '@mui/icons-material/Search';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import { useConfig } from '../context/ConfigContext';
 
 function KeyManagement() {
-  const { keys, addKey, removeKey, updateKey } = useKey();
+  const { config, updateConfig } = useConfig();
+  const { keys = [] } = config;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingKey, setEditingKey] = useState(null);
   const [newKey, setNewKey] = useState({
@@ -39,6 +44,7 @@ function KeyManagement() {
   });
   const [zoneInput, setZoneInput] = useState('');
   const [error, setError] = useState(null);
+  const [zoneSearchText, setZoneSearchText] = useState('');
 
   const handleOpenDialog = (key = null) => {
     if (key) {
@@ -76,12 +82,17 @@ function KeyManagement() {
 
   const handleSaveKey = () => {
     try {
-      if (!newKey.name || !newKey.algorithm || !newKey.secret || !newKey.server) {
-        throw new Error('All fields are required');
+      if (!newKey.name || !newKey.algorithm || !newKey.server) {
+        throw new Error('Name, algorithm, and server are required');
+      }
+      
+      if (!editingKey && !newKey.secret) {
+        throw new Error('Secret is required for new keys');
       }
       
       const keyWithTimestamp = {
         ...newKey,
+        secret: editingKey && !newKey.secret ? editingKey.secret : newKey.secret,
         created: editingKey?.created || Date.now()
       };
       
@@ -100,10 +111,188 @@ function KeyManagement() {
         server: '',
         zones: []
       });
+      setZoneInput('');
+      setZoneSearchText('');
       setError(null);
+
+      setTimeout(() => {
+        const event = new CustomEvent('keyDataChanged', {
+          detail: {
+            type: editingKey ? 'UPDATE' : 'ADD',
+            key: keyWithTimestamp
+          }
+        });
+        window.dispatchEvent(event);
+      }, 100);
+
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const getFilteredZones = (zones) => {
+    if (!zoneSearchText) return zones;
+    const searchLower = zoneSearchText.toLowerCase();
+    return zones.filter(zone => zone.toLowerCase().includes(searchLower));
+  };
+
+  const renderZonesList = (zones) => {
+    const filteredZones = getFilteredZones(zones);
+    
+    return (
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="subtitle2" gutterBottom>
+          Managed Zones
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+          <TextField
+            size="small"
+            label="Add Zone"
+            value={zoneInput}
+            onChange={(e) => setZoneInput(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddZone();
+              }
+            }}
+            sx={{ flexGrow: 1 }}
+          />
+          <Button 
+            variant="outlined" 
+            onClick={handleAddZone}
+            disabled={!zoneInput.trim()}
+          >
+            Add
+          </Button>
+        </Box>
+
+        {newKey.zones.length > 0 && (
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Search zones..."
+            value={zoneSearchText}
+            onChange={(e) => setZoneSearchText(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mb: 1 }}
+          />
+        )}
+
+        <Box 
+          sx={{ 
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: 1,
+            maxHeight: '200px',
+            overflowY: 'auto',
+            p: 1,
+            bgcolor: 'background.default',
+            borderRadius: 1,
+            border: 1,
+            borderColor: 'divider'
+          }}
+        >
+          {filteredZones.length > 0 ? (
+            filteredZones.map((zone) => (
+              <Chip
+                key={zone}
+                label={zone}
+                onDelete={() => handleRemoveZone(zone)}
+                size="small"
+                sx={{ 
+                  width: 'fit-content',
+                  maxWidth: '100%',
+                  '.MuiChip-label': {
+                    whiteSpace: 'normal',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }
+                }}
+              />
+            ))
+          ) : (
+            <Typography 
+              color="text.secondary" 
+              sx={{ 
+                gridColumn: '1 / -1',
+                textAlign: 'center',
+                py: 2 
+              }}
+            >
+              {newKey.zones.length === 0 
+                ? 'No zones added yet' 
+                : 'No zones match your search'}
+            </Typography>
+          )}
+        </Box>
+        
+        {newKey.zones.length > 0 && (
+          <Typography 
+            variant="caption" 
+            color="text.secondary"
+            sx={{ display: 'block', mt: 1 }}
+          >
+            {newKey.zones.length} zone{newKey.zones.length !== 1 ? 's' : ''} managed
+            {zoneSearchText && ` • ${filteredZones.length} matching filter`}
+          </Typography>
+        )}
+      </Box>
+    );
+  };
+
+  const renderKeyZones = (zones) => {
+    if (!zones?.length) return null;
+
+    return (
+      <Box sx={{ width: '100%' }}>
+        <Typography 
+          variant="body2" 
+          color="text.secondary" 
+          sx={{ mb: 0.5 }}
+        >
+          Managed Zones ({zones.length}):
+        </Typography>
+        <Box 
+          sx={{ 
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: 1,
+            maxHeight: zones.length > 6 ? '120px' : 'auto',
+            overflowY: zones.length > 6 ? 'auto' : 'visible',
+            p: 1,
+            bgcolor: 'background.default',
+            borderRadius: 1,
+            border: 1,
+            borderColor: 'divider'
+          }}
+        >
+          {zones.map((zone) => (
+            <Chip
+              key={zone}
+              label={zone}
+              size="small"
+              variant="outlined"
+              sx={{ 
+                width: 'fit-content',
+                maxWidth: '100%',
+                '.MuiChip-label': {
+                  whiteSpace: 'normal',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }
+              }}
+            />
+          ))}
+        </Box>
+      </Box>
+    );
   };
 
   return (
@@ -122,7 +311,7 @@ function KeyManagement() {
       </Box>
 
       <List>
-        {keys.map((key) => (
+        {(keys || []).map((key) => (
           <ListItem
             key={key.id}
             secondaryAction={
@@ -167,53 +356,12 @@ function KeyManagement() {
               </Typography>
             </Box>
             
-            {key.zones.length > 0 && (
-              <Box sx={{ width: '100%' }}>
-                <Typography 
-                  variant="body2" 
-                  color="text.secondary" 
-                  sx={{ mb: 0.5 }}
-                >
-                  Managed Zones ({key.zones.length}):
-                </Typography>
-                <Box 
-                  sx={{ 
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                    gap: 1,
-                    maxHeight: key.zones.length > 6 ? '120px' : 'auto',
-                    overflowY: key.zones.length > 6 ? 'auto' : 'visible',
-                    p: 1,
-                    bgcolor: 'background.default',
-                    borderRadius: 1,
-                  }}
-                >
-                  {key.zones.sort().map((zone) => (
-                    <Chip
-                      key={zone}
-                      label={zone}
-                      size="small"
-                      color="primary"
-                      variant="outlined"
-                      sx={{ 
-                        width: 'fit-content',
-                        maxWidth: '100%',
-                        '.MuiChip-label': {
-                          whiteSpace: 'normal',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }
-                      }}
-                    />
-                  ))}
-                </Box>
-              </Box>
-            )}
+            {renderKeyZones(key.zones)}
           </ListItem>
         ))}
       </List>
 
-      {keys.length === 0 && (
+      {(!keys || keys.length === 0) && (
         <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
           No TSIG keys configured
         </Typography>
@@ -272,42 +420,7 @@ function KeyManagement() {
             helperText="Base64 encoded key"
           />
           
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Managed Zones
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-              <TextField
-                size="small"
-                label="Add Zone"
-                value={zoneInput}
-                onChange={(e) => setZoneInput(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddZone();
-                  }
-                }}
-              />
-              <Button 
-                variant="outlined" 
-                onClick={handleAddZone}
-                disabled={!zoneInput.trim()}
-              >
-                Add
-              </Button>
-            </Box>
-            <Stack direction="row" spacing={1} flexWrap="wrap">
-              {newKey.zones.map((zone) => (
-                <Chip
-                  key={zone}
-                  label={zone}
-                  onDelete={() => handleRemoveZone(zone)}
-                  size="small"
-                />
-              ))}
-            </Stack>
-          </Box>
+          {renderZonesList(newKey.zones)}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>

@@ -43,6 +43,10 @@ import RecordEditor from './RecordEditor';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useKey } from '../context/KeyContext';
 
+const recordTypes = [
+  'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP', 'SOA'
+];
+
 function MultilineRecordDialog({ record, open, onClose }) {
   const formatDuration = (seconds) => {
     if (!seconds) return 'N/A';
@@ -130,7 +134,11 @@ function ZoneEditor() {
     setPendingChanges 
   } = usePendingChanges();
 
-  const { selectedKey, selectedZone, selectKey, selectZone } = useKey();
+  const { 
+    selectedKey, 
+    selectedZone, 
+    availableZones = []
+  } = useKey();
 
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -140,7 +148,7 @@ function ZoneEditor() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedTypes, setSelectedTypes] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchText, setSearchText] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [selectedRecords, setSelectedRecords] = useState([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -149,35 +157,16 @@ function ZoneEditor() {
   const [changeHistory, setChangeHistory] = useState([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [showAddRecord, setShowAddRecord] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const recordTypes = [
-    'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP', 'SOA'
-  ];
   const [addRecordDialogOpen, setAddRecordDialogOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copyingRecord, setCopyingRecord] = useState(null);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
-
-  // Add loading state for initial data
   const [isInitializing, setIsInitializing] = useState(true);
 
-  const availableZones = useMemo(() => {
-    const zones = new Set();
-    config.keys?.forEach(key => {
-      key.zones?.forEach(zone => zones.add(zone));
-    });
-    return Array.from(zones);
-  }, [config.keys]);
-
-  const availableKeys = useMemo(() => {
-    if (!selectedZone) return [];
-    return config.keys?.filter(key => key.zones?.includes(selectedZone)) || [];
-  }, [selectedZone, config.keys]);
-
-  // Add initialization effect
+  // Update initialization effect
   useEffect(() => {
-    if (config.keys && availableZones.length > 0) {
+    if (config.keys?.length > 0 && availableZones.length > 0) {
       setIsInitializing(false);
     }
   }, [config.keys, availableZones]);
@@ -235,19 +224,6 @@ function ZoneEditor() {
       return [...prev, record];
     });
   }, []);
-
-  const handleZoneChange = (event) => {
-    const newZone = event.target.value;
-    selectZone(newZone);
-    selectKey(null);
-    setSelectedRecords([]);
-  };
-
-  const handleKeyChange = (event) => {
-    const key = availableKeys.find(k => k.id === event.target.value);
-    selectKey(key);
-    setSelectedRecords([]);
-  };
 
   const handleDeleteRecord = async (record) => {
     try {
@@ -443,41 +419,8 @@ function ZoneEditor() {
   return (
     <Paper sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-        <Select
-          value={isInitializing ? '' : (selectedZone || '')}
-          onChange={handleZoneChange}
-          displayEmpty
-          fullWidth
-        >
-          <MenuItem value="" disabled>
-            Select a DNS Zone
-          </MenuItem>
-          {availableZones.map((zone) => (
-            <MenuItem key={zone} value={zone}>
-              {zone}
-            </MenuItem>
-          ))}
-        </Select>
-
-        <Select
-          value={isInitializing ? '' : (selectedKey?.id || '')}
-          onChange={handleKeyChange}
-          displayEmpty
-          fullWidth
-          disabled={!selectedZone || availableKeys.length === 0}
-        >
-          <MenuItem value="" disabled>
-            Select a DNS Key
-          </MenuItem>
-          {availableKeys.map((key) => (
-            <MenuItem key={key.id} value={key.id}>
-              {key.name || key.id}
-            </MenuItem>
-          ))}
-        </Select>
-
         <TextField
-          value={searchText}
+          value={searchText || ''}
           onChange={(e) => setSearchText(e.target.value)}
           placeholder="Search records..."
           InputProps={{
@@ -492,6 +435,7 @@ function ZoneEditor() {
         <Select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
+          sx={{ minWidth: 120 }}
         >
           <MenuItem value="ALL">All Types</MenuItem>
           {recordTypes.map(type => (

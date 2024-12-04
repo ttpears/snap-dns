@@ -8,10 +8,10 @@ import * as dnsPacket from 'dns-packet';
 const execAsync = promisify(exec);
 
 class DNSService {
-  private async createNSUpdateFile(zone: string, record: DNSRecord, isDelete = false): Promise<string> {
+  private async createNSUpdateFile(zone: string, record: DNSRecord, keyConfig: ZoneConfig, isDelete = false): Promise<string> {
     const updateFile = join('/tmp/snap-dns', `update-${Date.now()}-${Math.random()}.txt`);
     const commands = [
-      `server ${zone}`,
+      `server ${keyConfig.server}`,
       `zone ${zone}`,
       isDelete ? `update delete ${record.name} ${record.type}` : 
                  `update add ${record.name} ${record.ttl} ${record.class || 'IN'} ${record.type} ${
@@ -154,7 +154,7 @@ class DNSService {
 
   async addRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<ZoneOperationResult> {
     try {
-      const updateFile = await this.createNSUpdateFile(zone, record);
+      const updateFile = await this.createNSUpdateFile(zone, record, keyConfig);
       
       try {
         const { stdout, stderr } = await execAsync(
@@ -179,7 +179,7 @@ class DNSService {
 
   async deleteRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<ZoneOperationResult> {
     try {
-      const updateFile = await this.createNSUpdateFile(zone, record, true);
+      const updateFile = await this.createNSUpdateFile(zone, record, keyConfig, true);
       
       try {
         const { stdout, stderr } = await execAsync(
