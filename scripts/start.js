@@ -19,7 +19,8 @@ const startServer = () => {
       PORT: port,
       BROWSER: 'none',
       WATCHPACK_POLLING: 'true',
-      WDS_SOCKET_PORT: port,
+      WDS_SOCKET_HOST: process.env.WDS_SOCKET_HOST || 'localhost',
+      WDS_SOCKET_PORT: port
     },
   });
 

@@ -5,9 +5,10 @@ module.exports = function(app) {
   app.use(
     '/ws',
     createProxyMiddleware({
-      target: process.env.PUBLIC_URL || 'http://localhost:3001',
+      target: process.env.REACT_APP_WS_URL || 'ws://localhost:3002',
       ws: true,
       changeOrigin: true,
+      secure: process.env.NODE_ENV === 'production'
     })
   );
 
@@ -19,7 +20,7 @@ module.exports = function(app) {
         target: process.env.REACT_APP_API_URL || 'http://localhost:3002',
         changeOrigin: true,
         pathRewrite: {
-          '^/api': '', // Remove /api prefix when forwarding
+          '^/api': '',
         },
       })
     );
