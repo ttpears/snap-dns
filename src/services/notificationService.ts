@@ -139,7 +139,11 @@ class NotificationService {
     const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
-      const response = await fetch('http://localhost:3002/api/webhook/notify', {
+      const webhookEndpoint = `${this.apiUrl}/api/webhook/notify`;
+      
+      console.log('Sending webhook to:', webhookEndpoint);
+
+      const response = await fetch(webhookEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
