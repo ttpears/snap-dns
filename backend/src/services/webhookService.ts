@@ -1,5 +1,8 @@
-import { WebhookConfig, WebhookPayload, WebhookResponse } from '../types/webhook';
+import { WebhookConfig, WebhookResponse } from '../types/webhook';
+import type { WebhookPayload as ImportedWebhookPayload } from '../types/webhook';
 import fetch from 'node-fetch';
+
+export type WebhookPayload = ImportedWebhookPayload;
 
 class WebhookService {
   private formatPayload(provider: string, payload: WebhookPayload): any {

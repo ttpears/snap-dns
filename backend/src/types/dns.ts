@@ -1,7 +1,7 @@
 export interface DNSRecord {
   name: string;
   type: string;
-  value: string | object;
+  value: string | any;
   ttl: number;
   class?: string;
 }
@@ -16,7 +16,5 @@ export interface ZoneConfig {
 
 export interface ZoneOperationResult {
   success: boolean;
-  message?: string;
-  records?: DNSRecord[];
-  error?: string;
+  message: string;
 } 

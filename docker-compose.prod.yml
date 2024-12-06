@@ -1,16 +1,30 @@
 services:
   frontend:
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PUBLIC_URL=https://${FQDN}
+      - REACT_APP_API_URL=https://${FQDN_API}
+      - REACT_APP_WS_URL=wss://${FQDN}
+      - REACT_APP_PUBLIC_URL=https://${FQDN}
+      - PORT=3001
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    environment:
-      - NODE_ENV=production
-    command: ["npm", "run", "serve:prod"]
+      args:
+        NODE_ENV: production
+        PUBLIC_URL: https://${FQDN}
+        REACT_APP_API_URL: https://${FQDN_API}
+        REACT_APP_WS_URL: wss://${FQDN}
+        REACT_APP_PUBLIC_URL: https://${FQDN}
+    command: serve -s build -l ${PORT:-3001} --single --debug
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    env_file:
+      - backend/.env
     environment:
       - NODE_ENV=production
-    command: ["npm", "run", "start"] 
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=3002
+    command: npm run start

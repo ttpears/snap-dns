@@ -28,8 +28,16 @@ ENV BACKEND_HOST=0.0.0.0
 ENV BACKEND_PORT=3002
 ENV NODE_ENV=development
 
+# Build TypeScript code
+RUN npm run clean && npm run build
+
 # Expose the port
 EXPOSE ${BACKEND_PORT}
 
-# Start in development mode with hot reloading
-CMD ["npm", "run", "docker:dev"] 
+# Start command based on environment
+CMD if [ "$NODE_ENV" = "production" ] ; \
+    then \
+    npm run start ; \
+    else \
+    npm run docker:dev ; \
+    fi

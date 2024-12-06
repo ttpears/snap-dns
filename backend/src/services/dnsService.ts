@@ -152,7 +152,7 @@ class DNSService {
     }
   }
 
-  async addRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<void> {
+  async addRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<ZoneOperationResult> {
     try {
       // Get existing records first
       const existingRecords = await this.fetchZoneRecords(zone, keyConfig);
@@ -185,11 +185,14 @@ class DNSService {
         // Clean up the temporary file
         await unlink(updateFile).catch(console.error);
       }
-    } catch (error) {
-      if (error.message === 'DUPLICATE_RECORD') {
-        throw new Error(`Record already exists: ${record.name} ${record.type} ${record.value}`);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        if (error.message === 'DUPLICATE_RECORD') {
+          throw new Error(`Record already exists: ${record.name} ${record.type} ${record.value}`);
+        }
+        throw error;
       }
-      throw error;
+      throw new Error('Unknown error occurred');
     }
   }
 

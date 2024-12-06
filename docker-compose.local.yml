@@ -1,0 +1,23 @@
+services:
+  frontend:
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.development
+    environment:
+      - NODE_ENV=development
+      - WDS_SOCKET_PORT=3001
+      - WATCHPACK_POLLING=true
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
+    command: node scripts/start.js
+
+  backend:
+    ports:
+      - "3002:3002"
+    env_file:
+      - backend/.env.development
+    environment:
+      - NODE_ENV=development
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=3002
+    command: npm run docker:dev 

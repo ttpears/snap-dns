@@ -1,18 +1,13 @@
-import { Config } from '../types/config';
 import dotenv from 'dotenv';
+import { Config } from '../types/config';
 
-// Load environment variables from .env file
+// Load environment variables
 dotenv.config();
 
-const parseArrayFromEnv = (value?: string): string[] => {
-  if (!value) return [];
-  return value.split(',').map(item => item.trim());
-};
-
-export const config: Config = {
-  host: process.env.BACKEND_HOST || 'localhost',
+const config: Config = {
+  host: process.env.BACKEND_HOST || '0.0.0.0',
   port: parseInt(process.env.BACKEND_PORT || '3002', 10),
-  allowedOrigins: parseArrayFromEnv(process.env.ALLOWED_ORIGINS) || ['http://localhost:3001'],
+  allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3001'],
   maxRequestSize: process.env.MAX_REQUEST_SIZE || '10mb',
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
@@ -20,12 +15,15 @@ export const config: Config = {
   strictRateLimitMaxRequests: parseInt(process.env.STRICT_RATE_LIMIT_MAX_REQUESTS || '10', 10)
 };
 
-// Validate required configuration
+// Validate required config
 if (!config.host || !config.port) {
-  throw new Error('Missing required configuration: host and port must be defined');
+  throw new Error('Missing required configuration');
 }
 
-// Ensure allowedOrigins is always an array
-if (!Array.isArray(config.allowedOrigins)) {
-  config.allowedOrigins = ['http://localhost:3001'];
-} 
+// Log config on startup
+console.log('Loaded configuration:', {
+  ...config,
+  allowedOrigins: config.allowedOrigins
+});
+
+export { config }; 

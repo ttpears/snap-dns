@@ -1,9 +1,17 @@
+import { Key } from './keys';
+import { WebhookProvider } from './webhook';
+
 export interface Config {
-  keys: Key[];
-  defaultTTL?: number;
-  webhookUrl?: string | null;
+  host: string;
+  port: number;
+  allowedOrigins: string[];
+  maxRequestSize: string;
+  rateLimitWindowMs: number;
+  rateLimitMaxRequests: number;
+  strictRateLimitWindowMs: number;
+  strictRateLimitMaxRequests: number;
+  keys?: Key[];
   webhookProvider?: WebhookProvider;
-  rowsPerPage?: number;
 }
 
 export function validateConfig(config: any): config is Config {

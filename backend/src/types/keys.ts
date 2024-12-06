@@ -1,15 +1,18 @@
-export interface DNSKey {
+export interface Key {
   id: string;
   name: string;
-  secret: string;
   algorithm: string;
+  secret: string;
   server: string;
-  zones: string[];
+}
+
+export interface DNSKey extends Key {
+  zones?: string[];
 }
 
 export interface KeyOperationResult {
   success: boolean;
   message?: string;
-  key?: DNSKey;
+  key?: Key;
   error?: string;
 } 

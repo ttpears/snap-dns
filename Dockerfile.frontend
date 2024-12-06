@@ -1,3 +1,4 @@
+# Build stage
 FROM node:20-slim
 
 WORKDIR /app
@@ -6,21 +7,49 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Install react-scripts globally
-RUN npm install -g react-scripts serve
+# Install react-scripts in the container
+RUN npm install -g react-scripts@5.0.1
+RUN npm install typescript@5.7.2
 
-# Copy the rest of the application including env files
-COPY . .
-COPY .env .env
-COPY .env.* ./
+# Copy source files
+COPY public/ ./public/
+COPY src/ ./src/
+COPY tsconfig.json ./
+COPY .env* ./
 
-# Expose the port
+# Set build environment
+ENV NODE_ENV=production
+ENV CI=false
+ENV GENERATE_SOURCEMAP=false
+
+# Build the app
+ARG PUBLIC_URL
+ARG REACT_APP_API_URL
+ARG REACT_APP_WS_URL
+
+RUN PUBLIC_URL=$PUBLIC_URL \
+    REACT_APP_API_URL=$REACT_APP_API_URL \
+    REACT_APP_WS_URL=$REACT_APP_WS_URL \
+    npm run build
+
+# Install serve
+RUN npm install -g serve@latest
+
+# Add serve configuration
+RUN echo '{ \
+  "rewrites": [ { "source": "/**", "destination": "/index.html" } ], \
+  "headers": [ \
+    { \
+      "source": "/**", \
+      "headers": [ { \
+        "key": "Cache-Control", \
+        "value": "no-cache, no-store, must-revalidate" \
+      } ] \
+    } \
+  ] \
+}' > serve.json
+
 EXPOSE ${PORT}
 
-# Development uses start.js script, production uses build and serve
-CMD if [ "$NODE_ENV" = "production" ] ; \
-    then \
-    npm run build:prod && npm run serve:prod ; \
-    else \
-    node scripts/start.js ; \
-    fi
+# Serve the built files
+CMD serve -s build -l ${PORT:-3001} --config serve.json
