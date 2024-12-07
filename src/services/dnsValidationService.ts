@@ -80,9 +80,15 @@ class DNSValidationService {
   }
 
   private static isValidHostname(hostname: string, recordType?: string): boolean {
-    // Special case for SRV records which allow underscores
+    // Special case for TXT records which allow underscores
+    if (recordType === 'TXT') {
+      // Modified regex to allow underscores anywhere in TXT record names
+      const regex = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*\.?$/;
+      return regex.test(hostname);
+    }
+
+    // Special case for SRV records which allow underscores at start
     if (recordType === 'SRV') {
-      // Modified regex to explicitly allow underscores at start and in labels
       const regex = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*\.?$/;
       return regex.test(hostname);
     }

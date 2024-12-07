@@ -26,6 +26,19 @@ interface DNSRecord {
 
 export type { DNSRecord, SRVRecord, MXRecord };
 
+// Add error types
+export class DNSError extends Error {
+  code?: string;
+  details?: any;
+
+  constructor(message: string, code?: string, details?: any) {
+    super(message);
+    this.name = 'DNSError';
+    this.code = code;
+    this.details = details;
+  }
+}
+
 class DNSService {
   private baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3002';
 
@@ -179,11 +192,21 @@ class DNSService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(errorData.error || `Failed to add record: ${response.statusText}`);
+        throw new DNSError(
+          errorData.error || `Failed to add record: ${response.statusText}`,
+          errorData.code,
+          errorData.details
+        );
       }
     } catch (error) {
-      console.error('Error adding record:', error);
-      throw error instanceof Error ? error : new Error('Failed to add record');
+      if (error instanceof DNSError) {
+        throw error;
+      }
+      throw new DNSError(
+        'Failed to communicate with DNS server',
+        'SERVER_ERROR',
+        error instanceof Error ? error.message : undefined
+      );
     }
   }
 
@@ -228,11 +251,21 @@ class DNSService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(errorData.error || `Failed to delete record: ${response.statusText}`);
+        throw new DNSError(
+          errorData.error || `Failed to delete record: ${response.statusText}`,
+          errorData.code,
+          errorData.details
+        );
       }
     } catch (error) {
-      console.error('Error deleting record:', error);
-      throw error instanceof Error ? error : new Error('Failed to delete record');
+      if (error instanceof DNSError) {
+        throw error;
+      }
+      throw new DNSError(
+        'Failed to communicate with DNS server',
+        'SERVER_ERROR',
+        error instanceof Error ? error.message : undefined
+      );
     }
   }
 
@@ -253,8 +286,14 @@ class DNSService {
       // Then add the new record
       await this.addRecord(zone, newRecord, keyConfig);
     } catch (error) {
-      console.error('Error updating record:', error);
-      throw error instanceof Error ? error : new Error('Failed to update record');
+      if (error instanceof DNSError) {
+        throw error;
+      }
+      throw new DNSError(
+        'Failed to communicate with DNS server',
+        'SERVER_ERROR',
+        error instanceof Error ? error.message : undefined
+      );
     }
   }
 }

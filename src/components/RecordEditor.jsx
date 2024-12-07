@@ -241,52 +241,21 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
   const renderTXTFields = () => {
     if (record.type !== 'TXT') return null;
 
-    // Parse the TXT record value for editing
-    const rawValue = typeof editedRecord.value === 'string' 
-      ? editedRecord.value
-          .split(/"\s+"/) // Split on quotes with spaces between them
-          .map(str => str.replace(/^"|"$/g, '')) // Remove surrounding quotes from each part
-          .join('\n') // Join with newlines for editing
-      : '';
-
     return (
       <Grid item xs={12}>
         <TextField
           fullWidth
           label="Text Value"
-          value={rawValue}
+          value={record.value}
           onChange={(e) => {
             handleChange('value', e.target.value);
           }}
           multiline
           rows={4}
-          helperText={
-            'Enter your text content normally. Each line will be treated as a separate string. ' +
-            'Special characters (including !) are allowed. Quotes will be handled automatically.'
-          }
+          helperText="Enter text content exactly as needed - no quotes will be added"
         />
       </Grid>
     );
-  };
-
-  const formatTXTValue = (value) => {
-    if (!value) return '""';
-
-    // Split on newlines and handle each line
-    return value
-      .split('\n')
-      .map(line => {
-        line = line.trim();
-        if (!line) return null;
-        
-        // Remove any existing quotes
-        line = line.replace(/^"|"$/g, '');
-        
-        // Always quote each line for consistency
-        return `"${line}"`;
-      })
-      .filter(Boolean) // Remove empty lines
-      .join(' ');
   };
 
   const handleSave = () => {
@@ -296,15 +265,7 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
         id: isCopy ? undefined : editedRecord.id
       };
 
-      // Special handling for TXT records
-      if (editedRecord.type === 'TXT') {
-        processedRecord.value = formatTXTValue(editedRecord.value);
-      }
-      // Handle SOA records
-      else if (editedRecord.type === 'SOA') {
-        processedRecord.value = soaFields;
-      }
-
+      // No special handling for TXT records - use value exactly as entered
       onSave(processedRecord);
     } catch (err) {
       setError(err.message);

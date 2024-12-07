@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   TextField,
@@ -72,7 +72,7 @@ const RECORD_TYPES = {
     fields: [{
       name: 'value',
       label: 'Text Value',
-      helperText: 'Text record content, quotes will be added automatically if needed',
+      helperText: 'Enter text content exactly as needed - no quotes will be added',
       multiline: true,
       rows: 3,
       required: true
@@ -174,7 +174,24 @@ const RECORD_TYPES = {
         required: true
       }
     ]
+  },
+  PTR: {
+    fields: [{
+      name: 'value',
+      label: 'Target Hostname',
+      helperText: 'Fully qualified domain name (FQDN) ending with a dot',
+      validate: (value) => value.endsWith('.'),
+      required: true
+    }]
   }
+};
+
+const getReverseDNSZone = (zone) => {
+  // Check if this is already a reverse DNS zone
+  if (zone.endsWith('.in-addr.arpa') || zone.endsWith('.ip6.arpa')) {
+    return zone;
+  }
+  return null;
 };
 
 function AddDNSRecord({ zone, onSuccess, onClose }) {
@@ -201,9 +218,63 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
   const [validationErrors, setValidationErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(null);
+  const [ptrPreview, setPtrPreview] = useState('');
+
+  useEffect(() => {
+    if (record.type === 'PTR') {
+      const reverseZone = getReverseDNSZone(selectedZone);
+      if (!reverseZone) {
+        setError({
+          severity: 'warning',
+          message: 'PTR records should only be created in reverse DNS zones (.in-addr.arpa or .ip6.arpa)'
+        });
+        return;
+      }
+
+      try {
+        // Format the input as a proper PTR record
+        let name = record.name;
+        if (name) {
+          // Remove any non-numeric characters except dots
+          name = name.replace(/[^\d.]/g, '');
+          
+          // Split and reverse the octets if they haven't been reversed already
+          if (!name.endsWith('.in-addr.arpa')) {
+            const octets = name.split('.');
+            if (octets.length <= 4) { // Handle partial IP address
+              // Pad with empty strings to always have 4 parts
+              while (octets.length < 4) {
+                octets.push('');
+              }
+              // Reverse the octets
+              name = octets.reverse().filter(Boolean).join('.');
+            }
+          }
+
+          // Show the full PTR record name
+          setPtrPreview(`${name}${name.endsWith('.') ? '' : '.'}${reverseZone}`);
+        } else {
+          setPtrPreview('');
+        }
+      } catch (err) {
+        console.error('Error formatting PTR record:', err);
+      }
+    }
+  }, [record.name, record.type, selectedZone]);
 
   const currentTypeFields = useMemo(() => {
-    return RECORD_TYPES[record.type]?.fields || [];
+    const fields = RECORD_TYPES[record.type]?.fields || [];
+    
+    if (record.type === 'PTR') {
+      return [{
+        name: 'name',
+        label: 'IP Address',
+        helperText: 'Enter the IP address for this PTR record',
+        required: true
+      }, ...fields];
+    }
+    
+    return fields;
   }, [record.type]);
 
   const handleFieldChange = (fieldName, value) => {
@@ -506,9 +577,37 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
         ))}
       </Grid>
 
+      {record.type === 'PTR' && ptrPreview && (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          <Typography variant="body2">
+            This will create a PTR record with name:
+            <Box component="pre" sx={{ mt: 1, p: 1, bgcolor: 'background.paper' }}>
+              {ptrPreview}
+            </Box>
+          </Typography>
+        </Alert>
+      )}
+
       {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
+        <Alert 
+          severity={error.severity || 'error'} 
+          sx={{ mt: 2 }}
+          action={
+            error.details && (
+              <Button 
+                color="inherit" 
+                size="small"
+                onClick={() => {
+                  console.info('Error details:', error.details);
+                  // Could also show details in a dialog/tooltip
+                }}
+              >
+                Details
+              </Button>
+            )
+          }
+        >
+          {error.message}
         </Alert>
       )}
 

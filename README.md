@@ -7,10 +7,14 @@ A web-based DNS management interface for managing DNS zones and records using BI
 - 🔄 Real-time DNS record management
 - 💾 Backup and restore functionality
 - 📝 Multi-line record support (SOA, TXT, etc.)
-- 🔔 Mattermost webhook notifications
-- 📋 Pending changes management
+- 🔔 Webhook notifications (Slack, Discord, Teams, Mattermost)
+- 📋 Pending changes management with undo/redo
 - 🔒 TSIG key authentication
 - 📱 Responsive design
+- 🔍 Advanced record filtering and sorting
+- 🔄 Reverse DNS (PTR) record management with live preview
+- 📊 Record comparison and diff views
+- 💡 Intelligent record validation
 
 ## Prerequisites
 
@@ -37,9 +41,10 @@ The frontend application will be available at http://localhost:3001. Use the Set
 ## Configuration
 
 All configuration is handled through the web interface under Settings, including:
-- TSIG key management
-- Zone assignments
-- Webhook notifications
+- TSIG key management with zone assignments
+- Webhook notifications (multiple providers)
+- Default TTL and display settings
+- Import/Export functionality
 
 ## Usage
 
@@ -47,24 +52,39 @@ All configuration is handled through the web interface under Settings, including
 1. Select a zone from the dropdown
 2. View, add, modify, or delete DNS records
 3. Changes are staged in the pending changes drawer
-4. Review and apply changes
+4. Review and apply changes with undo/redo support
+
+### PTR Records
+- Automatic reverse DNS formatting
+- Live preview of PTR record structure
+- Validation for reverse DNS zones
+- IP address to PTR name conversion
+
+### Record Types
+Support for all common DNS record types:
+- A/AAAA records
+- CNAME records
+- MX records with priority
+- TXT records (including service verification records)
+- SRV records
+- PTR records
+- CAA records
+- SSHFP records
+- SOA records
 
 ### Backup & Restore
-1. Select a zone to backup
-2. Choose between:
-   - Download JSON backup
-   - Store backup in browser
-3. Restore options:
-   - Import from file
-   - Restore from stored backup
-   - Selective record restoration
+1. Create snapshots of zones
+2. Compare snapshots with current zone state
+3. Selective record restoration
+4. Export/Import functionality
+5. Automatic backup before changes
 
 ### Multi-line Records
 Special handling for:
-- SOA records
-- TXT records
+- SOA records with field validation
+- TXT records with proper quoting
 - MX records with preferences
-- SRV records
+- SRV records with service definitions
 
 ## Development
 
@@ -83,38 +103,40 @@ dns-manager/
 
 ### Key Components
 - ZoneEditor: Main interface for record management
-- BackupImport: Handles backup/restore functionality
-- PendingChangesDrawer: Stages changes before applying
+- AddDNSRecord: Intelligent record creation
+- PendingChangesDrawer: Change management with undo/redo
+- Snapshots: Backup and comparison functionality
 
 ### Services
-- dnsService: Handles DNS record operations
-- backupService: Manages backup operations
-- notificationService: Handles webhook notifications
+- dnsService: DNS record operations with error handling
+- backupService: Snapshot and restore operations
+- notificationService: Multi-provider webhook support
+- validationService: Record validation and formatting
 
 ## Security Considerations
 
 1. TSIG Key Protection
-   - Keys stored securely
-   - Transmitted only when needed
-   - Used for authentication with DNS server
+   - Secure key storage
+   - Encrypted transmission
+   - Per-zone authentication
 
 2. Input Validation
-   - Record validation before submission
-   - Sanitization of DNS values
+   - Comprehensive record validation
+   - Safe handling of special characters
    - Protection against invalid records
 
 3. Access Control
    - Zone-specific key restrictions
    - Operation logging
-   - Change tracking
+   - Change tracking and history
 
 ## Error Handling
 
-The application includes comprehensive error handling for:
-- DNS server communication
-- Record validation
-- Backup/restore operations
-- Configuration issues
+- User-friendly error messages
+- Detailed validation feedback
+- Specific error codes and descriptions
+- Development mode debugging
+- Operation rollback support
 
 ## Contributing
 

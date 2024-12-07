@@ -95,9 +95,9 @@ export class DNSRecordFormatter {
 
   private static formatTXTRecord(value: string | string[]): string {
     if (Array.isArray(value)) {
-      return value.map(v => `"${v.replace(/"/g, '\\"')}"`).join(' ');
+      return value.join(' ');
     }
-    return `"${value.replace(/"/g, '\\"')}"`;
+    return value;
   }
 
   private static formatSRVRecord(value: string): string {
