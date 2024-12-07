@@ -12,7 +12,7 @@ class DNSValidationService {
     // Validate name
     if (!record.name) {
       errors.push('Record name is required');
-    } else if (record.name !== '@' && !this.isValidHostname(record.name)) {
+    } else if (record.name !== '@' && !this.isValidHostname(record.name, record.type)) {
       errors.push('Invalid record name format');
     }
 
@@ -79,8 +79,15 @@ class DNSValidationService {
     };
   }
 
-  private static isValidHostname(hostname: string): boolean {
-    // Basic hostname validation
+  private static isValidHostname(hostname: string, recordType?: string): boolean {
+    // Special case for SRV records which allow underscores
+    if (recordType === 'SRV') {
+      // Modified regex to explicitly allow underscores at start and in labels
+      const regex = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*\.?$/;
+      return regex.test(hostname);
+    }
+
+    // Regular hostname validation for other record types
     const regex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.?$/;
     return regex.test(hostname);
   }

@@ -217,14 +217,17 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       if (selectedZone && (fieldName === 'name' || fieldName === 'ttl')) {
         let validationRecord = { ...newRecord };
         
-        // For SRV records, create a temporary formatted value
-        if (newRecord.type === 'SRV') {
-          validationRecord = {
-            ...newRecord,
-            value: `${newRecord.priority || 0} ${newRecord.weight || 0} ${newRecord.port || 0} ${newRecord.target || ''}`
-          };
+        // Skip live validation for SRV records during typing
+        if (newRecord.type === 'SRV' && fieldName === 'name') {
+          // Clear any existing validation errors for the name field
+          setValidationErrors(prev => ({
+            ...prev,
+            [fieldName]: null
+          }));
+          return newRecord;
         }
 
+        // For other record types or TTL validation, proceed as normal
         const validation = DNSValidationService.validateRecord(validationRecord, selectedZone);
         setValidationErrors(validation.errors.reduce((acc, error) => {
           // Only show errors related to the current field

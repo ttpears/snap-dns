@@ -15,11 +15,14 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.11.1",
+    "typescript": "^5.7.2",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
     "wait-on": "^7.0.1"
   },
   "scripts": {
     "start": "node scripts/start.js",
-    "build": "react-scripts build",
+    "build": "tsc --noEmit && react-scripts build",
     "serve:prod": "serve -s build -l $PORT --single"
   },
   "browserslist": {

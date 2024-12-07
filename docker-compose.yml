@@ -7,6 +7,7 @@ x-common-frontend: &frontend-common
   volumes:
     - .:/app:delegated
     - /app/node_modules
+    - frontend_build:/app/build
   networks:
     - snap-dns-network
 
@@ -35,6 +36,7 @@ services:
 volumes:
   backend_node_modules:
   temp-keys:
+  frontend_build:
 
 networks:
   snap-dns-network:

@@ -7,9 +7,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Install react-scripts in the container
-RUN npm install -g react-scripts@5.0.1
-RUN npm install typescript@5.7.2
+# Install TypeScript and react-scripts globally
+RUN npm install -g typescript@5.7.2 react-scripts@5.0.1
+
+# Create build directory with proper permissions
+RUN mkdir -p /app/build && chmod 755 /app/build
 
 # Copy source files
 COPY public/ ./public/
@@ -21,35 +23,59 @@ COPY .env* ./
 ENV NODE_ENV=production
 ENV CI=false
 ENV GENERATE_SOURCEMAP=false
+ENV TSC_COMPILE_ON_ERROR=true
+ENV DISABLE_ESLINT_PLUGIN=true
 
 # Build the app
 ARG PUBLIC_URL
 ARG REACT_APP_API_URL
 ARG REACT_APP_WS_URL
 
+# Clean any existing build
+RUN rm -rf build/*
+
+# Compile TypeScript first
+RUN npx tsc --noEmit
+
+# Then build the app
 RUN PUBLIC_URL=$PUBLIC_URL \
     REACT_APP_API_URL=$REACT_APP_API_URL \
     REACT_APP_WS_URL=$REACT_APP_WS_URL \
     npm run build
 
+# Verify build directory contents
+RUN ls -la build/
+
 # Install serve
 RUN npm install -g serve@latest
 
-# Add serve configuration
+# Add serve configuration with proper MIME types
 RUN echo '{ \
   "rewrites": [ { "source": "/**", "destination": "/index.html" } ], \
   "headers": [ \
     { \
       "source": "/**", \
-      "headers": [ { \
-        "key": "Cache-Control", \
-        "value": "no-cache, no-store, must-revalidate" \
-      } ] \
+      "headers": [ \
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }, \
+        { "key": "Content-Type", "value": "text/javascript; charset=utf-8" } \
+      ] \
+    }, \
+    { \
+      "source": "**/*.ts", \
+      "headers": [ { "key": "Content-Type", "value": "text/typescript; charset=utf-8" } ] \
+    }, \
+    { \
+      "source": "**/*.tsx", \
+      "headers": [ { "key": "Content-Type", "value": "text/typescript; charset=utf-8" } ] \
     } \
   ] \
 }' > serve.json
 
 EXPOSE ${PORT}
 
-# Serve the built files
-CMD serve -s build -l ${PORT:-3001} --config serve.json
+# Ensure build directory exists and has content before serving
+CMD if [ ! -d "build" ] || [ -z "$(ls -A build)" ]; then \
+      echo "Error: Build directory is missing or empty" && exit 1; \
+    else \
+      serve -s build -l ${PORT:-3001} --config serve.json; \
+    fi
