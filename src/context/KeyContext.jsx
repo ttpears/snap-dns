@@ -28,11 +28,22 @@ export function KeyProvider({ children }) {
   }, [config.keys]);
 
   const availableKeys = React.useMemo(() => {
-    // If no zone is selected, return all keys
-    if (!selectedZone) return config.keys || [];
-    // If zone is selected, return keys that manage that zone
-    return config.keys?.filter(key => key.zones?.includes(selectedZone)) || [];
-  }, [selectedZone, config.keys]);
+    return (config.keys || []).map(key => ({
+      id: key.id,
+      name: key.name,
+      server: key.server,
+      keyName: key.keyName || key.name,
+      keyValue: key.keyValue || key.secret,
+      algorithm: key.algorithm,
+      zones: key.zones || [],
+      type: key.type || 'internal'
+    }));
+  }, [config.keys]);
+
+  const availableZonesForKey = React.useMemo(() => {
+    if (!selectedKey) return availableZones;
+    return selectedKey.zones || [];
+  }, [selectedKey, availableZones]);
 
   // Load saved selections on mount
   useEffect(() => {

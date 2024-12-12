@@ -13,6 +13,15 @@ export class DNSRecordFormatter {
     if (formatted.name === '@') {
       // For apex records, use the zone name
       formatted.name = zone;
+    } else if (record.type === 'PTR' && zone.endsWith('.in-addr.arpa')) {
+      // For PTR records in IPv4 reverse zones, ensure octets are in reverse order
+      const octets = formatted.name.split('.');
+      if (octets.length <= 4) {  // Handle partial IP address
+        // Remove any existing .in-addr.arpa suffix
+        const cleanName = formatted.name.replace(/\.in-addr\.arpa\.?$/, '');
+        // Split IP, reverse octets, and append zone
+        formatted.name = cleanName.split('.').reverse().join('.');
+      }
     } else if (!formatted.name.endsWith(zone)) {
       // For non-apex records, append the zone if not already present
       formatted.name = `${formatted.name}.${zone}`;

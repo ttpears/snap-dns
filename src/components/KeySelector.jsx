@@ -8,7 +8,8 @@ import {
   TextField,
   Typography,
   InputAdornment,
-  Paper
+  Paper,
+  FormHelperText
 } from '@mui/material';
 import { useKey } from '../context/KeyContext';
 import SearchIcon from '@mui/icons-material/Search';
@@ -49,6 +50,43 @@ function KeySelector() {
   // Validate selected zone is in available zones
   const validSelectedZone = selectedZone && availableZones.includes(selectedZone) ? selectedZone : '';
 
+  const renderKeyOptions = () => {
+    return (
+      <FormControl fullWidth>
+        <InputLabel>Select Key</InputLabel>
+        <Select
+          value={selectedKey?.id || ''}
+          onChange={(e) => {
+            const key = availableKeys.find(k => k.id === e.target.value);
+            console.log('Selected key:', key); // Debug the selected key
+            if (key) {
+              // Verify all required fields are present
+              const requiredFields = ['id', 'name', 'algorithm', 'secret', 'server'];
+              const missingFields = requiredFields.filter(field => !key[field]);
+              if (missingFields.length > 0) {
+                console.error('Missing key fields:', missingFields);
+              }
+            }
+            selectKey(key || null);
+          }}
+          label="Select Key"
+        >
+          <MenuItem value="">
+            <em>None</em>
+          </MenuItem>
+          {availableKeys.map((key) => {
+            console.log('Key in dropdown:', key); // Debug each key in the dropdown
+            return (
+              <MenuItem key={key.id} value={key.id}>
+                {key.name} ({key.server})
+              </MenuItem>
+            );
+          })}
+        </Select>
+      </FormControl>
+    );
+  };
+
   return (
     <Paper 
       sx={{ 
@@ -70,26 +108,7 @@ function KeySelector() {
         TSIG Key Selection
       </Typography>
       
-      <FormControl fullWidth>
-        <InputLabel>Select Key</InputLabel>
-        <Select
-          value={selectedKey?.id || ''}
-          onChange={(e) => {
-            const key = availableKeys.find(k => k.id === e.target.value);
-            selectKey(key || null);
-          }}
-          label="Select Key"
-        >
-          <MenuItem value="">
-            <em>None</em>
-          </MenuItem>
-          {availableKeys.map((key) => (
-            <MenuItem key={key.id} value={key.id}>
-              {key.name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      {renderKeyOptions()}
 
       {availableZones.length > 10 && (
         <Box sx={{ mb: 2 }}>
@@ -116,16 +135,22 @@ function KeySelector() {
           value={validSelectedZone}
           onChange={(e) => selectZone(e.target.value || null)}
           label="Select Zone"
+          disabled={!selectedKey}
         >
           <MenuItem value="">
             <em>None</em>
           </MenuItem>
-          {filteredZones.map((zone) => (
-            <MenuItem key={zone} value={zone}>
-              {zone}
-            </MenuItem>
-          ))}
+          {filteredZones
+            .filter(zone => !selectedKey || selectedKey.zones?.includes(zone))
+            .map((zone) => (
+              <MenuItem key={zone} value={zone}>
+                {zone}
+              </MenuItem>
+            ))}
         </Select>
+        <FormHelperText>
+          {!selectedKey ? 'Select a key first' : 'Select a zone to manage'}
+        </FormHelperText>
       </FormControl>
 
       {selectedKey && (
