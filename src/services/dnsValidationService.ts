@@ -80,6 +80,13 @@ class DNSValidationService {
   }
 
   private static isValidHostname(hostname: string, recordType?: string): boolean {
+    // Handle wildcard records
+    if (hostname.startsWith('*.')) {
+      // Wildcards are only valid at the start of a name
+      // Remove the wildcard and validate the rest of the hostname
+      return this.isValidHostname(hostname.substring(2), recordType);
+    }
+
     // Special case for TXT records which allow underscores
     if (recordType === 'TXT') {
       // Modified regex to allow underscores anywhere in TXT record names
@@ -94,6 +101,7 @@ class DNSValidationService {
     }
 
     // Regular hostname validation for other record types
+    // Allow wildcards at the start of labels
     const regex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.?$/;
     return regex.test(hostname);
   }

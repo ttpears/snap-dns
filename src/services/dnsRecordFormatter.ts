@@ -22,9 +22,17 @@ export class DNSRecordFormatter {
         // Split IP, reverse octets, and append zone
         formatted.name = cleanName.split('.').reverse().join('.');
       }
-    } else if (!formatted.name.endsWith(zone)) {
-      // For non-apex records, append the zone if not already present
-      formatted.name = `${formatted.name}.${zone}`;
+    } else {
+      // For non-apex records, handle wildcards and append zone if needed
+      const name = formatted.name;
+      if (name.startsWith('*.')) {
+        // Preserve wildcard and append zone if not already present
+        const baseName = name.substring(2);
+        formatted.name = baseName ? `*.${baseName}.${zone}` : `*.${zone}`;
+      } else if (!formatted.name.endsWith(zone)) {
+        // For non-wildcard records, append zone if not already present
+        formatted.name = `${formatted.name}.${zone}`;
+      }
     }
 
     // Ensure name ends with dot
