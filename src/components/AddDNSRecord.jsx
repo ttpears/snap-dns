@@ -186,6 +186,19 @@ const RECORD_TYPES = {
   }
 };
 
+// Helper to map validation error messages to specific fields without false positives
+const mapErrorToField = (error) => {
+  const lower = (error || '').toLowerCase();
+  // If TTL mentioned, it's TTL
+  if (lower.includes('ttl')) return 'ttl';
+  // Explicit record name errors map to name
+  if (/\brecord name\b/.test(lower)) return 'name';
+  // Avoid matching 'hostname' as 'name'
+  if (/\bname\b/.test(lower) && !/host\s*name|hostname/.test(lower)) return 'name';
+  // Default to value-specific error
+  return 'value';
+};
+
 const getReverseDNSZone = (zone) => {
   // Check if this is already a reverse DNS zone
   if (zone.endsWith('.in-addr.arpa') || zone.endsWith('.ip6.arpa')) {
@@ -301,8 +314,8 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
         // For other record types or TTL validation, proceed as normal
         const validation = DNSValidationService.validateRecord(validationRecord, selectedZone);
         setValidationErrors(validation.errors.reduce((acc, error) => {
-          // Only show errors related to the current field
-          if (error.toLowerCase().includes(fieldName)) {
+          // Only show errors related to the current field using strict mapping
+          if (mapErrorToField(error) === fieldName) {
             acc[fieldName] = error;
           }
           return acc;
@@ -362,9 +375,17 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
       if (!validation.isValid) {
         setValidationErrors(validation.errors.reduce((acc, error) => {
-          if (error.includes('name')) acc.name = error;
-          else if (error.includes('TTL')) acc.ttl = error;
-          else acc.value = error;
+          const field = mapErrorToField(error);
+          acc[field] = error;
+          return acc;
+        }, {}));
+        return false;
+      }
+      const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
+      if (!validation.isValid) {
+        setValidationErrors(validation.errors.reduce((acc, error) => {
+          const field = mapErrorToField(error);
+          acc[field] = error;
           return acc;
         }, {}));
         return false;
@@ -374,9 +395,8 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       const validation = DNSValidationService.validateRecord(record, selectedZone);
       if (!validation.isValid) {
         setValidationErrors(validation.errors.reduce((acc, error) => {
-          if (error.includes('name')) acc.name = error;
-          else if (error.includes('TTL')) acc.ttl = error;
-          else acc.value = error;
+          const field = mapErrorToField(error);
+          acc[field] = error;
           return acc;
         }, {}));
         return false;
