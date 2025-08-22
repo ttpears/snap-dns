@@ -10,13 +10,27 @@ const execAsync = promisify(exec);
 class DNSService {
   private async createNSUpdateFile(zone: string, record: DNSRecord, keyConfig: ZoneConfig, isDelete = false): Promise<string> {
     const updateFile = join('/tmp/snap-dns', `update-${Date.now()}-${Math.random()}.txt`);
+    // For deletions, include RDATA to delete only the specific RR, not the entire RRset
+    const deleteCommand = (() => {
+      if (!isDelete) return '';
+      const hasData = record.value !== undefined && record.value !== null && record.value !== '';
+      if (!hasData || record.type === 'SOA') {
+        // Without specific RDATA (or for SOA), delete the whole RRset
+        return `update delete ${record.name} ${record.type}`;
+      }
+      // Use the provided value verbatim so it matches add semantics
+      const rdata = typeof record.value === 'object' ? this.formatSOA(record.value) : String(record.value);
+      return `update delete ${record.name} ${record.type} ${rdata}`;
+    })();
+
+    const addCommand = `update add ${record.name} ${record.ttl} ${record.class || 'IN'} ${record.type} ${
+      typeof record.value === 'object' ? this.formatSOA(record.value) : record.value
+    }`;
+
     const commands = [
       `server ${keyConfig.server}`,
       `zone ${zone}`,
-      isDelete ? `update delete ${record.name} ${record.type}` : 
-                 `update add ${record.name} ${record.ttl} ${record.class || 'IN'} ${record.type} ${
-                   typeof record.value === 'object' ? this.formatSOA(record.value) : record.value
-                 }`,
+      isDelete ? deleteCommand : addCommand,
       'send'
     ];
 
