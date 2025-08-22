@@ -127,7 +127,9 @@ class DNSValidationService {
     if (parts.length !== 2) return false;
     
     const priority = parseInt(parts[0], 10);
-    return !isNaN(priority) && priority >= 0 && priority <= 65535 && this.isValidHostname(parts[1]);
+    const target = parts[1];
+    const hostnameOk = target === '@' || this.isValidHostname(target);
+    return !isNaN(priority) && priority >= 0 && priority <= 65535 && hostnameOk;
   }
 
   private static isValidSRV(value: string): boolean {

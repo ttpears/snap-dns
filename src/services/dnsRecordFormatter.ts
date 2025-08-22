@@ -40,6 +40,16 @@ export class DNSRecordFormatter {
       formatted.name = `${formatted.name}.`;
     }
 
+    // Expand apex shorthand in MX target if used
+    if (formatted.type === 'MX' && typeof formatted.value === 'string') {
+      const match = formatted.value.match(/^(\d+)\s+(@)\.?$/);
+      if (match) {
+        const priority = match[1];
+        const zoneFqdn = zone.endsWith('.') ? zone : `${zone}.`;
+        formatted.value = `${priority} ${zoneFqdn}`;
+      }
+    }
+
     return formatted;
   }
 
@@ -107,7 +117,8 @@ export class DNSRecordFormatter {
     if (isNaN(num) || num < 0 || num > 65535) {
       throw new Error('Invalid MX priority value');
     }
-    return `${num} ${this.formatNameRecord(target)}`;
+    const formattedTarget = target === '@' ? '@' : this.formatNameRecord(target);
+    return `${num} ${formattedTarget}`;
   }
 
   private static formatTXTRecord(value: string | string[]): string {
