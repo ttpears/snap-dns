@@ -349,6 +349,26 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
         }, {}));
         return false;
       }
+    } else if (record.type === 'MX') {
+      // Validate MX fields and compose value for validation
+      if (record.priority == null || record.priority === '' || !record.value) {
+        setError('Both MX priority and mail server are required');
+        return false;
+      }
+      const tempRecord = {
+        ...record,
+        value: `${record.priority} ${record.value}`
+      };
+      const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
+      if (!validation.isValid) {
+        setValidationErrors(validation.errors.reduce((acc, error) => {
+          if (error.includes('name')) acc.name = error;
+          else if (error.includes('TTL')) acc.ttl = error;
+          else acc.value = error;
+          return acc;
+        }, {}));
+        return false;
+      }
     } else {
       // For other record types, validate normally
       const validation = DNSValidationService.validateRecord(record, selectedZone);
