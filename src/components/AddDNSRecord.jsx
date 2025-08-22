@@ -354,10 +354,8 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
       if (!validation.isValid) {
         setValidationErrors(validation.errors.reduce((acc, error) => {
-          // Map errors to fields based on content
-          if (error.includes('name')) acc.name = error;
-          else if (error.includes('TTL')) acc.ttl = error;
-          else acc.value = error;
+          const field = mapErrorToField(error);
+          acc[field] = error;
           return acc;
         }, {}));
         return false;
@@ -372,15 +370,6 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
         ...record,
         value: `${record.priority} ${record.value}`
       };
-      const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
-      if (!validation.isValid) {
-        setValidationErrors(validation.errors.reduce((acc, error) => {
-          const field = mapErrorToField(error);
-          acc[field] = error;
-          return acc;
-        }, {}));
-        return false;
-      }
       const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
       if (!validation.isValid) {
         setValidationErrors(validation.errors.reduce((acc, error) => {
