@@ -77,5 +77,5 @@ EXPOSE ${PORT}
 CMD if [ ! -d "build" ] || [ -z "$(ls -A build)" ]; then \
       echo "Error: Build directory is missing or empty" && exit 1; \
     else \
-      serve -s build -l ${PORT:-3001} --config serve.json; \
+      serve -s build -l ${PORT:-3001} --config /app/serve.json; \
     fi
