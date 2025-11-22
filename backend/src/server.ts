@@ -108,6 +108,40 @@ app.use('/api/zones', zoneRoutes);
 app.use('/api/keys', keyRoutes);
 app.use('/api/webhook', webhookRoutes);
 
+// Health check endpoints
+app.get('/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'healthy',
+    service: 'snap-dns-backend',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'healthy',
+    service: 'snap-dns-backend',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/', (req: Request, res: Response) => {
+  res.json({
+    service: 'Snap DNS API',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: {
+      health: '/health or /api/health',
+      auth: '/api/auth/*',
+      zones: '/api/zones/*',
+      keys: '/api/tsig-keys/*',
+      webhook: '/api/webhook/*'
+    }
+  });
+});
+
 // Error handling
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Error:', err);
