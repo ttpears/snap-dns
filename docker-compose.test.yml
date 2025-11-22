@@ -21,7 +21,7 @@ services:
         ipv4_address: 172.30.0.10
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "dig", "@localhost", "test.local", "SOA"]
+      test: ["CMD", "sh", "-c", "rndc status || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
