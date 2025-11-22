@@ -1,0 +1,9 @@
+{
+  "name": "snap-dns-test-fixtures",
+  "version": "1.0.0",
+  "description": "Test data fixture generator for Snap DNS",
+  "private": true,
+  "dependencies": {
+    "bcrypt": "^5.1.1"
+  }
+}

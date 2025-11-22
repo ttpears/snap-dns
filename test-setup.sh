@@ -33,7 +33,8 @@ fi
 
 echo -e "${GREEN}[1/5] Generating test data fixtures...${NC}"
 cd test
-npm install bcrypt 2>/dev/null || true
+echo "  Installing dependencies..."
+npm install --silent
 node generate-fixtures.js
 cd ..
 
