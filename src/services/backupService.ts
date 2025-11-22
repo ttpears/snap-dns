@@ -79,17 +79,10 @@ export class BackupService {
   async restoreRecords(backup: DNSBackup, config: Config, selectedRecords?: DNSRecord[]): Promise<void> {
     try {
       const recordsToRestore = selectedRecords || backup.records;
-      
-      const keyConfig = config.keys.find(key => 
-        key.zones?.includes(backup.zone) && key.server === backup.server
-      );
-      
-      if (!keyConfig) {
-        throw new Error('No key configuration found for this zone and server');
-      }
 
+      // Keys are now handled server-side, no need for keyConfig
       for (const record of recordsToRestore) {
-        await dnsService.addRecord(backup.zone, record, keyConfig);
+        await dnsService.addRecord(backup.zone, record);
       }
     } catch (error: unknown) {
       console.error('Failed to restore records:', error);

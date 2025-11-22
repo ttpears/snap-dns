@@ -1,37 +1,55 @@
+# docker-compose.yml
+# Local development environment
+# Usage: docker-compose up
+
 version: '3.8'
-
-x-common-frontend: &frontend-common
-  build:
-    context: .
-    dockerfile: Dockerfile.frontend
-  volumes:
-    - .:/app:delegated
-    - /app/node_modules
-    - frontend_build:/app/build
-  networks:
-    - snap-dns-network
-
-x-common-backend: &backend-common
-  build:
-    context: .
-    dockerfile: Dockerfile.backend
-  volumes:
-    - ./backend/src:/app/src:delegated
-    - ./backend/tsconfig.json:/app/tsconfig.json:delegated
-    - ./backend/.env:/app/.env:delegated
-    - backend_node_modules:/app/node_modules
-    - temp-keys:/tmp/snap-dns
-  networks:
-    - snap-dns-network
-  cap_add:
-    - NET_RAW
 
 services:
   frontend:
-    <<: *frontend-common
-  
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: snap-dns-frontend
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app:delegated
+      - /app/node_modules
+      - frontend_build:/app/build
+    networks:
+      - snap-dns-network
+    environment:
+      - NODE_ENV=development
+      - WDS_SOCKET_PORT=3001
+      - WATCHPACK_POLLING=true
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
+      - REACT_APP_API_URL=http://localhost:3002
+    command: node scripts/start.js
+    restart: unless-stopped
+
   backend:
-    <<: *backend-common
+    build:
+      context: .
+      dockerfile: Dockerfile.backend.dev
+    container_name: snap-dns-backend
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./backend/src:/app/src:delegated
+      - ./backend/tsconfig.json:/app/tsconfig.json:delegated
+      - ./backend/.env:/app/.env:delegated
+      - backend_node_modules:/app/node_modules
+      - temp-keys:/tmp/snap-dns
+    networks:
+      - snap-dns-network
+    environment:
+      - NODE_ENV=development
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=3002
+    command: npm run dev
+    cap_add:
+      - NET_RAW
+    restart: unless-stopped
 
 volumes:
   backend_node_modules:
@@ -40,4 +58,4 @@ volumes:
 
 networks:
   snap-dns-network:
-    driver: bridge 
+    driver: bridge

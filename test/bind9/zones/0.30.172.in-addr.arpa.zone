@@ -1,0 +1,22 @@
+; test/bind9/zones/0.30.172.in-addr.arpa.zone
+; Reverse DNS zone for 172.30.0.0/24 network
+
+$TTL 3600
+$ORIGIN 0.30.172.in-addr.arpa.
+
+@       IN      SOA     ns1.test.local. admin.test.local. (
+                        2025011501 ; Serial
+                        3600       ; Refresh
+                        1800       ; Retry
+                        604800     ; Expire
+                        3600       ; Minimum TTL
+                        )
+
+; Name servers
+@               IN      NS      ns1.test.local.
+
+; PTR records for test network
+10              IN      PTR     ns1.test.local.
+11              IN      PTR     ns2.test.local.
+20              IN      PTR     backend.snap-dns-test.
+30              IN      PTR     frontend.snap-dns-test.

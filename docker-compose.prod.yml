@@ -1,30 +1,100 @@
+# docker-compose.prod.yml
+# Production environment with optional Traefik proxy support
+#
+# Direct access usage:
+#   docker-compose -f docker-compose.prod.yml up -d
+#
+# With Traefik proxy:
+#   Set FQDN and FQDN_API environment variables
+#   Ensure 'proxy' network exists: docker network create proxy
+#   docker-compose -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
 services:
   frontend:
-    env_file:
-      - .env.production
-    environment:
-      - NODE_ENV=production
-      - PUBLIC_URL=https://${FQDN}
-      - REACT_APP_API_URL=https://${FQDN_API}
-      - REACT_APP_WS_URL=wss://${FQDN}
-      - REACT_APP_PUBLIC_URL=https://${FQDN}
-      - PORT=3001
     build:
       context: .
       dockerfile: Dockerfile.frontend
       args:
         NODE_ENV: production
-        PUBLIC_URL: https://${FQDN}
-        REACT_APP_API_URL: https://${FQDN_API}
-        REACT_APP_WS_URL: wss://${FQDN}
-        REACT_APP_PUBLIC_URL: https://${FQDN}
-    command: serve -s build -l ${PORT:-3001} --single --debug
+        PUBLIC_URL: ${PUBLIC_URL:-/}
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:3002}
+    container_name: snap-dns-frontend-prod
+    expose:
+      - "3001"
+    ports:
+      - "${FRONTEND_PORT:-3001}:3001"
+    volumes:
+      - frontend_build:/app/build
+    networks:
+      - snap-dns-network
+      # Uncomment below for Traefik proxy support
+      # - proxy
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - PUBLIC_URL=${PUBLIC_URL:-/}
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:3002}
+    # Uncomment below for Traefik proxy support
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.docker.network=proxy"
+    #   - "traefik.http.routers.snap-dns.rule=Host(`${FQDN}`)"
+    #   - "traefik.http.routers.snap-dns.entrypoints=websecure"
+    #   - "traefik.http.routers.snap-dns.tls=true"
+    #   - "traefik.http.services.snap-dns.loadBalancer.server.port=3001"
+    #   - "traefik.http.middlewares.spa.errors.status=404"
+    #   - "traefik.http.middlewares.spa.errors.service=snap-dns"
+    #   - "traefik.http.middlewares.spa.errors.query=/"
+    #   - "traefik.http.routers.snap-dns.middlewares=spa@docker"
+    command: serve -s build -l 3001 --single
+    restart: unless-stopped
 
   backend:
-    env_file:
-      - backend/.env
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: snap-dns-backend-prod
+    expose:
+      - "3002"
+    ports:
+      - "${BACKEND_PORT:-3002}:3002"
+    volumes:
+      - ./backend/.env:/app/.env:ro
+      - backend_data:/app/data
+      - temp-keys:/tmp/snap-dns
+    networks:
+      - snap-dns-network
+      # Uncomment below for Traefik proxy support
+      # - proxy
     environment:
       - NODE_ENV=production
       - BACKEND_HOST=0.0.0.0
       - BACKEND_PORT=3002
-    command: npm run start
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001}
+    # Uncomment below for Traefik proxy support
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.docker.network=proxy"
+    #   - "traefik.http.routers.snap-dns-api.rule=Host(`${FQDN_API}`)"
+    #   - "traefik.http.routers.snap-dns-api.entrypoints=websecure"
+    #   - "traefik.http.routers.snap-dns-api.tls=true"
+    #   - "traefik.http.services.snap-dns-api.loadBalancer.server.port=3002"
+    command: npm start
+    cap_add:
+      - NET_RAW
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+  temp-keys:
+  frontend_build:
+
+networks:
+  snap-dns-network:
+    driver: bridge
+  # Uncomment below for Traefik proxy support
+  # proxy:
+  #   external: true
+  #   name: proxy

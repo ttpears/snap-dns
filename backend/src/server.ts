@@ -2,11 +2,18 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import session from 'express-session';
+import FileStore from 'session-file-store';
 import { config } from './config';
 import { requestLogger } from './middleware/logging';
+import { generalApiLimiter } from './middleware/rateLimiter';
+import { userService } from './services/userService';
+import { tsigKeyService } from './services/tsigKeyService';
+import authRoutes from './routes/authRoutes';
 import zoneRoutes from './routes/zoneRoutes';
 import keyRoutes from './routes/keyRoutes';
 import webhookRoutes from './routes/webhookRoutes';
+import tsigKeyRoutes from './routes/tsigKeyRoutes';
 
 // Load environment variables first
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -15,6 +22,14 @@ dotenv.config({ path: path.resolve(__dirname, `../.env.${NODE_ENV}`) }); // Load
 
 // Create express app
 const app: Express = express();
+
+// Session store configuration
+const SessionFileStore = FileStore(session);
+const sessionStore = new SessionFileStore({
+  path: path.join(process.cwd(), 'data', 'sessions'),
+  ttl: 86400, // 24 hours
+  retries: 0
+});
 
 // Debug middleware to log ALL requests
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -34,12 +49,8 @@ const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3001'];
     console.log('CORS Check:', { origin, allowedOrigins, env: NODE_ENV });
-    
-    if (NODE_ENV === 'development') {
-      callback(null, true);
-      return;
-    }
-    
+
+    // Always validate origin - even in development
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -66,13 +77,33 @@ const corsOptions = {
   exposedHeaders: ['Content-Range', 'X-Content-Range']
 };
 
+// Session middleware - must be before routes
+app.use(session({
+  store: sessionStore,
+  secret: process.env.SESSION_SECRET || 'change-this-secret-in-production',
+  resave: false,
+  saveUninitialized: false,
+  name: 'snap-dns.sid',
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json({ limit: process.env.MAX_REQUEST_SIZE || '10mb' }));
 app.use(express.raw({ type: 'application/dns-message', limit: '512b' }));
 app.use(requestLogger);
 
+// Apply general rate limiting to all API endpoints
+app.use('/api', generalApiLimiter);
+
 // Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/tsig-keys', tsigKeyRoutes);
 app.use('/api/zones', zoneRoutes);
 app.use('/api/keys', keyRoutes);
 app.use('/api/webhook', webhookRoutes);
@@ -89,6 +120,13 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 // Start server
 const startServer = async () => {
   try {
+    // Initialize services
+    console.log('Initializing user service...');
+    await userService.initialize();
+
+    console.log('Initializing TSIG key service...');
+    await tsigKeyService.initialize();
+
     const port = parseInt(process.env.BACKEND_PORT || '3002', 10);
     const host = process.env.BACKEND_HOST || 'localhost';
 
@@ -99,8 +137,11 @@ const startServer = async () => {
         host,
         port,
         allowedOrigins: process.env.ALLOWED_ORIGINS?.split(','),
-        maxRequestSize: process.env.MAX_REQUEST_SIZE
+        maxRequestSize: process.env.MAX_REQUEST_SIZE,
+        sessionStore: 'file-based',
+        sessionTTL: '24 hours'
       });
+      console.log('✅ Authentication system ready');
     });
   } catch (error) {
     console.error('Failed to start server:', error);

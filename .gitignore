@@ -71,9 +71,15 @@ debug.log
 *.crt
 
 # DNS specific
-*.zone
 *.tsig
 *.key.conf
+
+# Runtime data directories (generated at runtime, should not be committed)
+backend/data/
+test/data/
+
+# Test zone files are configuration, keep them in git
+!test/bind9/zones/*.zone
 
 # Local configuration
 src/config/local.js

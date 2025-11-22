@@ -1,0 +1,110 @@
+# docker-compose.test.yml
+# Complete test environment with mock BIND9 DNS server
+# Usage: docker-compose -f docker-compose.test.yml up
+
+version: '3.8'
+
+services:
+  # BIND9 DNS Server for Testing
+  dns-server:
+    image: ubuntu/bind9:latest
+    container_name: snap-dns-test-server
+    hostname: ns1.test.local
+    ports:
+      - "5353:53/tcp"
+      - "5353:53/udp"
+    volumes:
+      - ./test/bind9/named.conf:/etc/bind/named.conf:ro
+      - ./test/bind9/zones:/etc/bind/zones:rw
+      - ./test/bind9/keys:/etc/bind/keys:ro
+      - dns_cache:/var/cache/bind
+      - dns_records:/var/lib/bind
+    networks:
+      snap-dns-test:
+        ipv4_address: 172.30.0.10
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "dig", "@localhost", "test.local", "SOA"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend.dev
+    container_name: snap-dns-test-backend
+    hostname: backend
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./backend/src:/app/src:delegated
+      - ./backend/tsconfig.json:/app/tsconfig.json:ro
+      - ./backend/package.json:/app/package.json:ro
+      - ./test/backend/.env.test:/app/.env:ro
+      - ./test/data:/app/data
+      - backend_node_modules:/app/node_modules
+      - temp_files:/tmp/snap-dns
+    networks:
+      snap-dns-test:
+        ipv4_address: 172.30.0.20
+    depends_on:
+      dns-server:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=test
+      - BACKEND_PORT=3002
+      - BACKEND_HOST=0.0.0.0
+      - ALLOWED_ORIGINS=http://localhost:3001,http://172.30.0.30:3001
+      - SESSION_SECRET=test-secret-do-not-use-in-production
+      - TEMP_DIR=/tmp/snap-dns
+      - MAX_ZONE_RECORDS=10000
+      - ZONE_RECORDS_WARNING_THRESHOLD=5000
+      - MAX_DIG_OUTPUT_SIZE=52428800
+    command: npm run dev
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: snap-dns-test-frontend
+    hostname: frontend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./src:/app/src:delegated
+      - ./public:/app/public:ro
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - frontend_node_modules:/app/node_modules
+    networks:
+      snap-dns-test:
+        ipv4_address: 172.30.0.30
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://localhost:3002
+      - WDS_SOCKET_PORT=3001
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    command: npm start
+    restart: unless-stopped
+
+volumes:
+  dns_cache:
+  dns_records:
+  backend_node_modules:
+  frontend_node_modules:
+  temp_files:
+
+networks:
+  snap-dns-test:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24

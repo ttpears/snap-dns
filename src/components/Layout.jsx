@@ -1,11 +1,12 @@
 import React from 'react';
-import { Box, Typography, IconButton, Toolbar, Divider, Button } from '@mui/material';
+import { Box, Typography, IconButton, Toolbar, Divider, Button, Menu, MenuItem, Chip } from '@mui/material';
 import { useLocation } from 'react-router-dom';
-import { Brightness4, Brightness7 } from '@mui/icons-material';
+import { Brightness4, Brightness7, AccountCircle, Logout } from '@mui/icons-material';
 import Navigation from './Navigation';
 import PendingChangesDrawer from './PendingChangesDrawer';
 import { useConfig } from '../context/ConfigContext';
 import { usePendingChanges } from '../context/PendingChangesContext';
+import { useAuth } from '../context/AuthContext';
 import Footer from './Footer';
 import { useTheme } from '../context/ThemeContext';
 
@@ -13,15 +14,30 @@ function Layout({ children }) {
   const location = useLocation();
   const { darkMode, toggleDarkMode } = useTheme();
   const { config } = useConfig();
-  const { 
-    pendingChanges, 
+  const { user, logout } = useAuth();
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const {
+    pendingChanges,
     setPendingChanges,
-    showPendingDrawer, 
+    showPendingDrawer,
     setShowPendingDrawer,
     addPendingChange,
     removePendingChange,
     clearPendingChanges
   } = usePendingChanges();
+
+  const handleUserMenuOpen = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = async () => {
+    handleUserMenuClose();
+    await logout();
+  };
   
   const getPageTitle = () => {
     switch (location.pathname) {
@@ -89,6 +105,33 @@ function Layout({ children }) {
             <IconButton onClick={toggleDarkMode} color="inherit">
               {darkMode ? <Brightness7 /> : <Brightness4 />}
             </IconButton>
+            {user && (
+              <>
+                <Chip
+                  icon={<AccountCircle />}
+                  label={user.username}
+                  onClick={handleUserMenuOpen}
+                  clickable
+                  size="small"
+                />
+                <Menu
+                  anchorEl={anchorEl}
+                  open={Boolean(anchorEl)}
+                  onClose={handleUserMenuClose}
+                >
+                  <MenuItem disabled>
+                    <Typography variant="caption" color="text.secondary">
+                      Role: {user.role}
+                    </Typography>
+                  </MenuItem>
+                  <Divider />
+                  <MenuItem onClick={handleLogout}>
+                    <Logout fontSize="small" sx={{ mr: 1 }} />
+                    Logout
+                  </MenuItem>
+                </Menu>
+              </>
+            )}
           </Box>
         </Box>
         {children}

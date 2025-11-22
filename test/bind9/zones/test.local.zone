@@ -1,0 +1,65 @@
+; test/bind9/zones/test.local.zone
+; Test zone file for Snap DNS testing
+; This file will be copied to /var/lib/bind/ by the test setup script
+
+$TTL 3600
+$ORIGIN test.local.
+
+@       IN      SOA     ns1.test.local. admin.test.local. (
+                        2025011501 ; Serial (YYYYMMDDNN)
+                        3600       ; Refresh (1 hour)
+                        1800       ; Retry (30 minutes)
+                        604800     ; Expire (1 week)
+                        86400      ; Minimum TTL (1 day)
+                        )
+
+; Name servers
+@               IN      NS      ns1.test.local.
+@               IN      NS      ns2.test.local.
+
+; A records
+ns1             IN      A       172.30.0.10
+ns2             IN      A       172.30.0.11
+www             IN      A       192.168.1.100
+mail            IN      A       192.168.1.101
+ftp             IN      A       192.168.1.102
+web1            IN      A       192.168.1.110
+web2            IN      A       192.168.1.111
+
+; AAAA records (IPv6)
+www             IN      AAAA    2001:db8::1
+mail            IN      AAAA    2001:db8::2
+ipv6only        IN      AAAA    2001:db8:abcd::100
+
+; CNAME records
+webserver       IN      CNAME   www.test.local.
+mailserver      IN      CNAME   mail.test.local.
+blog            IN      CNAME   www.test.local.
+
+; MX records
+@               IN      MX      10 mail.test.local.
+@               IN      MX      20 backup-mail.test.local.
+backup-mail     IN      A       192.168.1.103
+
+; TXT records
+@               IN      TXT     "v=spf1 mx a ~all"
+_dmarc          IN      TXT     "v=DMARC1; p=quarantine; rua=mailto:dmarc@test.local"
+selector1._domainkey IN TXT     "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC"
+
+; SRV records
+_http._tcp      IN      SRV     10 60 80 www.test.local.
+_ldap._tcp      IN      SRV     0 5 389 ldap.test.local.
+_xmpp-client._tcp IN    SRV     5 0 5222 xmpp.test.local.
+
+; Additional hosts
+ldap            IN      A       192.168.1.104
+xmpp            IN      A       192.168.1.105
+api             IN      A       192.168.1.106
+cdn             IN      A       192.168.1.107
+
+; Subdomain
+sub.www         IN      A       192.168.1.120
+
+; PTR records (in reverse zone)
+; Wildcard for testing
+*.wild          IN      A       192.168.1.200

@@ -29,6 +29,7 @@ import UploadIcon from '@mui/icons-material/Upload';
 import { useConfig } from '../context/ConfigContext';
 import { notificationService } from '../services/notificationService';
 import KeyManagement from './KeyManagement';
+import TSIGKeyManagement from './TSIGKeyManagement';
 import { Config, ensureValidConfig, WebhookProvider } from '../types/config';
 import { Key } from '../types/keys';
 import { backupService } from '../services/backupService';
@@ -484,6 +485,10 @@ function Settings() {
             />
           </Button>
         </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 3, mt: 3 }}>
+        <TSIGKeyManagement />
       </Paper>
 
       {/* Export Dialog */}
