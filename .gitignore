@@ -13,6 +13,7 @@ node_modules/
 # Environment files
 .env*
 !.env.example
+!.env.test.example
 !.env.development.example
 !.env.production.example
 backend/.env

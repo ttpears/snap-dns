@@ -54,7 +54,7 @@ services:
       - NODE_ENV=test
       - BACKEND_PORT=3002
       - BACKEND_HOST=0.0.0.0
-      - ALLOWED_ORIGINS=http://localhost:3001,http://172.30.0.30:3001
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001,http://172.30.0.30:3001}
       - SESSION_SECRET=test-secret-do-not-use-in-production
       - TEMP_DIR=/tmp/snap-dns
       - MAX_ZONE_RECORDS=10000
@@ -84,7 +84,7 @@ services:
     depends_on:
       - backend
     environment:
-      - REACT_APP_API_URL=http://localhost:3002
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:3002}
       - WDS_SOCKET_PORT=3001
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true

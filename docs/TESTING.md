@@ -19,6 +19,40 @@ This script will:
 
 **Access the application at:** http://localhost:3001
 
+## Remote Access Setup
+
+If you need to access the test environment remotely (e.g., from `foo.example.com`):
+
+### Quick Method
+```bash
+./test-remote.sh foo.example.com
+```
+
+### Manual Method
+```bash
+# Set your hostname
+export REACT_APP_API_URL=http://foo.example.com:3002
+export ALLOWED_ORIGINS=http://foo.example.com:3001
+
+# Run setup
+./test-setup.sh
+```
+
+### Using .env File
+```bash
+# Copy the example file
+cp .env.test.example .env.test
+
+# Edit .env.test with your hostname
+nano .env.test
+
+# Load environment and run
+set -a && source .env.test && set +a
+./test-setup.sh
+```
+
+**Access at:** http://foo.example.com:3001
+
 ## Test Environment Architecture
 
 The test environment consists of three Docker containers:
