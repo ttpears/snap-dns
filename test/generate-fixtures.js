@@ -90,7 +90,7 @@ function generateTSIGKeys() {
       name: 'Test Local Zone Key',
       server: '172.30.0.10',
       keyName: 'snap-dns-test-key',
-      keyValue: 'K9tJZ3kF2xL7mN4pQ6rS8tV9wY1aB3cD5eF7gH9jK0lM2nP4qR6sT8uV0wX2yZ4A==',
+      keyValue: 'yUJ6tgH1O0mbVLNBhCcuNPlWNcb74vGSehzsTbtdiKI=',
       algorithm: 'hmac-sha256',
       zones: ['test.local'],
       createdBy: 'user-admin-001'
@@ -100,7 +100,7 @@ function generateTSIGKeys() {
       name: 'Example Test Zone Key',
       server: '172.30.0.10',
       keyName: 'snap-dns-example-key',
-      keyValue: 'A1bC3dE5fG7hI9jK0lM2nO4pQ6rS8tU0vW2xY4zA6bC8dE0fG2hI4jK6lM8nO0pQ==',
+      keyValue: 'fVxf9TbJZ0sA+U168anJV0F5TmtU0xE5KEbsqGy6Rhk=',
       algorithm: 'hmac-sha256',
       zones: ['example.test'],
       createdBy: 'user-admin-001'
@@ -110,7 +110,7 @@ function generateTSIGKeys() {
       name: 'Demo Zone Key',
       server: '172.30.0.10',
       keyName: 'snap-dns-demo-key',
-      keyValue: 'B2cD4eF6gH8iJ0kL2mN4oP6qR8sT0uV2wX4yZ6aB8cD0eF2gH4iJ6kL8mN0oP2qR==',
+      keyValue: 'c5uvY5O1HE3f38fCArH+zsBzDcOOR4NYxP0OM035sP8=',
       algorithm: 'hmac-sha256',
       zones: ['demo.local'],
       createdBy: 'user-admin-001'

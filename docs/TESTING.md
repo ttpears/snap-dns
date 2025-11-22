@@ -84,21 +84,21 @@ Three TSIG keys are pre-configured and already added to the system:
 #### 1. Test Local Zone Key
 - **Key Name:** snap-dns-test-key
 - **Algorithm:** hmac-sha256
-- **Secret:** `K9tJZ3kF2xL7mN4pQ6rS8tV9wY1aB3cD5eF7gH9jK0lM2nP4qR6sT8uV0wX2yZ4A==`
+- **Secret:** `yUJ6tgH1O0mbVLNBhCcuNPlWNcb74vGSehzsTbtdiKI=`
 - **Zone:** test.local
 - **Server:** 172.30.0.10
 
 #### 2. Example Test Zone Key
 - **Key Name:** snap-dns-example-key
 - **Algorithm:** hmac-sha256
-- **Secret:** `A1bC3dE5fG7hI9jK0lM2nO4pQ6rS8tU0vW2xY4zA6bC8dE0fG2hI4jK6lM8nO0pQ==`
+- **Secret:** `fVxf9TbJZ0sA+U168anJV0F5TmtU0xE5KEbsqGy6Rhk=`
 - **Zone:** example.test
 - **Server:** 172.30.0.10
 
 #### 3. Demo Zone Key
 - **Key Name:** snap-dns-demo-key
 - **Algorithm:** hmac-sha256
-- **Secret:** `B2cD4eF6gH8iJ0kL2mN4oP6qR8sT0uV2wX4yZ6aB8cD0eF2gH4iJ6kL8mN0oP2qR==`
+- **Secret:** `c5uvY5O1HE3f38fCArH+zsBzDcOOR4NYxP0OM035sP8=`
 - **Zone:** demo.local
 - **Server:** 172.30.0.10
 
@@ -288,7 +288,7 @@ You can also test direct nsupdate operations:
 cat > test.key << EOF
 key snap-dns-test-key {
   algorithm hmac-sha256;
-  secret "K9tJZ3kF2xL7mN4pQ6rS8tV9wY1aB3cD5eF7gH9jK0lM2nP4qR6sT8uV0wX2yZ4A==";
+  secret "yUJ6tgH1O0mbVLNBhCcuNPlWNcb74vGSehzsTbtdiKI=";
 };
 EOF
 
