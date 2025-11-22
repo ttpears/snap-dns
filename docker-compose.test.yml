@@ -2,8 +2,6 @@
 # Complete test environment with mock BIND9 DNS server
 # Usage: docker-compose -f docker-compose.test.yml up
 
-version: '3.8'
-
 services:
   # BIND9 DNS Server for Testing
   dns-server:
@@ -15,10 +13,9 @@ services:
       - "5353:53/udp"
     volumes:
       - ./test/bind9/named.conf:/etc/bind/named.conf:ro
-      - ./test/bind9/zones:/etc/bind/zones:rw
+      - ./test/bind9/zones:/var/lib/bind:rw
       - ./test/bind9/keys:/etc/bind/keys:ro
       - dns_cache:/var/cache/bind
-      - dns_records:/var/lib/bind
     networks:
       snap-dns-test:
         ipv4_address: 172.30.0.10
@@ -97,7 +94,6 @@ services:
 
 volumes:
   dns_cache:
-  dns_records:
   backend_node_modules:
   frontend_node_modules:
   temp_files:
