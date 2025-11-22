@@ -49,25 +49,10 @@ RUN ls -la build/
 # Install serve
 RUN npm install -g serve@latest
 
-# Add serve configuration with proper MIME types
+# Add serve configuration for SPA routing
 RUN echo '{ \
-  "rewrites": [ { "source": "/**", "destination": "/index.html" } ], \
-  "headers": [ \
-    { \
-      "source": "/**", \
-      "headers": [ \
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }, \
-        { "key": "Content-Type", "value": "text/javascript; charset=utf-8" } \
-      ] \
-    }, \
-    { \
-      "source": "**/*.ts", \
-      "headers": [ { "key": "Content-Type", "value": "text/typescript; charset=utf-8" } ] \
-    }, \
-    { \
-      "source": "**/*.tsx", \
-      "headers": [ { "key": "Content-Type", "value": "text/typescript; charset=utf-8" } ] \
-    } \
+  "rewrites": [ \
+    { "source": "**", "destination": "/index.html" } \
   ] \
 }' > serve.json
 
