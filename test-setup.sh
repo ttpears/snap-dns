@@ -58,7 +58,7 @@ sleep 5
 
 # Wait for DNS server
 for i in {1..30}; do
-    if docker exec snap-dns-test-server dig @localhost test.local SOA +short > /dev/null 2>&1; then
+    if docker exec snap-dns-test-server rndc status > /dev/null 2>&1; then
         echo -e "  ${GREEN}✓ DNS server is ready${NC}"
         break
     fi
@@ -69,17 +69,6 @@ for i in {1..30}; do
     fi
     sleep 2
 done
-
-# Copy zone files into the running container
-echo "  Copying zone files to DNS server..."
-docker cp test/bind9/zones/test.local.zone snap-dns-test-server:/var/lib/bind/test.local.zone
-docker cp test/bind9/zones/example.test.zone snap-dns-test-server:/var/lib/bind/example.test.zone
-docker cp test/bind9/zones/demo.local.zone snap-dns-test-server:/var/lib/bind/demo.local.zone
-docker cp test/bind9/zones/0.30.172.in-addr.arpa.zone snap-dns-test-server:/var/lib/bind/0.30.172.in-addr.arpa.zone
-
-# Reload BIND9 configuration
-echo "  Reloading DNS server..."
-docker exec snap-dns-test-server rndc reload 2>/dev/null || true
 
 # Wait for backend
 echo "  Waiting for backend..."
