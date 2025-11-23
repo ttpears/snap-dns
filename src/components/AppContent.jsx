@@ -75,13 +75,9 @@ function AppContent({ darkMode, toggleDarkMode }) {
             </ProtectedZoneRoute>
           } 
         />
-        <Route 
-          path="/snapshots" 
-          element={
-            <ProtectedZoneRoute>
-              <Snapshots />
-            </ProtectedZoneRoute>
-          } 
+        <Route
+          path="/snapshots"
+          element={<Snapshots />}
         />
         <Route path="/settings" element={<Settings />} />
       </Routes>

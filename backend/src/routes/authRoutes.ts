@@ -20,6 +20,10 @@ const loginLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in test/dev environments
+  skip: (req) => {
+    return process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
+  }
 });
 
 /**
@@ -361,6 +365,215 @@ router.delete('/users/:userId', requireAuth, requireRole(UserRole.ADMIN), async 
     res.status(500).json({
       success: false,
       error: 'Failed to delete user',
+      code: 'SERVER_ERROR'
+    });
+  }
+});
+
+/**
+ * PATCH /api/auth/users/:userId/role
+ * Update user role (admin only)
+ */
+router.patch('/users/:userId/role', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+    const authReq = req as AuthenticatedRequest;
+
+    if (!role || !Object.values(UserRole).includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid role is required',
+        code: 'INVALID_ROLE'
+      });
+    }
+
+    // Prevent changing your own role
+    if (userId === authReq.user!.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot change your own role',
+        code: 'CANNOT_CHANGE_OWN_ROLE'
+      });
+    }
+
+    // Get user info before updating
+    const user = await userService.getUserById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    await userService.updateUserRole(userId, role);
+
+    // Log role change
+    await auditService.log(AuditEventType.USER_UPDATED, {
+      userId: req.session.userId,
+      username: req.session.username,
+      success: true,
+      details: {
+        updatedUserId: userId,
+        updatedUsername: user.username,
+        oldRole: user.role,
+        newRole: role,
+      },
+    });
+
+    console.log(`User role updated: ${user.username} from ${user.role} to ${role} by ${req.session.username}`);
+
+    res.json({
+      success: true,
+      message: 'User role updated successfully'
+    });
+  } catch (error: any) {
+    console.error('Update user role error:', error);
+
+    if (error.message === 'User not found') {
+      return res.status(404).json({
+        success: false,
+        error: error.message,
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update user role',
+      code: 'SERVER_ERROR'
+    });
+  }
+});
+
+/**
+ * PATCH /api/auth/users/:userId/keys
+ * Update user's allowed key IDs (admin only)
+ */
+router.patch('/users/:userId/keys', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { keyIds } = req.body;
+
+    if (!Array.isArray(keyIds)) {
+      return res.status(400).json({
+        success: false,
+        error: 'keyIds must be an array',
+        code: 'INVALID_KEY_IDS'
+      });
+    }
+
+    // Get user info before updating
+    const user = await userService.getUserById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    await userService.updateAllowedKeys(userId, keyIds);
+
+    // Log key access change
+    await auditService.log(AuditEventType.USER_UPDATED, {
+      userId: req.session.userId,
+      username: req.session.username,
+      success: true,
+      details: {
+        updatedUserId: userId,
+        updatedUsername: user.username,
+        oldKeys: user.allowedKeyIds,
+        newKeys: keyIds,
+      },
+    });
+
+    console.log(`User allowed keys updated: ${user.username} by ${req.session.username}`);
+
+    res.json({
+      success: true,
+      message: 'User allowed keys updated successfully'
+    });
+  } catch (error: any) {
+    console.error('Update user keys error:', error);
+
+    if (error.message === 'User not found') {
+      return res.status(404).json({
+        success: false,
+        error: error.message,
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update user keys',
+      code: 'SERVER_ERROR'
+    });
+  }
+});
+
+/**
+ * PATCH /api/auth/users/:userId/password
+ * Reset user password (admin only)
+ */
+router.patch('/users/:userId/password', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 8 characters',
+        code: 'WEAK_PASSWORD'
+      });
+    }
+
+    // Get user info before updating
+    const user = await userService.getUserById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    await userService.updatePassword(userId, newPassword);
+
+    // Log password reset
+    await auditService.log(AuditEventType.PASSWORD_RESET, {
+      userId: req.session.userId,
+      username: req.session.username,
+      success: true,
+      details: {
+        targetUserId: userId,
+        targetUsername: user.username,
+      },
+    });
+
+    console.log(`Password reset for user: ${user.username} by ${req.session.username}`);
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully'
+    });
+  } catch (error: any) {
+    console.error('Reset password error:', error);
+
+    if (error.message === 'User not found') {
+      return res.status(404).json({
+        success: false,
+        error: error.message,
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset password',
       code: 'SERVER_ERROR'
     });
   }

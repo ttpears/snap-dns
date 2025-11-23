@@ -1,0 +1,22 @@
+# Dockerfile.frontend.dev
+# Development mode with hot reload - NO production build
+# Changes to src/ files will automatically reload the browser
+
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+
+# Install global packages for development
+RUN npm install -g typescript@5.7.2
+
+# Source files will be mounted via volume for hot reload
+# No need to COPY them here
+
+EXPOSE 3001
+
+# Start React development server (hot reload enabled)
+CMD ["npm", "start"]

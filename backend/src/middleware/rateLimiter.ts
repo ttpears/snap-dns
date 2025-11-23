@@ -3,6 +3,9 @@
 
 import { rateLimit } from 'express-rate-limit';
 
+// Skip rate limiting in test/development environments
+const isTestOrDev = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
+
 /**
  * Rate limiter for DNS zone queries (GET operations)
  * More lenient since reading data is less risky
@@ -17,10 +20,9 @@ export const dnsQueryLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting for certain IPs if needed (e.g., monitoring systems)
+  // Skip rate limiting in test/dev environments
   skip: (req) => {
-    // Could add whitelist logic here if needed
-    return false;
+    return isTestOrDev;
   }
 });
 
@@ -38,6 +40,10 @@ export const dnsModifyLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in test/dev environments
+  skip: (req) => {
+    return isTestOrDev;
+  },
   // Use user ID as key for authenticated requests
   keyGenerator: (req) => {
     // If authenticated, use user ID for per-user limits
@@ -63,6 +69,10 @@ export const keyManagementLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in test/dev environments
+  skip: (req) => {
+    return isTestOrDev;
+  },
   keyGenerator: (req) => {
     if (req.session?.userId) {
       return `user:${req.session.userId}`;
@@ -85,6 +95,10 @@ export const webhookLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in test/dev environments
+  skip: (req) => {
+    return isTestOrDev;
+  },
   keyGenerator: (req) => {
     if (req.session?.userId) {
       return `user:${req.session.userId}`;
@@ -106,5 +120,9 @@ export const generalApiLimiter = rateLimit({
     code: 'RATE_LIMIT_EXCEEDED'
   },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  // Skip rate limiting in test/dev environments
+  skip: (req) => {
+    return isTestOrDev;
+  }
 });

@@ -1,48 +1,43 @@
-; test/bind9/zones/example.test.zone
-; Example zone file for testing multiple zones
-
-$TTL 7200
+$ORIGIN .
+$TTL 7200	; 2 hours
+example.test		IN SOA	ns1.example.test. hostmaster.example.test. (
+				2025011518 ; serial
+				7200       ; refresh (2 hours)
+				3600       ; retry (1 hour)
+				1209600    ; expire (2 weeks)
+				7200       ; minimum (2 hours)
+				)
+			NS	ns1.example.test.
+			NS	ns2.example.test.
+			A	203.0.113.10
+			MX	10 mail.example.test.
+			MX	20 mail2.example.test.
+			MX	30 mail.example.test.
+			TXT	"v=spf1 ip4:203.0.113.0/24 ~all"
+			TXT	"google-site-verification=abcdefghijklmnopqrstuvwxyz123456"
+			CAA	0 iodef "mailto:security@example.test"
+			CAA	0 issue "letsencrypt.org"
 $ORIGIN example.test.
-
-@       IN      SOA     ns1.example.test. hostmaster.example.test. (
-                        2025011501 ; Serial
-                        7200       ; Refresh (2 hours)
-                        3600       ; Retry (1 hour)
-                        1209600    ; Expire (2 weeks)
-                        7200       ; Minimum TTL (2 hours)
-                        )
-
-; Name servers
-@               IN      NS      ns1.example.test.
-@               IN      NS      ns2.example.test.
-
-; A records
-ns1             IN      A       172.30.0.10
-ns2             IN      A       172.30.0.11
-@               IN      A       203.0.113.10
-www             IN      A       203.0.113.11
-shop            IN      A       203.0.113.12
-blog            IN      A       203.0.113.13
-
-; MX records
-@               IN      MX      10 mail.example.test.
-@               IN      MX      20 mail2.example.test.
-mail            IN      A       203.0.113.20
-mail2           IN      A       203.0.113.21
-
-; TXT records
-@               IN      TXT     "v=spf1 ip4:203.0.113.0/24 ~all"
-@               IN      TXT     "google-site-verification=abcdefghijklmnopqrstuvwxyz123456"
-
-; CAA records (for testing certificate authority authorization)
-@               IN      CAA     0 issue "letsencrypt.org"
-@               IN      CAA     0 iodef "mailto:security@example.test"
-
-; CNAME records
-store           IN      CNAME   shop.example.test.
-articles        IN      CNAME   blog.example.test.
-
-; Additional testing hosts
-db              IN      A       203.0.113.30
-cache           IN      A       203.0.113.31
-api             IN      A       203.0.113.32
+api			A	203.0.113.32
+api2			A	203.0.113.32
+			A	203.0.113.33
+api3			A	203.0.113.32
+$TTL 3600	; 1 hour
+api4			A	203.0.113.33
+$TTL 7200	; 2 hours
+articles		CNAME	blog
+articles2		CNAME	blog
+blog			A	203.0.113.12
+cache			A	203.0.113.31
+db			A	203.0.113.30
+mail			A	203.0.113.20
+mail2			A	203.0.113.21
+ns1			A	172.30.0.10
+ns2			A	172.30.0.11
+shop			A	203.0.113.12
+store2			CNAME	shop
+$TTL 3600	; 1 hour
+test			TXT	"dasadsad"
+testing123		A	192.168.1.250
+$TTL 7200	; 2 hours
+www			A	203.0.113.11

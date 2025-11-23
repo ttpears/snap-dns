@@ -12,6 +12,7 @@ export enum AuditEventType {
   LOGIN_FAILURE = 'auth.login.failure',
   LOGOUT = 'auth.logout',
   PASSWORD_CHANGE = 'auth.password_change',
+  PASSWORD_RESET = 'auth.password_reset',
 
   // User management
   USER_CREATED = 'user.created',

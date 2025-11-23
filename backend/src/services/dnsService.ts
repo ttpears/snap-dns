@@ -48,6 +48,21 @@ class DNSService {
   private async createNSUpdateFile(zone: string, record: DNSRecord, keyConfig: ZoneConfig, isDelete = false): Promise<string> {
     await this.initialize();
     const updateFile = join(this.getTempDir(), `update-${Date.now()}-${Math.random()}.txt`);
+
+    // Format the record value properly for nsupdate
+    const formatValue = (rec: DNSRecord): string => {
+      if (!rec.value || rec.value === '') {
+        console.error('EMPTY VALUE for record:', rec);
+        throw new Error(`Record value is empty for ${rec.name} ${rec.type}`);
+      }
+
+      if (typeof rec.value === 'object') {
+        return this.formatSOA(rec.value);
+      }
+
+      return String(rec.value);
+    };
+
     // For deletions, include RDATA to delete only the specific RR, not the entire RRset
     const deleteCommand = (() => {
       if (!isDelete) return '';
@@ -57,13 +72,11 @@ class DNSService {
         return `update delete ${record.name} ${record.type}`;
       }
       // Use the provided value verbatim so it matches add semantics
-      const rdata = typeof record.value === 'object' ? this.formatSOA(record.value) : String(record.value);
+      const rdata = formatValue(record);
       return `update delete ${record.name} ${record.type} ${rdata}`;
     })();
 
-    const addCommand = `update add ${record.name} ${record.ttl} ${record.class || 'IN'} ${record.type} ${
-      typeof record.value === 'object' ? this.formatSOA(record.value) : record.value
-    }`;
+    const addCommand = `update add ${record.name} ${record.ttl} ${record.class || 'IN'} ${record.type} ${formatValue(record)}`;
 
     const commands = [
       `server ${keyConfig.server}`,
@@ -72,7 +85,10 @@ class DNSService {
       'send'
     ];
 
-    await writeFile(updateFile, commands.join('\n'));
+    const fileContent = commands.join('\n');
+    console.log('Generated nsupdate file:', { zone, isDelete, record: { name: record.name, type: record.type, value: record.value }, fileContent });
+
+    await writeFile(updateFile, fileContent);
     return updateFile;
   }
 
@@ -201,6 +217,12 @@ class DNSService {
           const parts = line.split(/\s+/);
           const [name, ttl, recordClass, type, ...data] = parts;
 
+          // Skip TSIG records - they're ephemeral authentication signatures, not real DNS records
+          if (type === 'TSIG') {
+            skippedCount++;
+            continue;
+          }
+
           // Create a DNS packet record
           const packetRecord = {
             name,
@@ -311,6 +333,11 @@ class DNSService {
 
   async deleteRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<ZoneOperationResult> {
     try {
+      // Prevent SOA deletion - every zone must have exactly one SOA record
+      if (record.type === 'SOA') {
+        throw new Error('SOA records cannot be deleted. Every zone must have exactly one SOA record. Use the edit function to modify SOA fields.');
+      }
+
       const updateFile = await this.createNSUpdateFile(zone, record, keyConfig, true);
 
       try {
@@ -348,36 +375,64 @@ class DNSService {
     const updateFile = join(this.getTempDir(), `update-${Date.now()}-${Math.random()}.txt`);
 
     try {
-      // Build delete command for old record
-      const hasOldData = oldRecord.value !== undefined && oldRecord.value !== null && oldRecord.value !== '';
-      let deleteCommand: string;
+      // Special handling for SOA records
+      if (newRecord.type === 'SOA') {
+        // Auto-increment serial number
+        const oldSOA = oldRecord.value as any;
+        const newSOA = newRecord.value as any;
 
-      if (!hasOldData || oldRecord.type === 'SOA') {
-        // Without specific RDATA (or for SOA), delete the whole RRset
-        deleteCommand = `update delete ${oldRecord.name} ${oldRecord.type}`;
+        // Ensure serial increments
+        if (typeof newSOA.serial === 'number' && newSOA.serial <= oldSOA.serial) {
+          newSOA.serial = oldSOA.serial + 1;
+        }
+
+        // For SOA, delete the entire RRset and add the new one atomically
+        const deleteCommand = `update delete ${oldRecord.name} ${oldRecord.type}`;
+        const addCommand = `update add ${newRecord.name} ${newRecord.ttl} ${newRecord.class || 'IN'} ${newRecord.type} ${this.formatSOA(newSOA)}`;
+
+        const commands = [
+          `server ${keyConfig.server}`,
+          `zone ${zone}`,
+          deleteCommand,
+          addCommand,
+          'send'
+        ];
+
+        const fileContent = commands.join('\n');
+        console.log('Generated SOA update file:', { zone, fileContent });
+
+        await writeFile(updateFile, fileContent);
       } else {
-        // Delete specific record with RDATA
-        const oldRdata = typeof oldRecord.value === 'object'
-          ? this.formatSOA(oldRecord.value)
-          : String(oldRecord.value);
-        deleteCommand = `update delete ${oldRecord.name} ${oldRecord.type} ${oldRdata}`;
+        // Standard record update (non-SOA)
+        const hasOldData = oldRecord.value !== undefined && oldRecord.value !== null && oldRecord.value !== '';
+        let deleteCommand: string;
+
+        if (!hasOldData) {
+          deleteCommand = `update delete ${oldRecord.name} ${oldRecord.type}`;
+        } else {
+          // Delete specific record with RDATA
+          const oldRdata = typeof oldRecord.value === 'object'
+            ? this.formatSOA(oldRecord.value)
+            : String(oldRecord.value);
+          deleteCommand = `update delete ${oldRecord.name} ${oldRecord.type} ${oldRdata}`;
+        }
+
+        // Build add command for new record
+        const addCommand = `update add ${newRecord.name} ${newRecord.ttl} ${newRecord.class || 'IN'} ${newRecord.type} ${
+          typeof newRecord.value === 'object' ? this.formatSOA(newRecord.value) : newRecord.value
+        }`;
+
+        // Create atomic transaction - both commands in single nsupdate file
+        const commands = [
+          `server ${keyConfig.server}`,
+          `zone ${zone}`,
+          deleteCommand,
+          addCommand,
+          'send'  // Single send makes this atomic
+        ];
+
+        await writeFile(updateFile, commands.join('\n'));
       }
-
-      // Build add command for new record
-      const addCommand = `update add ${newRecord.name} ${newRecord.ttl} ${newRecord.class || 'IN'} ${newRecord.type} ${
-        typeof newRecord.value === 'object' ? this.formatSOA(newRecord.value) : newRecord.value
-      }`;
-
-      // Create atomic transaction - both commands in single nsupdate file
-      const commands = [
-        `server ${keyConfig.server}`,
-        `zone ${zone}`,
-        deleteCommand,
-        addCommand,
-        'send'  // Single send makes this atomic
-      ];
-
-      await writeFile(updateFile, commands.join('\n'));
 
       try {
         const { stdout, stderr } = await execAsync(

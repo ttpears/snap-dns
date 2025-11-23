@@ -51,8 +51,16 @@ router.get('/:zone', dnsQueryLimiter, requireAuth, async (req: Request, res: Res
     const user = authReq.user!;
     const { zone } = req.params;
 
+    // For admins, get all key IDs; otherwise use the user's allowed keys
+    let allowedKeyIds = user.allowedKeyIds;
+    if (user.role === 'admin') {
+      // Admins have access to all keys
+      const allKeys = await tsigKeyService.listKeys();
+      allowedKeyIds = allKeys.map(k => k.id);
+    }
+
     // Fetch TSIG key from storage for this zone
-    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, user.allowedKeyIds);
+    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
 
     if (!tsigKey) {
       return res.status(403).json({
@@ -141,8 +149,15 @@ router.post(
       });
     }
 
+    // For admins, get all key IDs; otherwise use the user's allowed keys
+    let allowedKeyIds = user.allowedKeyIds;
+    if (user.role === 'admin') {
+      const allKeys = await tsigKeyService.listKeys();
+      allowedKeyIds = allKeys.map(k => k.id);
+    }
+
     // Fetch TSIG key from storage
-    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, user.allowedKeyIds);
+    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
 
     if (!tsigKey) {
       return res.status(403).json({
@@ -233,8 +248,15 @@ router.delete(
       });
     }
 
+    // For admins, get all key IDs; otherwise use the user's allowed keys
+    let allowedKeyIds = user.allowedKeyIds;
+    if (user.role === 'admin') {
+      const allKeys = await tsigKeyService.listKeys();
+      allowedKeyIds = allKeys.map(k => k.id);
+    }
+
     // Fetch TSIG key from storage
-    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, user.allowedKeyIds);
+    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
 
     if (!tsigKey) {
       return res.status(403).json({
@@ -345,8 +367,15 @@ router.patch(
       });
     }
 
+    // For admins, get all key IDs; otherwise use the user's allowed keys
+    let allowedKeyIds = user.allowedKeyIds;
+    if (user.role === 'admin') {
+      const allKeys = await tsigKeyService.listKeys();
+      allowedKeyIds = allKeys.map(k => k.id);
+    }
+
     // Fetch TSIG key from storage
-    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, user.allowedKeyIds);
+    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
 
     if (!tsigKey) {
       return res.status(403).json({

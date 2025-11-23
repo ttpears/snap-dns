@@ -238,6 +238,30 @@ class UserService {
   }
 
   /**
+   * Create or update SSO user (for JIT provisioning)
+   */
+  async createOrUpdateSSOUser(user: User): Promise<User> {
+    if (!this.initialized) await this.initialize();
+
+    // Check if user already exists
+    const existingUser = this.users.get(user.id);
+
+    if (existingUser) {
+      // Update existing user
+      existingUser.lastLogin = user.lastLogin;
+      existingUser.email = user.email;
+      // Don't update role or allowedKeyIds for existing users automatically
+      await this.saveUsers();
+      return existingUser;
+    } else {
+      // Create new user
+      this.users.set(user.id, user);
+      await this.saveUsers();
+      return user;
+    }
+  }
+
+  /**
    * Delete user
    */
   async deleteUser(userId: string): Promise<void> {

@@ -97,9 +97,14 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
             type="number"
             label="Serial Number"
             value={soaFields.serial}
-            onChange={(e) => handleSOAChange('serial', parseInt(e.target.value))}
-            helperText="Zone version number (YYYYMMDDNN format recommended)"
+            disabled
+            helperText="Auto-increments on save (read-only)"
           />
+        </Grid>
+        <Grid item xs={12}>
+          <Alert severity="info">
+            The serial number will automatically increment when you save changes. SOA records cannot be deleted.
+          </Alert>
         </Grid>
         <Grid item xs={12} md={6}>
           <TextField

@@ -7,6 +7,7 @@ import { ZoneProvider } from './context/ZoneContext';
 import { KeyProvider } from './context/KeyContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import AppContent from './components/AppContent';
 import Login from './components/Login';
 
@@ -50,9 +51,11 @@ function AuthenticatedApp() {
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AuthenticatedApp />
-      </AuthProvider>
+      <NotificationProvider>
+        <AuthProvider>
+          <AuthenticatedApp />
+        </AuthProvider>
+      </NotificationProvider>
     </ThemeProvider>
   );
 }

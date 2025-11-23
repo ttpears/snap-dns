@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useConfig } from './ConfigContext';
+import { tsigKeyService } from '../services/tsigKeyService';
+import { useAuth } from './AuthContext';
 
 const KeyContext = createContext({
   selectedKey: null,
@@ -14,48 +16,78 @@ const STORAGE_KEY = 'dns_manager_selections';
 
 export function KeyProvider({ children }) {
   const { config } = useConfig();
+  const { isAuthenticated, user } = useAuth();
   const [selectedKey, setSelectedKey] = useState(null);
   const [selectedZone, setSelectedZone] = useState(null);
   const [initialized, setInitialized] = useState(false);
+  const [backendKeys, setBackendKeys] = useState([]);
+
+  // Fetch keys from backend when authenticated
+  useEffect(() => {
+    const fetchKeys = async () => {
+      if (isAuthenticated) {
+        try {
+          const keys = await tsigKeyService.listKeys();
+          console.log('Fetched keys from backend:', keys);
+          setBackendKeys(keys);
+        } catch (error) {
+          console.error('Failed to fetch keys from backend:', error);
+          // Fall back to config keys if backend fetch fails
+          setBackendKeys([]);
+        }
+      } else {
+        setBackendKeys([]);
+      }
+    };
+
+    fetchKeys();
+  }, [isAuthenticated]);
 
   // Calculate available keys and zones
   const availableZones = React.useMemo(() => {
     const zones = new Set();
-    config.keys?.forEach(key => {
+    // Use backend keys first, fall back to config keys
+    const keysToUse = backendKeys.length > 0 ? backendKeys : (config.keys || []);
+    keysToUse.forEach(key => {
       key.zones?.forEach(zone => zones.add(zone));
     });
     return Array.from(zones);
-  }, [config.keys]);
+  }, [backendKeys, config.keys]);
 
   const availableKeys = React.useMemo(() => {
-    return (config.keys || []).map(key => ({
+    // Use backend keys first, fall back to config keys
+    const keysToUse = backendKeys.length > 0 ? backendKeys : (config.keys || []);
+    return keysToUse.map(key => ({
       id: key.id,
       name: key.name,
       server: key.server,
       keyName: key.keyName || key.name,
-      keyValue: key.keyValue || key.secret,
+      // keyValue/secret is no longer needed on frontend - keys are stored server-side
+      secret: key.keyValue || key.secret || 'server-side',
       algorithm: key.algorithm,
       zones: key.zones || [],
       type: key.type || 'internal'
     }));
-  }, [config.keys]);
+  }, [backendKeys, config.keys]);
 
   const availableZonesForKey = React.useMemo(() => {
     if (!selectedKey) return availableZones;
     return selectedKey.zones || [];
   }, [selectedKey, availableZones]);
 
-  // Load saved selections on mount
+  // Load saved selections on mount - wait for availableKeys to be populated
   useEffect(() => {
-    if (!initialized && config.keys?.length) {
+    if (!initialized && availableKeys.length > 0) {
       try {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        
+
         if (saved.keyId) {
-          const savedKey = config.keys.find(k => k.id === saved.keyId);
+          const savedKey = availableKeys.find(k => k.id === saved.keyId);
           if (savedKey) {
+            console.log('Restoring saved key selection:', savedKey.name);
             setSelectedKey(savedKey);
             if (saved.zone && savedKey.zones?.includes(saved.zone)) {
+              console.log('Restoring saved zone selection:', saved.zone);
               setSelectedZone(saved.zone);
             }
           }
@@ -66,18 +98,18 @@ export function KeyProvider({ children }) {
         setInitialized(true);
       }
     }
-  }, [config.keys, initialized]);
+  }, [availableKeys, initialized]);
 
-  // Validate selections when config changes
+  // Validate selections when availableKeys changes
   useEffect(() => {
     if (initialized && selectedKey) {
-      const keyStillExists = config.keys?.find(k => k.id === selectedKey.id);
+      const keyStillExists = availableKeys.find(k => k.id === selectedKey.id);
       const zoneStillValid = keyStillExists?.zones?.includes(selectedZone);
 
       if (!keyStillExists || (selectedZone && !zoneStillValid)) {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        const savedKey = config.keys?.find(k => k.id === saved.keyId);
-        
+        const savedKey = availableKeys.find(k => k.id === saved.keyId);
+
         if (savedKey && (!saved.zone || savedKey.zones?.includes(saved.zone))) {
           setSelectedKey(savedKey);
           setSelectedZone(saved.zone || null);
@@ -88,7 +120,7 @@ export function KeyProvider({ children }) {
         }
       }
     }
-  }, [config.keys, selectedKey, selectedZone, initialized]);
+  }, [availableKeys, selectedKey, selectedZone, initialized]);
 
   // Save selections to localStorage
   const saveSelections = (key, zone) => {

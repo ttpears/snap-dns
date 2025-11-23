@@ -1,0 +1,82 @@
+# traefik-proxy-example.yml
+# Example Traefik configuration for HTTPS proxy
+# Copy and customize this for your Traefik setup
+
+# To use with docker-compose.test.yml:
+# 1. Uncomment the Traefik labels in docker-compose.test.yml
+# 2. Make sure Traefik is running on the same network
+# 3. Run: ./test-proxy.sh
+
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.10
+    container_name: snap-dns-traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # For testing with self-signed certs:
+      - "--serversTransport.insecureSkipVerify=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Mount your SSL certificates here:
+      # - ./certs:/certs:ro
+    networks:
+      - snap-dns-test
+    restart: unless-stopped
+
+networks:
+  snap-dns-test:
+    external: true
+
+# ALTERNATIVE: Simple Nginx Reverse Proxy
+# Create nginx.conf:
+#
+# server {
+#     listen 443 ssl;
+#     server_name snap-dns-testing.teamgleim.com;
+#
+#     ssl_certificate /etc/nginx/certs/cert.pem;
+#     ssl_certificate_key /etc/nginx/certs/key.pem;
+#
+#     location / {
+#         proxy_pass http://localhost:3001;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#     }
+#
+#     # WebSocket support for hot reload
+#     location /ws {
+#         proxy_pass http://localhost:3001;
+#         proxy_http_version 1.1;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection "Upgrade";
+#         proxy_set_header Host $host;
+#     }
+# }
+#
+# server {
+#     listen 443 ssl;
+#     server_name snap-dns-testing-api.teamgleim.com;
+#
+#     ssl_certificate /etc/nginx/certs/cert.pem;
+#     ssl_certificate_key /etc/nginx/certs/key.pem;
+#
+#     location / {
+#         proxy_pass http://localhost:3002;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#     }
+# }

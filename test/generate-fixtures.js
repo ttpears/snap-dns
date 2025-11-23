@@ -88,7 +88,7 @@ function generateTSIGKeys() {
     {
       id: 'key-001',
       name: 'Test Local Zone Key',
-      server: '172.30.0.10',
+      server: '10.100.0.10',
       keyName: 'snap-dns-test-key',
       keyValue: 'yUJ6tgH1O0mbVLNBhCcuNPlWNcb74vGSehzsTbtdiKI=',
       algorithm: 'hmac-sha256',
@@ -98,7 +98,7 @@ function generateTSIGKeys() {
     {
       id: 'key-002',
       name: 'Example Test Zone Key',
-      server: '172.30.0.10',
+      server: '10.100.0.10',
       keyName: 'snap-dns-example-key',
       keyValue: 'fVxf9TbJZ0sA+U168anJV0F5TmtU0xE5KEbsqGy6Rhk=',
       algorithm: 'hmac-sha256',
@@ -108,7 +108,7 @@ function generateTSIGKeys() {
     {
       id: 'key-003',
       name: 'Demo Zone Key',
-      server: '172.30.0.10',
+      server: '10.100.0.10',
       keyName: 'snap-dns-demo-key',
       keyValue: 'c5uvY5O1HE3f38fCArH+zsBzDcOOR4NYxP0OM035sP8=',
       algorithm: 'hmac-sha256',
@@ -179,15 +179,15 @@ async function main() {
     console.log('=== Pre-configured TSIG Keys ===\n');
     console.log('1. Test Local Zone Key');
     console.log('   Zone: test.local');
-    console.log('   Server: 172.30.0.10\n');
+    console.log('   Server: 10.100.0.10\n');
 
     console.log('2. Example Test Zone Key');
     console.log('   Zone: example.test');
-    console.log('   Server: 172.30.0.10\n');
+    console.log('   Server: 10.100.0.10\n');
 
     console.log('3. Demo Zone Key');
     console.log('   Zone: demo.local');
-    console.log('   Server: 172.30.0.10\n');
+    console.log('   Server: 10.100.0.10\n');
 
     console.log('✓ Test fixtures generated successfully!\n');
   } catch (error) {

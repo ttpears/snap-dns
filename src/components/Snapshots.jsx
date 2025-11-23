@@ -63,6 +63,7 @@ import { backupService } from '../services/backupService.ts';
 import { notificationService } from '../services/notificationService';
 import { useKey } from '../context/KeyContext';
 import { usePendingChanges } from '../context/PendingChangesContext';
+import { tsigKeyService } from '../services/tsigKeyService';
 
 // Add this utility function near the top of the file
 const getRelativeTimeString = (timestamp) => {
@@ -294,11 +295,9 @@ function Snapshots() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [backups, setBackups] = useState(() => {
-    const saved = localStorage.getItem('dnsBackups') || '[]';
-    return JSON.parse(saved);
-  });
+  const [backups, setBackups] = useState([]);
   const [selectedBackup, setSelectedBackup] = useState(null);
+  const [loadingBackups, setLoadingBackups] = useState(false);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [comparisonData, setComparisonData] = useState(null);
@@ -312,20 +311,58 @@ function Snapshots() {
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
   const [selectedKeyId, setSelectedKeyId] = useState('');
+  const [backendKeys, setBackendKeys] = useState([]);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
 
-  // Get available zones from config
+  // Load keys from backend API
+  useEffect(() => {
+    const loadKeys = async () => {
+      try {
+        const keys = await tsigKeyService.listKeys();
+        setBackendKeys(keys);
+      } catch (error) {
+        console.error('Failed to load keys:', error);
+        // Fall back to config keys if backend fails
+        setBackendKeys(config.keys || []);
+      }
+    };
+
+    loadKeys();
+  }, [config.keys]);
+
+  // Get available zones from backend keys
   const availableZones = useMemo(() => {
     const zones = new Set();
-    config.keys?.forEach(key => {
+    backendKeys.forEach(key => {
       key.zones?.forEach(zone => zones.add(zone));
     });
     return Array.from(zones);
-  }, [config.keys]);
+  }, [backendKeys]);
 
   const availableKeys = useMemo(() => {
     if (!selectedZone) return [];
-    return config.keys?.filter(key => key.zones?.includes(selectedZone)) || [];
-  }, [config.keys, selectedZone]);
+    return backendKeys.filter(key => key.zones?.includes(selectedZone)) || [];
+  }, [backendKeys, selectedZone]);
+
+  // Load backups from backend API on mount
+  useEffect(() => {
+    const loadBackups = async () => {
+      setLoadingBackups(true);
+      try {
+        const backupList = await backupService.getBackups();
+        setBackups(backupList);
+      } catch (error) {
+        console.error('Failed to load backups:', error);
+        setError(`Failed to load snapshots: ${error.message}`);
+      } finally {
+        setLoadingBackups(false);
+      }
+    };
+
+    loadBackups();
+  }, []);
 
   // Move all the helper functions and handlers from BackupImport
   const handleBackup = async () => {
@@ -339,60 +376,102 @@ function Snapshots() {
     setSuccess(null);
 
     try {
-      const keyConfig = config.keys.find(key => key.id === selectedKeyId);
+      const keyConfig = backendKeys.find(key => key.id === selectedKeyId);
       if (!keyConfig) {
         throw new Error('No key configuration found');
       }
 
-      const records = await dnsService.fetchZoneRecords(selectedZone, keyConfig);
-      
+      // Fetch zone records - backend will look up key server-side
+      const records = await dnsService.fetchZoneRecords(selectedZone);
+
       const backup = await backupService.createBackup(selectedZone, records, {
         type: 'manual',
-        description: 'Manual backup',
+        description: 'Manual snapshot',
         server: keyConfig.server,
         config: config
       });
 
-      setBackups(prev => [...prev, backup]);
-      localStorage.setItem('dnsBackups', JSON.stringify([...backups, backup]));
-      setSuccess('Backup created successfully');
+      // Reload all backups from server
+      const backupList = await backupService.getBackups();
+      setBackups(backupList);
+      setSuccess('Snapshot created successfully');
     } catch (err) {
       console.error('Backup failed:', err);
-      setError(`Failed to create backup: ${err.message}`);
+      setError(`Failed to create snapshot: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleImportSnapshot = async () => {
+    if (!importFile) {
+      setError('Please select a file to import');
+      return;
+    }
+
+    setImporting(true);
+    setError(null);
+
+    try {
+      const fileContent = await importFile.text();
+      const snapshotData = JSON.parse(fileContent);
+
+      // Validate snapshot format
+      if (!snapshotData.zone || !snapshotData.records || !Array.isArray(snapshotData.records)) {
+        throw new Error('Invalid snapshot format. Must contain zone and records array.');
+      }
+
+      // Import the snapshot
+      await backupService.importBackup(snapshotData);
+
+      // Reload backups
+      const backupList = await backupService.getBackups();
+      setBackups(backupList);
+
+      setSuccess(`Snapshot imported successfully for zone ${snapshotData.zone}`);
+      setImportDialogOpen(false);
+      setImportFile(null);
+    } catch (err) {
+      console.error('Import failed:', err);
+      setError(`Failed to import snapshot: ${err.message}`);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleDeleteBackup = async (backup) => {
-    if (window.confirm('Are you sure you want to delete this backup?')) {
+    if (window.confirm('Are you sure you want to delete this snapshot?')) {
       try {
-        const updatedBackups = backups.filter(b => b.id !== backup.id);
-        localStorage.setItem('dnsBackups', JSON.stringify(updatedBackups));
-        setBackups(updatedBackups);
-        setSuccess('Backup deleted successfully');
+        await backupService.deleteBackup(backup.zone, backup.id);
+        // Reload backups after deletion
+        const backupList = await backupService.getBackups();
+        setBackups(backupList);
+        setSuccess('Snapshot deleted successfully');
       } catch (error) {
-        setError('Failed to delete backup');
+        setError(`Failed to delete snapshot: ${error.message}`);
         console.error('Delete backup error:', error);
       }
     }
   };
 
-  const handleDownloadBackup = (backup) => {
+  const handleDownloadBackup = async (backupListItem) => {
     try {
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { 
-        type: 'application/json' 
+      // Load full backup with records from backend
+      const fullBackup = await backupService.getBackup(backupListItem.zone, backupListItem.id);
+
+      const blob = new Blob([JSON.stringify(fullBackup, null, 2)], {
+        type: 'application/json'
       });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `backup-${backup.zone}-${new Date(backup.timestamp).toISOString()}.json`;
+      a.download = `snapshot-${fullBackup.zone}-${new Date(fullBackup.timestamp).toISOString()}.json`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      setError(`Failed to download backup: ${error.message}`);
+      setError(`Failed to download snapshot: ${error.message}`);
     }
   };
 
@@ -440,44 +519,40 @@ function Snapshots() {
 
   // Add these functions after the existing handlers:
 
-  const handleRestoreBackup = (backup) => {
-    setSelectedBackup(backup);
-    setRestoreDialogOpen(true);
+  const handleRestoreBackup = async (backupListItem) => {
+    try {
+      // Load full backup with records from backend
+      const fullBackup = await backupService.getBackup(backupListItem.zone, backupListItem.id);
+      setSelectedBackup(fullBackup);
+      setRestoreDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to load backup:', error);
+      setError(`Failed to load snapshot: ${error.message}`);
+    }
   };
 
-  const handleCompareBackup = async (backup) => {
-    setSelectedBackup(backup);
+  const handleCompareBackup = async (backupListItem) => {
     setCompareDialogOpen(true);
     setLoadingComparison(true);
-    
+
     try {
-      // Find the key that manages this zone
-      const keyForZone = config.keys.find(k => k.zones.includes(backup.zone));
-      
-      if (!keyForZone) {
-        throw new Error('No key found for this zone');
-      }
+      // Load full backup with records from backend
+      const fullBackup = await backupService.getBackup(backupListItem.zone, backupListItem.id);
+      setSelectedBackup(fullBackup);
 
-      console.log('Fetching current records with key:', {
-        zone: backup.zone,
-        keyId: keyForZone.id,
-        server: backup.server
-      });
+      console.log('Fetching current records for zone:', backupListItem.zone);
 
-      // Fetch current zone records using the server from the backup
-      const currentRecords = await dnsService.fetchZoneRecords(
-        backup.zone,
-        keyForZone  // Pass the entire key object instead of spreading it
-      );
+      // Fetch current zone records - backend will look up key server-side
+      const currentRecords = await dnsService.fetchZoneRecords(backupListItem.zone);
 
       console.log('Fetched current records:', currentRecords);
-      
+
       if (!Array.isArray(currentRecords) || currentRecords.length === 0) {
         throw new Error('Failed to fetch current zone records or zone is empty');
       }
 
       // Compare records
-      const comparison = compareZoneRecords(backup.records, currentRecords);
+      const comparison = compareZoneRecords(fullBackup.records, currentRecords);
       setComparisonData(comparison);
     } catch (error) {
       console.error('Failed to load current zone records:', error);
@@ -682,33 +757,136 @@ function Snapshots() {
   const confirmRestore = async (recordsToRestore) => {
     try {
       // Find the key that manages this zone
-      const keyForZone = config.keys.find(k => k.zones.includes(selectedBackup.zone));
-      
+      const keyForZone = backendKeys.find(k => k.zones.includes(selectedBackup.zone));
+
       if (!keyForZone) {
         throw new Error('No key found for this zone');
       }
 
-      // Create pending changes for each selected record
-      const changes = recordsToRestore.map(record => ({
-        id: Date.now() + Math.random(), // Ensure unique ID
-        type: 'RESTORE',
-        zone: selectedBackup.zone,
-        keyId: keyForZone.id,
-        record: {
+      // Fetch current zone records to check what exists
+      const currentRecords = await dnsService.fetchZoneRecords(selectedBackup.zone);
+
+      const changes = [];
+
+      console.log('=== RESTORE DEBUG ===');
+      console.log('Records to restore:', recordsToRestore.length);
+      console.log('Current zone records:', currentRecords.length);
+
+      // Filter out TSIG records from both snapshot and current records
+      const filteredRecordsToRestore = recordsToRestore.filter(r => r.type !== 'TSIG');
+      const filteredCurrentRecords = currentRecords.filter(r => r.type !== 'TSIG');
+
+      console.log('After filtering TSIG - Snapshot:', filteredRecordsToRestore.length, 'Current:', filteredCurrentRecords.length);
+
+      // Process records from snapshot (ADD or MODIFY)
+      filteredRecordsToRestore.forEach(record => {
+        const normalizedRecord = {
           ...record,
-          // Ensure all required fields are present
           name: record.name,
           type: record.type,
           value: record.value,
           ttl: record.ttl || 3600,
           class: record.class || 'IN'
-        },
-        source: {
-          type: 'backup',
-          id: selectedBackup.id,
-          timestamp: selectedBackup.timestamp
+        };
+
+        // Find EXACT match by name, type, AND value (not just name/type)
+        const exactMatch = filteredCurrentRecords.find(r =>
+          r.name === normalizedRecord.name &&
+          r.type === normalizedRecord.type &&
+          isRecordEqual(r, normalizedRecord)
+        );
+
+        if (exactMatch) {
+          // Exact match found - skip it (no change needed)
+          if (record.type !== 'SOA') {
+            console.log(`Skipping ${normalizedRecord.name} (${normalizedRecord.type}) - exact match`);
+          }
+        } else {
+          // No exact match - check if there's a record with same name/type but different value
+          const partialMatch = filteredCurrentRecords.find(r =>
+            r.name === normalizedRecord.name &&
+            r.type === normalizedRecord.type
+          );
+
+          if (partialMatch) {
+            // Record exists with same name/type but different value - use MODIFY
+            if (record.type !== 'SOA') {
+              console.log(`MODIFY ${normalizedRecord.name} (${normalizedRecord.type}):`, {
+                from: partialMatch.value,
+                to: normalizedRecord.value
+              });
+            }
+
+            changes.push({
+              id: Date.now() + Math.random(),
+              type: 'MODIFY',
+              zone: selectedBackup.zone,
+              keyId: keyForZone.id,
+              originalRecord: partialMatch,
+              newRecord: normalizedRecord,
+              source: {
+                type: 'backup',
+                id: selectedBackup.id,
+                timestamp: selectedBackup.timestamp
+              }
+            });
+          } else {
+            // Record doesn't exist at all - use ADD
+            console.log(`ADD ${normalizedRecord.name} (${normalizedRecord.type})`);
+
+            changes.push({
+              id: Date.now() + Math.random(),
+              type: 'ADD',
+              zone: selectedBackup.zone,
+              keyId: keyForZone.id,
+              record: normalizedRecord,
+              source: {
+                type: 'backup',
+                id: selectedBackup.id,
+                timestamp: selectedBackup.timestamp
+              }
+            });
+          }
         }
-      }));
+      });
+
+      // Process records in current zone that are NOT in snapshot (DELETE)
+      filteredCurrentRecords.forEach(currentRecord => {
+        // Skip SOA records - never delete these
+        if (currentRecord.type === 'SOA') return;
+
+        // Check if this EXACT current record (name+type+value) exists in the snapshot
+        const inSnapshot = filteredRecordsToRestore.find(r =>
+          r.name === currentRecord.name &&
+          r.type === currentRecord.type &&
+          isRecordEqual(currentRecord, r)
+        );
+
+        if (!inSnapshot) {
+          // This exact record exists now but wasn't in the snapshot - mark for deletion
+          console.log(`DELETE ${currentRecord.name} (${currentRecord.type}) - value: ${currentRecord.value}`);
+
+          changes.push({
+            id: Date.now() + Math.random(),
+            type: 'DELETE',
+            zone: selectedBackup.zone,
+            keyId: keyForZone.id,
+            record: currentRecord,
+            source: {
+              type: 'backup',
+              id: selectedBackup.id,
+              timestamp: selectedBackup.timestamp
+            }
+          });
+        }
+      });
+
+      if (changes.length === 0) {
+        setSuccess('No changes needed - all selected records are already up to date');
+        setRestoreDialogOpen(false);
+        setRecordsToRestore([]);
+        return;
+      }
 
       // Add each change individually using addPendingChange
       changes.forEach(change => {
@@ -716,10 +894,20 @@ function Snapshots() {
         addPendingChange(change);
       });
 
+      // Count change types for informative message
+      const adds = changes.filter(c => c.type === 'ADD').length;
+      const modifies = changes.filter(c => c.type === 'MODIFY').length;
+      const deletes = changes.filter(c => c.type === 'DELETE').length;
+
+      const parts = [];
+      if (adds > 0) parts.push(`${adds} add${adds !== 1 ? 's' : ''}`);
+      if (modifies > 0) parts.push(`${modifies} modification${modifies !== 1 ? 's' : ''}`);
+      if (deletes > 0) parts.push(`${deletes} deletion${deletes !== 1 ? 's' : ''}`);
+
       setShowPendingDrawer(true);
       setRestoreDialogOpen(false);
       setRecordsToRestore([]);
-      setSuccess(`${recordsToRestore.length} record(s) queued for restoration`);
+      setSuccess(`Restore queued: ${parts.join(', ')}`);
     } catch (error) {
       console.error('Failed to restore records:', error);
       setError('Failed to restore zone: ' + error.message);
@@ -817,6 +1005,13 @@ function Snapshots() {
             >
               Create Snapshot
             </Button>
+            <Button
+              variant="outlined"
+              startIcon={<UploadIcon />}
+              onClick={() => setImportDialogOpen(true)}
+            >
+              Import Snapshot
+            </Button>
           </Box>
         </Box>
       </Paper>
@@ -889,7 +1084,11 @@ function Snapshots() {
         </Grid>
 
         {/* Backup Groups */}
-        {Object.entries(groupedBackups).length > 0 ? (
+        {loadingBackups ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : Object.entries(groupedBackups).length > 0 ? (
           Object.entries(groupedBackups).map(([date, backups]) => (
             <Accordion key={date} defaultExpanded={date === Object.keys(groupedBackups)[0]}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -939,7 +1138,7 @@ function Snapshots() {
                               </Tooltip>
                             </Box>
                             <Typography variant="body2">
-                              Records: {backup.records.length}
+                              Records: {backup.recordCount}
                             </Typography>
                             {backup.description && (
                               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -1031,14 +1230,14 @@ function Snapshots() {
                     <TableRow>
                       <TableCell padding="checkbox">
                         <Checkbox
-                          checked={recordsToRestore.length === selectedBackup?.records?.length}
+                          checked={recordsToRestore.length === selectedBackup?.records?.filter(r => r.type !== 'TSIG').length}
                           indeterminate={
-                            recordsToRestore.length > 0 && 
-                            recordsToRestore.length < selectedBackup?.records?.length
+                            recordsToRestore.length > 0 &&
+                            recordsToRestore.length < selectedBackup?.records?.filter(r => r.type !== 'TSIG').length
                           }
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setRecordsToRestore(selectedBackup?.records || []);
+                              setRecordsToRestore(selectedBackup?.records?.filter(r => r.type !== 'TSIG') || []);
                             } else {
                               setRecordsToRestore([]);
                             }
@@ -1052,8 +1251,8 @@ function Snapshots() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {selectedBackup?.records?.map((record, index) => (
-                      <TableRow 
+                    {selectedBackup?.records?.filter(r => r.type !== 'TSIG').map((record, index) => (
+                      <TableRow
                         key={index}
                         hover
                         selected={recordsToRestore.includes(record)}
@@ -1332,12 +1531,105 @@ function Snapshots() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCompareDialogOpen(false)}>Close</Button>
-          <Button 
-            onClick={() => handleRestoreBackup(selectedBackup)}
+          <Button
+            onClick={() => {
+              // Close compare dialog and open restore dialog
+              setCompareDialogOpen(false);
+              handleRestoreBackup(selectedBackup);
+            }}
+            color="primary"
+            variant="outlined"
+          >
+            Select Records to Restore
+          </Button>
+          <Button
+            onClick={async () => {
+              // Restore ALL records from snapshot (full restore)
+              setCompareDialogOpen(false);
+              setRecordsToRestore(selectedBackup.records);
+              await confirmRestore(selectedBackup.records);
+            }}
             color="warning"
             variant="contained"
+            disabled={!comparisonData || (
+              comparisonData.added.length === 0 &&
+              comparisonData.modified.length === 0 &&
+              comparisonData.removed.length === 0
+            )}
           >
-            Restore from Snapshot
+            Restore All Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Import Snapshot Dialog */}
+      <Dialog
+        open={importDialogOpen}
+        onClose={() => {
+          setImportDialogOpen(false);
+          setImportFile(null);
+          setError(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Import Snapshot</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Select a snapshot JSON file to import. The snapshot will be added to the list and can be restored later.
+          </DialogContentText>
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          <Button
+            variant="outlined"
+            component="label"
+            fullWidth
+            startIcon={<UploadIcon />}
+            sx={{ mb: 2 }}
+          >
+            {importFile ? importFile.name : 'Choose File'}
+            <input
+              type="file"
+              hidden
+              accept=".json"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  setImportFile(e.target.files[0]);
+                  setError(null);
+                }
+              }}
+            />
+          </Button>
+
+          {importFile && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Ready to import: {importFile.name} ({(importFile.size / 1024).toFixed(2)} KB)
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setImportDialogOpen(false);
+              setImportFile(null);
+              setError(null);
+            }}
+            disabled={importing}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleImportSnapshot}
+            variant="contained"
+            disabled={!importFile || importing}
+            startIcon={importing ? <CircularProgress size={20} /> : <UploadIcon />}
+          >
+            {importing ? 'Importing...' : 'Import'}
           </Button>
         </DialogActions>
       </Dialog>

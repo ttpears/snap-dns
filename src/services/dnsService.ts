@@ -52,8 +52,11 @@ class DNSService {
     });
   }
 
-  private formatRecordValue(record: DNSRecord): string {
+  private formatRecordValue(record: DNSRecord): DNSRecordValue {
     switch (record.type) {
+      case 'SOA':
+        // SOA records stay as objects - backend will format them
+        return record.value;
       case 'SRV': {
         const srv = this.parseSRVRecord(record.value as (string | SRVRecord));
         return `${srv.priority} ${srv.weight} ${srv.port} ${srv.target}`;

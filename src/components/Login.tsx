@@ -1,5 +1,5 @@
 // src/components/Login.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -9,8 +9,12 @@ import {
   Alert,
   CircularProgress,
   Container,
+  Divider,
 } from '@mui/material';
+import MicrosoftIcon from '@mui/icons-material/Microsoft';
 import { useAuth } from '../context/AuthContext';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
 
 export default function Login() {
   const { login } = useAuth();
@@ -18,6 +22,30 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check for SSO errors in URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const errorParam = params.get('error');
+    if (errorParam) {
+      const errorMessages: Record<string, string> = {
+        sso_disabled: 'SSO is not enabled on this server',
+        sso_init_failed: 'Failed to initiate SSO login',
+        invalid_state: 'Invalid authentication state (possible CSRF attack)',
+        no_code: 'No authorization code received from identity provider',
+        callback_failed: 'SSO callback failed',
+        access_denied: 'Access denied by identity provider',
+      };
+      setError(errorMessages[errorParam] || `SSO Error: ${errorParam}`);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  const handleSSOLogin = () => {
+    // Redirect to backend SSO endpoint
+    window.location.href = `${API_URL}/api/auth/sso/signin`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +90,20 @@ export default function Login() {
             </Alert>
           )}
 
+          {/* SSO Login Button */}
+          <Button
+            fullWidth
+            variant="contained"
+            size="large"
+            startIcon={<MicrosoftIcon />}
+            onClick={handleSSOLogin}
+            sx={{ mb: 2 }}
+          >
+            Sign in with Microsoft
+          </Button>
+
+          <Divider sx={{ my: 2 }}>OR</Divider>
+
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
               margin="normal"
@@ -99,13 +141,9 @@ export default function Login() {
               {isLoading ? <CircularProgress size={24} /> : 'Sign In'}
             </Button>
 
-            <Alert severity="info" sx={{ mt: 2 }}>
-              <Typography variant="caption">
-                <strong>Default credentials:</strong><br />
-                Username: admin<br />
-                Password: changeme123
-              </Typography>
-            </Alert>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>
+              Local authentication for fallback access
+            </Typography>
           </Box>
         </Paper>
       </Box>

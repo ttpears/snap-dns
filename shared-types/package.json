@@ -1,0 +1,12 @@
+{
+  "name": "@snap-dns/shared-types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript type definitions for Snap DNS frontend and backend",
+  "main": "index.ts",
+  "types": "index.ts",
+  "private": true,
+  "scripts": {},
+  "keywords": ["typescript", "types", "dns"],
+  "author": "",
+  "license": "MIT"
+}
