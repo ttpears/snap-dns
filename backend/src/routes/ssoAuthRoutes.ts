@@ -6,6 +6,7 @@ import { ssoConfigService } from '../services/ssoConfigService';
 import { userService } from '../services/userService';
 import { auditService, AuditEventType } from '../services/auditService';
 import { UserRole } from '../types/auth';
+import { getClientIp } from '../helpers/ipHelpers';
 
 const router = Router();
 
@@ -74,7 +75,7 @@ const handleCallback = async (req: Request, res: Response) => {
       await auditService.log(AuditEventType.LOGIN_FAILURE, {
         username: 'unknown',
         success: false,
-        ipAddress: req.ip,
+        ipAddress: getClientIp(req),
         error: `SSO OAuth error: ${error}`,
       });
       return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
@@ -86,7 +87,7 @@ const handleCallback = async (req: Request, res: Response) => {
       await auditService.log(AuditEventType.UNAUTHORIZED_ACCESS, {
         username: 'unknown',
         success: false,
-        ipAddress: req.ip,
+        ipAddress: getClientIp(req),
         error: 'Invalid state token',
       });
       return res.redirect(`${frontendUrl}/login?error=invalid_state`);
@@ -150,7 +151,7 @@ const handleCallback = async (req: Request, res: Response) => {
         userId: user.id,
         username: user.username,
         success: true,
-        ipAddress: req.ip,
+        ipAddress: getClientIp(req),
         details: {
           method: 'sso_jit_provisioning',
           provider: 'm365',
@@ -170,7 +171,7 @@ const handleCallback = async (req: Request, res: Response) => {
       userId: user.id,
       username: user.username,
       success: true,
-      ipAddress: req.ip,
+      ipAddress: getClientIp(req),
       details: { method: 'sso_m365' },
     });
 
@@ -185,7 +186,7 @@ const handleCallback = async (req: Request, res: Response) => {
     await auditService.log(AuditEventType.LOGIN_FAILURE, {
       username: 'unknown',
       success: false,
-      ipAddress: req.ip,
+      ipAddress: getClientIp(req),
       error: error instanceof Error ? error.message : 'SSO callback failed',
     });
 
@@ -210,7 +211,7 @@ router.get('/signout', async (req: Request, res: Response) => {
       userId: userId,
       username: username!,
       success: true,
-      ipAddress: req.ip,
+      ipAddress: getClientIp(req),
       details: { method: 'sso_m365' },
     });
   }

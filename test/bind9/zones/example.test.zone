@@ -1,7 +1,7 @@
 $ORIGIN .
 $TTL 7200	; 2 hours
 example.test		IN SOA	ns1.example.test. hostmaster.example.test. (
-				2025011518 ; serial
+				2025011519 ; serial
 				7200       ; refresh (2 hours)
 				3600       ; retry (1 hour)
 				1209600    ; expire (2 weeks)
@@ -24,6 +24,7 @@ api2			A	203.0.113.32
 api3			A	203.0.113.32
 $TTL 3600	; 1 hour
 api4			A	203.0.113.33
+api5			A	203.0.113.33
 $TTL 7200	; 2 hours
 articles		CNAME	blog
 articles2		CNAME	blog

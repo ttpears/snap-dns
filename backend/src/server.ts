@@ -21,6 +21,7 @@ import tsigKeyRoutes from './routes/tsigKeyRoutes';
 import backupRoutes from './routes/backupRoutes';
 import webhookConfigRoutes from './routes/webhookConfigRoutes';
 import ssoConfigRoutes from './routes/ssoConfigRoutes';
+import auditRoutes from './routes/auditRoutes';
 
 // Load environment variables first
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -125,6 +126,7 @@ app.use('/api/webhook', webhookRoutes);
 app.use('/api/backups', backupRoutes);
 app.use('/api/webhook-config', webhookConfigRoutes);
 app.use('/api/sso-config', ssoConfigRoutes);
+app.use('/api/audit', auditRoutes);
 
 // Health check endpoints
 app.get('/health', (req: Request, res: Response) => {

@@ -6,6 +6,7 @@ import { auditService, AuditEventType } from '../services/auditService';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { LoginCredentials, UserCreateData, UserRole, AuthenticatedRequest } from '../types/auth';
 import { validateLogin, validateUserCreate, validateChangePassword } from '../middleware/validation';
+import { getClientIp } from '../helpers/ipHelpers';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ router.post('/login', loginLimiter, validateLogin, async (req: Request, res: Res
         AuditEventType.LOGIN_FAILURE,
         username,
         undefined,
-        req.ip,
+        getClientIp(req),
         false,
         'Invalid credentials'
       );
@@ -74,7 +75,7 @@ router.post('/login', loginLimiter, validateLogin, async (req: Request, res: Res
       AuditEventType.LOGIN_SUCCESS,
       user.username,
       user.id,
-      req.ip,
+      getClientIp(req),
       true
     );
 
@@ -113,7 +114,7 @@ router.post('/logout', requireAuth, async (req: Request, res: Response) => {
     AuditEventType.LOGOUT,
     username!,
     userId,
-    req.ip,
+    getClientIp(req),
     true
   );
 

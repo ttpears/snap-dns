@@ -1,6 +1,6 @@
-# docker-compose.test.dev.yml
+# docker-compose.test.yml
 # Test environment with HOT RELOAD for fast development
-# Usage: REACT_APP_API_URL=http://yourhostname.example.com:3002 docker-compose -f docker-compose.test.dev.yml up
+# Usage: REACT_APP_API_URL=http://yourhostname.example.com:3002 docker-compose -f docker-compose.test.yml up
 
 services:
   # BIND9 DNS Server for Testing
@@ -62,8 +62,8 @@ services:
       - NODE_ENV=test
       - BACKEND_PORT=3002
       - BACKEND_HOST=0.0.0.0
-      - FRONTEND_URL=${FRONTEND_URL:-https://localhost}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001,http://10.100.0.30:3001,http://yourhostname.example.com:3001,https://localhost,https://localhost}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3001}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001,http://10.100.0.30:3001}
       - SESSION_SECRET=test-secret-do-not-use-in-production
       - TEMP_DIR=/tmp/snap-dns
       - MAX_ZONE_RECORDS=10000
@@ -105,14 +105,14 @@ services:
     environment:
       - PORT=3001
       - NODE_ENV=development
-      # HTTPS Proxy Configuration (default)
-      - REACT_APP_API_URL=https://localhost
+      # For HTTPS proxy, set to your API domain
+      - REACT_APP_API_URL=http://localhost:3002
       - WDS_SOCKET_HOST=localhost
-      - WDS_SOCKET_PORT=443
+      - WDS_SOCKET_PORT=3001
       - WDS_SOCKET_PATH=/ws
       # Note: HTTPS=true makes webpack dev server use HTTPS which breaks reverse proxy
       # Keep webpack dev server on HTTP, use ws-fix.js to upgrade WebSocket protocol
-      # For direct HTTP access, override with:
+      # For remote access, override with:
       # REACT_APP_API_URL=http://yourhostname.example.com:3002
       # WDS_SOCKET_HOST=yourhostname.example.com
       # WDS_SOCKET_PORT=3001

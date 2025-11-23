@@ -33,6 +33,8 @@ import { notificationService } from '../services/notificationService';
 import TSIGKeyManagement from './TSIGKeyManagement';
 import UserManagement from './UserManagement';
 import SSOConfiguration from './SSOConfiguration';
+import AuditLog from './AuditLog';
+import { useAuth } from '../context/AuthContext';
 import { Config, ensureValidConfig, WebhookProvider } from '../types/config';
 import { Key } from '../types/keys';
 import { backupService } from '../services/backupService';
@@ -139,6 +141,7 @@ function a11yProps(index: number) {
 
 function Settings() {
   const { config, updateConfig } = useConfig();
+  const { user } = useAuth();
   const [currentTab, setCurrentTab] = useState(0);
   const [defaultTTL, setDefaultTTL] = useState(config.defaultTTL);
   const [webhookUrl, setWebhookUrl] = useState(config.webhookUrl || '');
@@ -402,6 +405,7 @@ function Settings() {
             <Tab label="Keys" {...a11yProps(1)} />
             <Tab label="Users" {...a11yProps(2)} />
             <Tab label="SSO" {...a11yProps(3)} />
+            {user?.role === 'admin' && <Tab label="Audit Logs" {...a11yProps(4)} />}
           </Tabs>
         </Box>
 
@@ -568,6 +572,15 @@ function Settings() {
             <SSOConfiguration />
           </Box>
         </TabPanel>
+
+        {/* Audit Logs Tab (Admin only) */}
+        {user?.role === 'admin' && (
+          <TabPanel value={currentTab} index={4}>
+            <Box sx={{ p: 3 }}>
+              <AuditLog />
+            </Box>
+          </TabPanel>
+        )}
       </Paper>
 
       {/* Export Dialog */}

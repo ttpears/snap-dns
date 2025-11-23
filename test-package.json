@@ -1,0 +1,18 @@
+{
+  "name": "snap-dns-e2e-tests",
+  "version": "2.0.0",
+  "description": "E2E tests for Snap DNS using Playwright",
+  "main": "test-dns-operations.js",
+  "scripts": {
+    "test": "node test-dns-operations.js",
+    "test:headed": "HEADLESS=false node test-dns-operations.js",
+    "test:debug": "HEADLESS=false PWDEBUG=1 node test-dns-operations.js",
+    "install-browsers": "npx playwright install chromium"
+  },
+  "keywords": ["dns", "playwright", "e2e", "testing"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}
