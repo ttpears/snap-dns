@@ -1,0 +1,22 @@
+# backend/.eslintignore
+# Files and directories to exclude from ESLint
+
+# Build output
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Data directories
+data/
+
+# Logs
+*.log

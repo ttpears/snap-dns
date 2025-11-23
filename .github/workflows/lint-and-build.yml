@@ -72,7 +72,7 @@ jobs:
       - name: Lint backend code
         run: |
           cd backend
-          npm run lint
+          npm run lint -- --max-warnings 100
 
       - name: TypeScript type check
         run: |

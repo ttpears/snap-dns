@@ -1,7 +1,6 @@
 // backend/src/middleware/auth.ts
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest, UserRole } from '../types/auth';
-import { userService } from '../services/userService';
 
 /**
  * Middleware to check if user is authenticated
