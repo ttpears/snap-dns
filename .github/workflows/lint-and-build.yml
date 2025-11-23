@@ -29,13 +29,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: TypeScript type check
-        continue-on-error: true
-        run: npx tsc --noEmit || true
-
       - name: Build frontend
-        continue-on-error: true
-        run: npm run build || true
+        run: npm run build
         env:
           REACT_APP_API_URL: http://localhost:3002
           CI: false
@@ -78,15 +73,19 @@ jobs:
           cd backend
           npm run lint -- --max-warnings 100 || true
 
-      - name: TypeScript type check
-        run: |
-          cd backend
-          npx tsc --noEmit
-
       - name: Build backend
         run: |
           cd backend
           npm run build
+
+      - name: Verify build succeeded
+        run: |
+          cd backend
+          if [ ! -d "dist" ] || [ ! -f "dist/server.js" ]; then
+            echo "Backend build failed - dist/server.js not found"
+            exit 1
+          fi
+          echo "✓ Backend built successfully"
 
       - name: Check build output
         run: |
