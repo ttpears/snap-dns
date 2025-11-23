@@ -21,7 +21,7 @@ export const dnsQueryLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting in test/dev environments
-  skip: (req) => {
+  skip: (_req) => {
     return isTestOrDev;
   }
 });
@@ -41,7 +41,7 @@ export const dnsModifyLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting in test/dev environments
-  skip: (req) => {
+  skip: (_req) => {
     return isTestOrDev;
   },
   // Use user ID as key for authenticated requests
@@ -70,7 +70,7 @@ export const keyManagementLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting in test/dev environments
-  skip: (req) => {
+  skip: (_req) => {
     return isTestOrDev;
   },
   keyGenerator: (req) => {
@@ -96,7 +96,7 @@ export const webhookLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting in test/dev environments
-  skip: (req) => {
+  skip: (_req) => {
     return isTestOrDev;
   },
   keyGenerator: (req) => {
@@ -122,7 +122,7 @@ export const generalApiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting in test/dev environments
-  skip: (req) => {
+  skip: (_req) => {
     return isTestOrDev;
   }
 });

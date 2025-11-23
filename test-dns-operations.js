@@ -645,6 +645,7 @@ class DNSTestSuite {
     } catch (error) {
       logError(`Test suite error: ${error.message}`);
       this.testResults.errors.push({ test: 'Test Suite', error: error.message });
+      this.testResults.failed++; // Count critical errors as failures
     } finally {
       await this.teardown();
 
@@ -669,11 +670,16 @@ class DNSTestSuite {
       }
 
       log('\n=== Test Summary ===', 'blue');
-      if (this.testResults.failed === 0) {
+      if (this.testResults.failed === 0 && this.testResults.errors.length === 0) {
         logSuccess('All tests passed! 🎉');
         process.exit(0);
       } else {
-        logError(`${this.testResults.failed} test(s) failed`);
+        if (this.testResults.failed > 0) {
+          logError(`${this.testResults.failed} test(s) failed`);
+        }
+        if (this.testResults.errors.length > 0) {
+          logError(`${this.testResults.errors.length} error(s) occurred`);
+        }
         process.exit(1);
       }
     }
