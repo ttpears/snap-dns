@@ -1,0 +1,96 @@
+# .github/workflows/lint-and-build.yml
+# GitHub Actions workflow for linting and build checks
+
+name: Lint and Build
+
+on:
+  push:
+    branches: [ main, feat/*, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  frontend-checks:
+    name: Frontend Lint and Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          REACT_APP_API_URL: http://localhost:3002
+          CI: true
+
+      - name: Check build output
+        run: |
+          if [ ! -d "build" ]; then
+            echo "Build directory not created!"
+            exit 1
+          fi
+          echo "✓ Build directory created"
+          du -sh build/
+          ls -lh build/
+
+  backend-checks:
+    name: Backend Lint and Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Lint backend code
+        run: |
+          cd backend
+          npm run lint
+
+      - name: TypeScript type check
+        run: |
+          cd backend
+          npx tsc --noEmit
+
+      - name: Build backend
+        run: |
+          cd backend
+          npm run build
+
+      - name: Check build output
+        run: |
+          cd backend
+          if [ ! -d "dist" ]; then
+            echo "Dist directory not created!"
+            exit 1
+          fi
+          echo "✓ Dist directory created"
+          du -sh dist/
+          ls -lh dist/
