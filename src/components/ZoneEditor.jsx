@@ -202,8 +202,7 @@ function ZoneEditor() {
       console.log('Loading records for zone:', selectedZone);
       loadZoneRecords();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedZone, selectedKey, availableZones, isInitializing]);
+  }, [selectedZone, selectedKey, availableZones, isInitializing, loadZoneRecords]);
 
   const handleSelectAllClick = (event) => {
     if (event.target.checked) {
