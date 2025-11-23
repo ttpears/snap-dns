@@ -32,7 +32,9 @@ class SSOConfigService {
         }
 
         this.config = storedConfig;
-        console.log(`SSO config loaded: ${this.config.enabled ? 'enabled' : 'disabled'} (${this.config.provider})`);
+        if (this.config) {
+          console.log(`SSO config loaded: ${this.config.enabled ? 'enabled' : 'disabled'} (${this.config.provider})`);
+        }
       } catch (error: any) {
         if (error.code === 'ENOENT') {
           // No config file, use defaults

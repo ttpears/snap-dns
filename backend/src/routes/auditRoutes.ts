@@ -4,6 +4,7 @@
 import { Router, Request, Response } from 'express';
 import { auditService, AuditEventType } from '../services/auditService';
 import { requireAuth } from '../middleware/auth';
+import { AuthenticatedRequest } from '../types/auth';
 
 const router = Router();
 
@@ -18,7 +19,8 @@ router.use(requireAuth);
 router.get('/', async (req: Request, res: Response) => {
   try {
     // Only admins can view audit logs
-    if (req.user?.role !== 'admin') {
+    const authReq = req as AuthenticatedRequest;
+    if (authReq.user?.role !== 'admin') {
       return res.status(403).json({
         success: false,
         error: 'Only administrators can view audit logs',
@@ -94,7 +96,8 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/event-types', (req: Request, res: Response) => {
   try {
     // Only admins can view audit logs
-    if (req.user?.role !== 'admin') {
+    const authReq = req as AuthenticatedRequest;
+    if (authReq.user?.role !== 'admin') {
       return res.status(403).json({
         success: false,
         error: 'Only administrators can view audit logs',

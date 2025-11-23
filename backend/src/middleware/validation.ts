@@ -139,7 +139,7 @@ export function validateRequest<T>(schema: z.ZodType<T>) {
     } catch (error) {
       if (error instanceof ZodError) {
         // Format Zod errors into a user-friendly structure
-        const errors = error.errors.map(err => ({
+        const errors = error.issues.map((err: any) => ({
           field: err.path.join('.'),
           message: err.message,
           code: err.code
@@ -175,7 +175,7 @@ export function validateParams<T>(schema: z.ZodType<T>) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.errors.map(err => ({
+        const errors = error.issues.map((err: any) => ({
           field: err.path.join('.'),
           message: err.message,
           code: err.code
@@ -210,7 +210,7 @@ export function validateQuery<T>(schema: z.ZodType<T>) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.errors.map(err => ({
+        const errors = error.issues.map((err: any) => ({
           field: err.path.join('.'),
           message: err.message,
           code: err.code

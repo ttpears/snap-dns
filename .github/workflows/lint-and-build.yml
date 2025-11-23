@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
       - name: Build frontend
         run: npm run build
         env:
@@ -71,21 +74,17 @@ jobs:
         continue-on-error: true
         run: |
           cd backend
-          npm run lint -- --max-warnings 100 || true
+          npm run lint -- --max-warnings 100 || echo "Lint has warnings (non-blocking)"
+
+      - name: TypeScript type check
+        run: |
+          cd backend
+          npx tsc --noEmit
 
       - name: Build backend
         run: |
           cd backend
           npm run build
-
-      - name: Verify build succeeded
-        run: |
-          cd backend
-          if [ ! -d "dist" ] || [ ! -f "dist/server.js" ]; then
-            echo "Backend build failed - dist/server.js not found"
-            exit 1
-          fi
-          echo "✓ Backend built successfully"
 
       - name: Check build output
         run: |
