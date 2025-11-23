@@ -2,6 +2,8 @@
 
 ![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
+![E2E Tests](https://github.com/ttpears/snap-dns/workflows/E2E%20Tests/badge.svg)
+![Lint and Build](https://github.com/ttpears/snap-dns/workflows/Lint%20and%20Build/badge.svg)
 
 A modern, enterprise-ready web-based DNS management interface for BIND9 DNS servers using nsupdate for dynamic DNS updates.
 
@@ -112,6 +114,24 @@ HEADLESS=true                         # Run headless
 ```
 
 See [TEST_DOCUMENTATION.md](TEST_DOCUMENTATION.md) for full testing guide.
+
+### Continuous Integration
+
+GitHub Actions automatically runs tests on every push and pull request:
+
+**E2E Tests Workflow** (`.github/workflows/e2e-tests.yml`):
+- Starts complete Docker test environment
+- Runs Playwright tests against all 11 record types
+- Tests CRUD operations, undo/redo, bulk changes
+- Uploads screenshots and logs on failure
+
+**Lint and Build Workflow** (`.github/workflows/lint-and-build.yml`):
+- TypeScript type checking (frontend & backend)
+- ESLint validation (backend)
+- Production build verification (both)
+- Ensures code quality on every commit
+
+**View test results:** Check the Actions tab in GitHub repository
 
 ## Configuration
 

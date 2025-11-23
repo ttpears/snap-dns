@@ -1,0 +1,88 @@
+# .github/workflows/e2e-tests.yml
+# GitHub Actions workflow for automated E2E testing
+
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, feat/*, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  e2e-tests:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Start test environment
+        run: |
+          echo "Starting Docker test environment (CI mode)..."
+          docker-compose -f docker-compose.ci.yml up -d
+          echo "Waiting for services to be ready..."
+          sleep 15
+
+      - name: Check container status
+        run: |
+          docker-compose -f docker-compose.ci.yml ps
+          echo ""
+          echo "Backend health check:"
+          curl -f http://localhost:3002/health || exit 1
+          echo ""
+          echo "Frontend health check:"
+          curl -f http://localhost:3001 || exit 1
+
+      - name: Install test dependencies
+        run: |
+          npm install --no-save --legacy-peer-deps playwright
+          npx playwright install chromium
+
+      - name: Run E2E tests
+        env:
+          TEST_URL: http://localhost:3001
+          TEST_USERNAME: admin
+          TEST_PASSWORD: admin
+          TEST_ZONE: test.local
+          TEST_KEY: Test Local Zone Key
+          HEADLESS: true
+        run: |
+          node test-dns-operations.js
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            playwright-report/
+            test-results/
+            *.png
+          retention-days: 7
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Backend Logs ==="
+          docker logs snap-dns-test-backend --tail 100
+          echo ""
+          echo "=== Frontend Logs ==="
+          docker logs snap-dns-test-frontend --tail 100
+          echo ""
+          echo "=== DNS Server Logs ==="
+          docker logs snap-dns-test-server --tail 50
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose -f docker-compose.ci.yml down -v
