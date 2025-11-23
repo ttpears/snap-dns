@@ -12,7 +12,8 @@ const config: Config = {
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   strictRateLimitWindowMs: parseInt(process.env.STRICT_RATE_LIMIT_WINDOW_MS || '3600000', 10),
-  strictRateLimitMaxRequests: parseInt(process.env.STRICT_RATE_LIMIT_MAX_REQUESTS || '10', 10)
+  strictRateLimitMaxRequests: parseInt(process.env.STRICT_RATE_LIMIT_MAX_REQUESTS || '10', 10),
+  tempDir: process.env.TEMP_DIR || '/tmp/snap-dns'
 };
 
 // Validate required config

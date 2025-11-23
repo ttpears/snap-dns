@@ -20,7 +20,9 @@ const startServer = () => {
       BROWSER: 'none',
       WATCHPACK_POLLING: 'true',
       WDS_SOCKET_HOST: process.env.WDS_SOCKET_HOST || 'localhost',
-      WDS_SOCKET_PORT: port
+      WDS_SOCKET_PORT: process.env.WDS_SOCKET_PORT || port,
+      WDS_SOCKET_PATH: process.env.WDS_SOCKET_PATH || '/ws'
+      // DO NOT set HTTPS here - breaks reverse proxy compatibility
     },
   });
 

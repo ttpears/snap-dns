@@ -118,8 +118,66 @@ class DNSValidationService {
   }
 
   private static isValidIPv6(ip: string): boolean {
-    const regex = /^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i;
-    return regex.test(ip);
+    // Comprehensive IPv6 validation including:
+    // - Full format: 2001:0db8:85a3:0000:0000:8a2e:0370:7334
+    // - Compressed format: 2001:db8:85a3::8a2e:370:7334
+    // - IPv4-mapped: ::ffff:192.0.2.1
+    // - Loopback: ::1
+    // - All zeros: ::
+
+    // Remove leading/trailing whitespace
+    ip = ip.trim();
+
+    // Check for IPv4-mapped IPv6 (::ffff:192.0.2.1)
+    const ipv4MappedRegex = /^::ffff:(\d{1,3}\.){3}\d{1,3}$/i;
+    if (ipv4MappedRegex.test(ip)) {
+      const ipv4Part = ip.split(':').pop();
+      return ipv4Part ? this.isValidIPv4(ipv4Part) : false;
+    }
+
+    // Split on ::
+    const parts = ip.split('::');
+
+    // Can only have one :: compression
+    if (parts.length > 2) return false;
+
+    // Validate each part
+    const validatePart = (part: string): boolean => {
+      if (!part) return true; // Empty is ok for ::
+      const segments = part.split(':');
+      return segments.every(seg => {
+        if (!seg) return false; // Empty segment not allowed within a part
+        return /^[0-9a-f]{1,4}$/i.test(seg);
+      });
+    };
+
+    if (parts.length === 2) {
+      // Compressed format (has ::)
+      const [left, right] = parts;
+
+      // Both can't be empty unless it's :: (all zeros)
+      if (!left && !right) {
+        return ip === '::';
+      }
+
+      // Validate both parts
+      if (!validatePart(left) || !validatePart(right)) return false;
+
+      // Check total segment count doesn't exceed 8
+      const leftSegments = left ? left.split(':').length : 0;
+      const rightSegments = right ? right.split(':').length : 0;
+      return leftSegments + rightSegments < 8;
+
+    } else {
+      // Full format (no ::)
+      const segments = ip.split(':');
+
+      // Must have exactly 8 segments in full format
+      if (segments.length !== 8) return false;
+
+      // Validate all segments
+      return segments.every(seg => /^[0-9a-f]{1,4}$/i.test(seg));
+    }
   }
 
   private static isValidMX(value: string): boolean {

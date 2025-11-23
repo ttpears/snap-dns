@@ -1,0 +1,28 @@
+; test/bind9/zones/demo.local.zone
+; Simple demo zone for testing
+
+$TTL 3600
+$ORIGIN demo.local.
+
+@       IN      SOA     ns1.demo.local. admin.demo.local. (
+                        2025011501 ; Serial
+                        3600       ; Refresh
+                        1800       ; Retry
+                        604800     ; Expire
+                        3600       ; Minimum TTL
+                        )
+
+; Name servers
+@               IN      NS      ns1.demo.local.
+
+; Basic records
+ns1             IN      A       172.30.0.10
+@               IN      A       10.0.0.1
+www             IN      A       10.0.0.2
+mail            IN      A       10.0.0.3
+
+; MX record
+@               IN      MX      10 mail.demo.local.
+
+; TXT record
+@               IN      TXT     "Demo zone for testing"

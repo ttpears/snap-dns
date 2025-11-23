@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install dependencies first
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Install TypeScript and react-scripts globally
 RUN npm install -g typescript@5.7.2 react-scripts@5.0.1
@@ -49,25 +49,10 @@ RUN ls -la build/
 # Install serve
 RUN npm install -g serve@latest
 
-# Add serve configuration with proper MIME types
+# Add serve configuration for SPA routing
 RUN echo '{ \
-  "rewrites": [ { "source": "/**", "destination": "/index.html" } ], \
-  "headers": [ \
-    { \
-      "source": "/**", \
-      "headers": [ \
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }, \
-        { "key": "Content-Type", "value": "text/javascript; charset=utf-8" } \
-      ] \
-    }, \
-    { \
-      "source": "**/*.ts", \
-      "headers": [ { "key": "Content-Type", "value": "text/typescript; charset=utf-8" } ] \
-    }, \
-    { \
-      "source": "**/*.tsx", \
-      "headers": [ { "key": "Content-Type", "value": "text/typescript; charset=utf-8" } ] \
-    } \
+  "rewrites": [ \
+    { "source": "**", "destination": "/index.html" } \
   ] \
 }' > serve.json
 
@@ -77,5 +62,5 @@ EXPOSE ${PORT}
 CMD if [ ! -d "build" ] || [ -z "$(ls -A build)" ]; then \
       echo "Error: Build directory is missing or empty" && exit 1; \
     else \
-      serve -s build -l ${PORT:-3001} --config serve.json; \
+      serve -s build -l ${PORT:-3001} --config /app/serve.json; \
     fi

@@ -13,6 +13,7 @@ node_modules/
 # Environment files
 .env*
 !.env.example
+!.env.test.example
 !.env.development.example
 !.env.production.example
 backend/.env
@@ -25,6 +26,7 @@ backend/tmp
 *.temp
 *.key
 *.conf
+*.backup
 
 # Logs
 logs
@@ -71,9 +73,15 @@ debug.log
 *.crt
 
 # DNS specific
-*.zone
 *.tsig
 *.key.conf
+
+# Runtime data directories (generated at runtime, should not be committed)
+backend/data/
+test/data/
+
+# Test zone files are configuration, keep them in git
+!test/bind9/zones/*.zone
 
 # Local configuration
 src/config/local.js
@@ -81,3 +89,13 @@ src/config/local.js
 # TypeScript
 dist/
 *.tsbuildinfo
+
+# Playwright and test artifacts
+.playwright-mcp/
+playwright-report/
+test-results/
+*.png
+*.jpg
+*.jpeg
+audit-logs-*.csv
+audit-logs-*.json

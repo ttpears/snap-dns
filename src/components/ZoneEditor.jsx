@@ -171,9 +171,9 @@ function ZoneEditor() {
 
   // Update initialization effect
   useEffect(() => {
-    if (config.keys?.length > 0 && availableZones.length > 0) {
-      setIsInitializing(false);
-    }
+    // Set initializing based on whether we have keys and zones available
+    const hasData = (config.keys?.length > 0 || availableZones.length > 0);
+    setIsInitializing(!hasData);
   }, [config.keys, availableZones]);
 
   const loadZoneRecords = useCallback(async () => {
@@ -181,9 +181,9 @@ function ZoneEditor() {
     
     setRefreshing(true);
     setError(null);
-    
+
     try {
-      const records = await dnsService.fetchZoneRecords(selectedZone, selectedKey);
+      const records = await dnsService.fetchZoneRecords(selectedZone);
       setRecords(records);
     } catch (err) {
       console.error('Failed to load zone records:', err);
@@ -195,14 +195,15 @@ function ZoneEditor() {
 
   useEffect(() => {
     // Only load if we have all required data and zone is valid
-    if (selectedZone && 
-        selectedKey && 
-        availableZones.includes(selectedZone) && 
+    if (selectedZone &&
+        selectedKey &&
+        availableZones.includes(selectedZone) &&
         !isInitializing) {
       console.log('Loading records for zone:', selectedZone);
       loadZoneRecords();
     }
-  }, [selectedZone, selectedKey, availableZones, isInitializing, loadZoneRecords]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedZone, selectedKey, availableZones, isInitializing]);
 
   const handleSelectAllClick = (event) => {
     if (event.target.checked) {
@@ -532,11 +533,15 @@ function ZoneEditor() {
         </Tooltip>
       </Box>
 
-      {error && (
+      {!selectedZone || !selectedKey ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          No TSIG key found for this zone. Please configure a key first.
+        </Alert>
+      ) : error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
-      )}
+      ) : null}
 
       {isRefreshing && (
         <Alert severity="info" sx={{ mb: 2 }}>
@@ -691,13 +696,15 @@ function ZoneEditor() {
                       <TableCell>{record.ttl}</TableCell>
                       <TableCell align="right">
                         <Box component="span" sx={{ display: 'inline-flex', gap: 1 }}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleCopyRecord(record)}
-                            title="Copy and Edit Record"
-                          >
-                            <ContentCopyIcon fontSize="small" />
-                          </IconButton>
+                          {record.type !== 'SOA' && (
+                            <IconButton
+                              size="small"
+                              onClick={() => handleCopyRecord(record)}
+                              title="Copy and Edit Record"
+                            >
+                              <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                          )}
                           <IconButton
                             size="small"
                             onClick={() => handleEditRecord(record)}
@@ -705,13 +712,16 @@ function ZoneEditor() {
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDeleteRecord(record)}
-                            color="error"
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          {record.type !== 'SOA' && (
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDeleteRecord(record)}
+                              color="error"
+                              title="Delete Record"
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
                         </Box>
                       </TableCell>
                     </TableRow>

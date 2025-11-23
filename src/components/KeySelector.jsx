@@ -60,8 +60,8 @@ function KeySelector() {
             const key = availableKeys.find(k => k.id === e.target.value);
             console.log('Selected key:', key); // Debug the selected key
             if (key) {
-              // Verify all required fields are present
-              const requiredFields = ['id', 'name', 'algorithm', 'secret', 'server'];
+              // Verify all required fields are present (secret not required - keys stored server-side)
+              const requiredFields = ['id', 'name', 'algorithm', 'server'];
               const missingFields = requiredFields.filter(field => !key[field]);
               if (missingFields.length > 0) {
                 console.error('Missing key fields:', missingFields);

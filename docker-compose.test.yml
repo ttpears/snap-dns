@@ -1,0 +1,138 @@
+# docker-compose.test.yml
+# Test environment with HOT RELOAD for fast development
+# Usage: docker-compose -f docker-compose.test.yml up
+
+services:
+  # BIND9 DNS Server for Testing
+  dns-server:
+    image: ubuntu/bind9:latest
+    container_name: snap-dns-test-server
+    hostname: ns1.test.local
+    ports:
+      - "5353:53/tcp"
+      - "5353:53/udp"
+    volumes:
+      - ./test/bind9/named.conf:/etc/bind/named.conf:ro
+      - ./test/bind9/zones:/var/lib/bind:rw
+      - ./test/bind9/keys:/etc/bind/keys:ro
+      - dns_cache:/var/cache/bind
+    networks:
+      snap-dns-test:
+        ipv4_address: 10.100.0.10
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "rndc status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Backend API with HOT RELOAD
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend.dev
+    container_name: snap-dns-test-backend
+    hostname: backend
+    ports:
+      - "3002:3002"
+    # Uncomment labels below if using Traefik
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.snap-dns-api.rule=Host(`localhost`)"
+    #   - "traefik.http.routers.snap-dns-api.entrypoints=websecure"
+    #   - "traefik.http.routers.snap-dns-api.tls=true"
+    #   - "traefik.http.services.snap-dns-api.loadbalancer.server.port=3002"
+    volumes:
+      # Hot reload - mount source files
+      - ./backend/src:/app/src:delegated
+      - ./backend/tsconfig.json:/app/tsconfig.json:ro
+      - ./backend/package.json:/app/package.json:ro
+      - ./test/backend/.env.test:/app/.env:ro
+      - ./test/data:/app/data
+      - backend_node_modules:/app/node_modules
+      - temp_files:/tmp/snap-dns
+    networks:
+      snap-dns-test:
+        ipv4_address: 10.100.0.20
+    depends_on:
+      dns-server:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=test
+      - BACKEND_PORT=3002
+      - BACKEND_HOST=0.0.0.0
+      - FRONTEND_URL=${FRONTEND_URL:-https://snap-dns-testing.teamgleim.com}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001,http://10.100.0.30:3001,http://ttpearso.teamgleim.com:3001,https://snap-dns-testing.teamgleim.com,https://snap-dns-testing-api.teamgleim.com}
+      - SESSION_SECRET=test-secret-do-not-use-in-production
+      - TEMP_DIR=/tmp/snap-dns
+      - MAX_ZONE_RECORDS=10000
+      - ZONE_RECORDS_WARNING_THRESHOLD=5000
+      - MAX_DIG_OUTPUT_SIZE=52428800
+    # ts-node-dev provides hot reload for TypeScript
+    command: npm run dev
+    restart: unless-stopped
+
+  # Frontend with HOT RELOAD (React dev server)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.dev
+    container_name: snap-dns-test-frontend
+    hostname: frontend
+    ports:
+      - "3001:3001"
+    # Uncomment labels below if using Traefik
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.snap-dns-web.rule=Host(`localhost`)"
+    #   - "traefik.http.routers.snap-dns-web.entrypoints=websecure"
+    #   - "traefik.http.routers.snap-dns-web.tls=true"
+    #   - "traefik.http.services.snap-dns-web.loadbalancer.server.port=3001"
+    volumes:
+      # Hot reload - mount source files
+      - ./src:/app/src:delegated
+      - ./public:/app/public:delegated
+      - ./scripts:/app/scripts:delegated
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - frontend_node_modules:/app/node_modules
+    networks:
+      snap-dns-test:
+        ipv4_address: 10.100.0.30
+    depends_on:
+      - backend
+    environment:
+      - PORT=3001
+      - NODE_ENV=development
+      # HTTPS Proxy Configuration (default)
+      - REACT_APP_API_URL=https://snap-dns-testing-api.teamgleim.com
+      - WDS_SOCKET_HOST=snap-dns-testing.teamgleim.com
+      - WDS_SOCKET_PORT=443
+      - WDS_SOCKET_PATH=/ws
+      # Note: HTTPS=true makes webpack dev server use HTTPS which breaks reverse proxy
+      # Keep webpack dev server on HTTP, use ws-fix.js to upgrade WebSocket protocol
+      # For remote access, override with:
+      # REACT_APP_API_URL=http://yourhostname.example.com:3002
+      # WDS_SOCKET_HOST=yourhostname.example.com
+      # WDS_SOCKET_PORT=3001
+      # WDS_SOCKET_PROTOCOL=ws
+      - WATCHPACK_POLLING=true
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
+      - CHOKIDAR_USEPOLLING=true
+    # React development server with hot reload
+    command: npm start
+    restart: unless-stopped
+
+volumes:
+  dns_cache:
+  backend_node_modules:
+  frontend_node_modules:
+  temp_files:
+
+networks:
+  snap-dns-test:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.100.0.0/24

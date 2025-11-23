@@ -21,6 +21,8 @@ import {
   FormGroup,
   FormControlLabel,
   Checkbox,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import SendIcon from '@mui/icons-material/Send';
@@ -28,7 +30,11 @@ import DownloadIcon from '@mui/icons-material/Download';
 import UploadIcon from '@mui/icons-material/Upload';
 import { useConfig } from '../context/ConfigContext';
 import { notificationService } from '../services/notificationService';
-import KeyManagement from './KeyManagement';
+import TSIGKeyManagement from './TSIGKeyManagement';
+import UserManagement from './UserManagement';
+import SSOConfiguration from './SSOConfiguration';
+import AuditLog from './AuditLog';
+import { useAuth } from '../context/AuthContext';
 import { Config, ensureValidConfig, WebhookProvider } from '../types/config';
 import { Key } from '../types/keys';
 import { backupService } from '../services/backupService';
@@ -100,8 +106,43 @@ interface ImportData {
   }>;
 }
 
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`settings-tabpanel-${index}`}
+      aria-labelledby={`settings-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ pt: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
+function a11yProps(index: number) {
+  return {
+    id: `settings-tab-${index}`,
+    'aria-controls': `settings-tabpanel-${index}`,
+  };
+}
+
 function Settings() {
   const { config, updateConfig } = useConfig();
+  const { user } = useAuth();
+  const [currentTab, setCurrentTab] = useState(0);
   const [defaultTTL, setDefaultTTL] = useState(config.defaultTTL);
   const [webhookUrl, setWebhookUrl] = useState(config.webhookUrl || '');
   const [webhookProvider, setWebhookProvider] = useState<WebhookProvider>(
@@ -120,6 +161,10 @@ function Settings() {
   const [selectedKeyId, setSelectedKeyId] = useState('');
   const [importType, setImportType] = useState<'full' | 'zones' | null>(null);
   const [exportBackups, setExportBackups] = useState(true);
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setCurrentTab(newValue);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -346,13 +391,32 @@ function Settings() {
   };
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto' }}>
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h5" component="h2" gutterBottom>
-          Application Settings
-        </Typography>
+    <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
+      <Paper sx={{ mb: 3 }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tabs
+            value={currentTab}
+            onChange={handleTabChange}
+            aria-label="settings tabs"
+            variant="scrollable"
+            scrollButtons="auto"
+          >
+            <Tab label="General" {...a11yProps(0)} />
+            <Tab label="Keys" {...a11yProps(1)} />
+            <Tab label="Users" {...a11yProps(2)} />
+            <Tab label="SSO" {...a11yProps(3)} />
+            {user?.role === 'admin' && <Tab label="Audit Logs" {...a11yProps(4)} />}
+          </Tabs>
+        </Box>
 
-        <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* General Tab */}
+        <TabPanel value={currentTab} index={0}>
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h5" component="h2" gutterBottom>
+              Application Settings
+            </Typography>
+
+            <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <FormControl>
             <InputLabel>Default TTL</InputLabel>
             <Select
@@ -455,35 +519,68 @@ function Settings() {
               </Button>
             )}
           </Stack>
-        </Box>
-      </Paper>
+            </Box>
 
-      <Paper sx={{ p: 3, mt: 3 }}>
-        <Typography variant="h5" component="h2" gutterBottom>
-          Import/Export
-        </Typography>
-        <Stack direction="row" spacing={2}>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleExportConfig}
-          >
-            Export Configuration
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<UploadIcon />}
-            component="label"
-          >
-            Import Configuration
-            <input
-              type="file"
-              hidden
-              accept=".json"
-              onChange={handleImportFile}
-            />
-          </Button>
-        </Stack>
+            {/* Import/Export Section */}
+            <Box sx={{ mt: 4 }}>
+              <Typography variant="h5" component="h2" gutterBottom>
+                Import/Export
+              </Typography>
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={handleExportConfig}
+                >
+                  Export Configuration
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<UploadIcon />}
+                  component="label"
+                >
+                  Import Configuration
+                  <input
+                    type="file"
+                    hidden
+                    accept=".json"
+                    onChange={handleImportFile}
+                  />
+                </Button>
+              </Stack>
+            </Box>
+          </Box>
+        </TabPanel>
+
+        {/* Keys Tab */}
+        <TabPanel value={currentTab} index={1}>
+          <Box sx={{ p: 3 }}>
+            <TSIGKeyManagement />
+          </Box>
+        </TabPanel>
+
+        {/* Users Tab */}
+        <TabPanel value={currentTab} index={2}>
+          <Box sx={{ p: 3 }}>
+            <UserManagement />
+          </Box>
+        </TabPanel>
+
+        {/* SSO Tab */}
+        <TabPanel value={currentTab} index={3}>
+          <Box sx={{ p: 3 }}>
+            <SSOConfiguration />
+          </Box>
+        </TabPanel>
+
+        {/* Audit Logs Tab (Admin only) */}
+        {user?.role === 'admin' && (
+          <TabPanel value={currentTab} index={4}>
+            <Box sx={{ p: 3 }}>
+              <AuditLog />
+            </Box>
+          </TabPanel>
+        )}
       </Paper>
 
       {/* Export Dialog */}
@@ -594,8 +691,6 @@ function Settings() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <KeyManagement />
     </Box>
   );
 }

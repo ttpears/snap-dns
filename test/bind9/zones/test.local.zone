@@ -1,0 +1,48 @@
+$ORIGIN .
+$TTL 3600	; 1 hour
+test.local		IN SOA	ns1.test.local. admin.test.local. (
+				2025011504 ; serial
+				3600       ; refresh (1 hour)
+				1800       ; retry (30 minutes)
+				604800     ; expire (1 week)
+				86400      ; minimum (1 day)
+				)
+			NS	ns1.test.local.
+			NS	ns2.test.local.
+			MX	10 mail.test.local.
+			MX	20 backup-mail.test.local.
+			TXT	"testing123"
+			TXT	"v=spf1 mx a ~all"
+$ORIGIN test.local.
+_dmarc			TXT	"v=DMARC1; p=quarantine; rua=mailto:dmarc@test.local"
+_dmarc2			TXT	"\"v=DMARC1; p=quarantine; rua=mailto:dmarc@test.local\""
+selector1._domainkey	TXT	"v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC"
+$ORIGIN _tcp.test.local.
+_http			SRV	10 60 80 www.test.local.
+_ldap			SRV	0 5 389 ldap.test.local.
+_xmpp-client		SRV	5 0 5222 xmpp.test.local.
+$ORIGIN test.local.
+api			A	192.168.1.106
+backup-mail		A	192.168.1.103
+blog			CNAME	www
+cdn			A	192.168.1.107
+ftp			A	192.168.1.102
+ipv6only		AAAA	2001:db8:abcd::100
+ldap			A	192.168.1.104
+mail			A	192.168.1.101
+			AAAA	2001:db8::2
+mailserver		CNAME	mail
+ns1			A	172.30.0.10
+ns2			A	172.30.0.11
+web1			A	192.168.1.110
+web2			A	192.168.1.111
+webserver		CNAME	www
+$ORIGIN wild.test.local.
+*			A	192.168.1.201
+$ORIGIN test.local.
+www			A	192.168.1.100
+			AAAA	2001:db8::1
+$ORIGIN www.test.local.
+sub			A	192.168.1.120
+$ORIGIN test.local.
+xmpp			A	192.168.1.105

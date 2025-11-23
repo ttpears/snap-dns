@@ -28,22 +28,45 @@ import {
 import { dnsService } from '../services/dnsService';
 import { notificationService } from '../services/notificationService';
 import { usePendingChanges } from '../context/PendingChangesContext';
+import { backupService } from '../services/backupService';
+import { useConfig } from '../context/ConfigContext';
+import { tsigKeyService } from '../services/tsigKeyService';
+import { useNotification } from '../context/NotificationContext';
 
-function PendingChangesDrawer({ 
-  open, 
+function PendingChangesDrawer({
+  open,
   onClose,
   removePendingChange,
   clearPendingChanges
 }) {
-  const { 
-    pendingChanges, 
-    setPendingChanges, 
-    setShowPendingDrawer 
+  const {
+    pendingChanges,
+    setPendingChanges,
+    setShowPendingDrawer
   } = usePendingChanges();
+  const { config } = useConfig();
+  const { showSuccess, showError } = useNotification();
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState(null);
   const [draggingIndex, setDraggingIndex] = useState(null);
   const [expandedItems, setExpandedItems] = useState({});
+  const [backendKeys, setBackendKeys] = useState([]);
+
+  // Load keys from backend API
+  useEffect(() => {
+    const loadKeys = async () => {
+      try {
+        const keys = await tsigKeyService.listKeys();
+        setBackendKeys(keys);
+      } catch (error) {
+        console.error('Failed to load keys:', error);
+        // Fall back to config keys if backend fails
+        setBackendKeys(config.keys || []);
+      }
+    };
+
+    loadKeys();
+  }, [config.keys]);
 
   useEffect(() => {
     setExpandedItems({});
@@ -97,39 +120,38 @@ function PendingChangesDrawer({
 
       // Apply changes zone by zone
       for (const [zone, changes] of Object.entries(changesByZone)) {
-        const firstChange = changes[0];
-        const config = JSON.parse(localStorage.getItem('dns_manager_config') || '{}');
-        const keyConfig = config.keys.find(k => k.id === firstChange.keyId);
-        
-        if (!keyConfig) {
-          throw new Error(`No key configuration found for ID: ${firstChange.keyId}`);
-        }
-
         try {
-          // Create backup before applying changes
-          const currentRecords = await dnsService.fetchZoneRecords(zone, keyConfig);
-          const backup = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            timestamp: Date.now(),
-            zone: zone,
-            server: keyConfig.server,
-            records: currentRecords,
-            type: 'auto',
-            description: 'Automatic backup before changes',
-            version: '1.0'
-          };
+          // Get the first change to determine the key being used
+          const firstChange = changes[0];
+          const keyConfig = backendKeys.find(k => k.id === firstChange.keyId);
 
-          // Save backup
-          const backups = JSON.parse(localStorage.getItem('dnsBackups') || '[]');
-          backups.unshift(backup);
-          localStorage.setItem('dnsBackups', JSON.stringify(backups));
+          if (!keyConfig) {
+            throw new Error(`No key configuration found for zone ${zone}`);
+          }
+
+          // Create automatic snapshot before applying changes
+          // Backend will look up key server-side based on user permissions
+          const currentRecords = await dnsService.fetchZoneRecords(zone);
+
+          try {
+            await backupService.createBackup(zone, currentRecords, {
+              type: 'auto',
+              description: `Automatic snapshot before applying ${changes.length} change${changes.length !== 1 ? 's' : ''}`,
+              server: keyConfig.server,
+              config: config
+            });
+            console.log(`Auto-snapshot created for zone ${zone}`);
+          } catch (backupError) {
+            console.warn('Failed to create auto-snapshot:', backupError);
+            // Don't fail the entire operation if snapshot creation fails
+          }
 
           // Apply changes in order
           for (const change of changes) {
             try {
               switch (change.type) {
                 case 'ADD':
-                  await dnsService.addRecord(zone, change.record, keyConfig);
+                  await dnsService.addRecord(zone, change.record);
                   allSuccessfulChanges.push({
                     ...change,
                     type: 'ADD'
@@ -144,7 +166,7 @@ function PendingChangesDrawer({
                     value: change.record.value,
                     ttl: change.record.ttl || 3600  // Ensure TTL exists
                   };
-                  await dnsService.addRecord(zone, recordToRestore, keyConfig);
+                  await dnsService.addRecord(zone, recordToRestore);
                   allSuccessfulChanges.push({
                     ...change,
                     type: 'RESTORE',
@@ -152,12 +174,12 @@ function PendingChangesDrawer({
                   });
                   break;
                 case 'DELETE':
-                  await dnsService.deleteRecord(zone, change.record, keyConfig);
+                  await dnsService.deleteRecord(zone, change.record);
                   allSuccessfulChanges.push(change);
                   break;
                 case 'MODIFY':
-                  await dnsService.deleteRecord(zone, change.originalRecord, keyConfig);
-                  await dnsService.addRecord(zone, change.newRecord, keyConfig);
+                  // Use atomic update for modifications (especially important for SOA)
+                  await dnsService.updateRecord(zone, change.originalRecord, change.newRecord);
                   allSuccessfulChanges.push(change);
                   break;
                 default:
@@ -199,10 +221,13 @@ function PendingChangesDrawer({
       }
 
       clearPendingChanges();
+      showSuccess(`Successfully applied ${allSuccessfulChanges.length} change${allSuccessfulChanges.length !== 1 ? 's' : ''} to ${affectedZones.length} zone${affectedZones.length !== 1 ? 's' : ''}`);
       onClose();
     } catch (error) {
       console.error('Failed to apply changes:', error);
-      setError(`Failed to apply changes: ${error.message}`);
+      const errorMessage = `Failed to apply changes: ${error.message}`;
+      setError(errorMessage);
+      showError(errorMessage);
     } finally {
       setApplying(false);
     }

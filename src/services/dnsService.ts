@@ -1,3 +1,6 @@
+// src/services/dnsService.ts
+// Frontend DNS service - keys are now stored server-side!
+
 import { ZoneConfig, ZoneOperationResult } from '../types/dns';
 
 export type { ZoneConfig, ZoneOperationResult };
@@ -42,37 +45,18 @@ export class DNSError extends Error {
 class DNSService {
   private baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3002';
 
-  private createHeaders(keyConfig: ZoneConfig): Headers {
-    if (!keyConfig) {
-      throw new Error('Missing required DNS configuration');
-    }
-
-    // Validate required fields
-    const requiredFields = ['server', 'keyName', 'keyValue', 'algorithm'];
-    const missingFields = requiredFields.filter(field => !keyConfig[field as keyof ZoneConfig]);
-
-    if (missingFields.length > 0) {
-      throw new Error(`Missing required DNS configuration fields: ${missingFields.join(', ')}`);
-    }
-
-    const headers = new Headers({
-      'Content-Type': 'application/json',
-      'x-dns-server': keyConfig.server,
-      'x-dns-key-name': keyConfig.keyName,
-      'x-dns-key-value': keyConfig.keyValue,
-      'x-dns-algorithm': keyConfig.algorithm
+  private createHeaders(): Headers {
+    // Keys are now stored server-side - no longer sent in headers!
+    return new Headers({
+      'Content-Type': 'application/json'
     });
-
-    // Add optional key ID if present
-    if (keyConfig.id) {
-      headers.append('x-dns-key-id', keyConfig.id);
-    }
-
-    return headers;
   }
 
-  private formatRecordValue(record: DNSRecord): string {
+  private formatRecordValue(record: DNSRecord): DNSRecordValue {
     switch (record.type) {
+      case 'SOA':
+        // SOA records stay as objects - backend will format them
+        return record.value;
       case 'SRV': {
         const srv = this.parseSRVRecord(record.value as (string | SRVRecord));
         return `${srv.priority} ${srv.weight} ${srv.port} ${srv.target}`;
@@ -125,17 +109,17 @@ class DNSService {
     };
   }
 
-  async fetchZoneRecords(zone: string, keyConfig: ZoneConfig): Promise<DNSRecord[]> {
+  async fetchZoneRecords(zone: string): Promise<DNSRecord[]> {
     try {
       if (!zone) {
         throw new Error('Zone name is required');
       }
 
-      const headers = this.createHeaders(keyConfig);
+      const headers = this.createHeaders();
       const response = await fetch(`${this.baseUrl}/api/zones/${encodeURIComponent(zone)}`, {
         method: 'GET',
         headers,
-        credentials: 'include'
+        credentials: 'include' // Send authentication cookies
       });
 
       if (!response.ok) {
@@ -151,36 +135,22 @@ class DNSService {
     }
   }
 
-  async addRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<void> {
+  async addRecord(zone: string, record: DNSRecord): Promise<void> {
     try {
       if (!zone || !record) {
         throw new Error('Zone and record are required');
       }
 
-      if (!keyConfig) {
-        throw new Error('Key configuration is required');
-      }
-
-      const headers = this.createHeaders(keyConfig);
+      const headers = this.createHeaders();
       const preparedRecord = this.prepareRecordForRequest(record);
 
       const requestBody = {
-        record: preparedRecord,
-        keyConfig: {
-          server: keyConfig.server,
-          keyName: keyConfig.keyName,
-          keyValue: keyConfig.keyValue,
-          algorithm: keyConfig.algorithm,
-          id: keyConfig.id
-        }
+        record: preparedRecord
       };
 
-      console.log('Adding record with data:', {
+      console.log('Adding record:', {
         zone,
-        requestBody: { 
-          ...requestBody, 
-          keyConfig: { ...requestBody.keyConfig, keyValue: '[REDACTED]' }
-        }
+        record: preparedRecord
       });
 
       const response = await fetch(`${this.baseUrl}/api/zones/${encodeURIComponent(zone)}/records`, {
@@ -210,36 +180,22 @@ class DNSService {
     }
   }
 
-  async deleteRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<void> {
+  async deleteRecord(zone: string, record: DNSRecord): Promise<void> {
     try {
       if (!zone || !record) {
         throw new Error('Zone and record are required');
       }
 
-      if (!keyConfig) {
-        throw new Error('Key configuration is required');
-      }
-
-      const headers = this.createHeaders(keyConfig);
+      const headers = this.createHeaders();
       const preparedRecord = this.prepareRecordForRequest(record);
 
       const requestBody = {
-        record: preparedRecord,
-        keyConfig: {
-          server: keyConfig.server,
-          keyName: keyConfig.keyName,
-          keyValue: keyConfig.keyValue,
-          algorithm: keyConfig.algorithm,
-          id: keyConfig.id
-        }
+        record: preparedRecord
       };
 
-      console.log('Deleting record with data:', {
+      console.log('Deleting record:', {
         zone,
-        requestBody: { 
-          ...requestBody, 
-          keyConfig: { ...requestBody.keyConfig, keyValue: '[REDACTED]' }
-        }
+        record: preparedRecord
       });
 
       const response = await fetch(`${this.baseUrl}/api/zones/${encodeURIComponent(zone)}/records`, {
@@ -272,19 +228,44 @@ class DNSService {
   async updateRecord(
     zone: string,
     oldRecord: DNSRecord,
-    newRecord: DNSRecord,
-    keyConfig: ZoneConfig
+    newRecord: DNSRecord
   ): Promise<void> {
     try {
       if (!zone || !oldRecord || !newRecord) {
         throw new Error('Zone, old record, and new record are required');
       }
 
-      // First delete the old record
-      await this.deleteRecord(zone, oldRecord, keyConfig);
-      
-      // Then add the new record
-      await this.addRecord(zone, newRecord, keyConfig);
+      const headers = this.createHeaders();
+      const preparedOldRecord = this.prepareRecordForRequest(oldRecord);
+      const preparedNewRecord = this.prepareRecordForRequest(newRecord);
+
+      const requestBody = {
+        oldRecord: preparedOldRecord,
+        newRecord: preparedNewRecord
+      };
+
+      console.log('Updating record:', {
+        zone,
+        oldRecord: preparedOldRecord,
+        newRecord: preparedNewRecord
+      });
+
+      // Use atomic PATCH endpoint instead of separate DELETE and ADD
+      const response = await fetch(`${this.baseUrl}/api/zones/${encodeURIComponent(zone)}/records`, {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new DNSError(
+          errorData.error || `Failed to update record: ${response.statusText}`,
+          errorData.code,
+          errorData.details
+        );
+      }
     } catch (error) {
       if (error instanceof DNSError) {
         throw error;

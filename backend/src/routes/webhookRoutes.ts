@@ -1,8 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { WebhookConfig, WebhookPayload } from '../types/webhook';
 import { webhookService } from '../services/webhookService';
+import { webhookLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
+
+// Apply rate limiting to all webhook routes
+router.use(webhookLimiter);
 
 interface WebhookRequestBody {
   config: WebhookConfig;

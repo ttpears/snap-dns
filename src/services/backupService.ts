@@ -2,6 +2,8 @@ import { notificationService } from './notificationService';
 import { dnsService, type DNSRecord } from './dnsService';
 import type { Config, KeyConfig } from '../config';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
+
 interface DNSBackup {
   id: string;
   timestamp: number;
@@ -11,6 +13,19 @@ interface DNSBackup {
   type: 'auto' | 'manual';
   description?: string;
   version: string;
+  createdBy?: string;
+}
+
+interface BackupListItem {
+  id: string;
+  timestamp: number;
+  zone: string;
+  server: string;
+  recordCount: number;
+  type: 'auto' | 'manual';
+  description?: string;
+  version: string;
+  createdBy: string;
 }
 
 interface BackupOptions {
@@ -21,47 +36,99 @@ interface BackupOptions {
 }
 
 export class BackupService {
-  private readonly STORAGE_KEY = 'dnsBackups';
-  private readonly MAX_STORAGE_SIZE = 5 * 1024 * 1024; // 5MB
-  private readonly MAX_BACKUPS = 50;
   private readonly VERSION = '1.0';
 
-  private calculateSize(backups: DNSBackup[]): number {
-    return new Blob([JSON.stringify(backups)]).size;
-  }
-
-  getBackups(): DNSBackup[] {
+  /**
+   * Get all backups (list items only, without full records)
+   */
+  async getBackups(): Promise<BackupListItem[]> {
     try {
-      const backups = localStorage.getItem(this.STORAGE_KEY);
-      return backups ? JSON.parse(backups) : [];
+      const response = await fetch(`${API_URL}/api/backups`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch backups');
+      }
+
+      const data = await response.json();
+      return data.backups || [];
     } catch (error) {
       console.error('Failed to get backups:', error);
-      return [];
+      throw error;
+    }
+  }
+
+  /**
+   * Get backups for a specific zone
+   */
+  async getBackupsForZone(zone: string): Promise<BackupListItem[]> {
+    try {
+      const response = await fetch(`${API_URL}/api/backups/zone/${encodeURIComponent(zone)}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch backups for zone');
+      }
+
+      const data = await response.json();
+      return data.backups || [];
+    } catch (error) {
+      console.error(`Failed to get backups for zone ${zone}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific backup with full records
+   */
+  async getBackup(zone: string, backupId: string): Promise<DNSBackup> {
+    try {
+      const response = await fetch(`${API_URL}/api/backups/zone/${encodeURIComponent(zone)}/${backupId}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch backup');
+      }
+
+      const data = await response.json();
+      return data.backup;
+    } catch (error) {
+      console.error(`Failed to get backup ${backupId}:`, error);
+      throw error;
     }
   }
 
   async createBackup(zone: string, records: DNSRecord[], options: BackupOptions): Promise<DNSBackup> {
     try {
-      const backups = this.getBackups();
-      const newBackup: DNSBackup = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: Date.now(),
-        zone,
-        server: options.server || options.config.defaultServer,
-        records,
-        type: options.type,
-        description: options.description,
-        version: this.VERSION
-      };
+      const response = await fetch(`${API_URL}/api/backups/zone/${encodeURIComponent(zone)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          records,
+          server: options.server || options.config.defaultServer,
+          type: options.type,
+          description: options.description,
+        }),
+      });
 
-      backups.unshift(newBackup);
-
-      while (this.calculateSize(backups) > this.MAX_STORAGE_SIZE || backups.length > this.MAX_BACKUPS) {
-        backups.pop();
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create backup');
       }
 
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(backups));
-      
+      const data = await response.json();
+      const newBackup = data.backup;
+
       if (options.type === 'manual') {
         await notificationService.notifyBackupCreated(newBackup);
       }
@@ -79,17 +146,10 @@ export class BackupService {
   async restoreRecords(backup: DNSBackup, config: Config, selectedRecords?: DNSRecord[]): Promise<void> {
     try {
       const recordsToRestore = selectedRecords || backup.records;
-      
-      const keyConfig = config.keys.find(key => 
-        key.zones?.includes(backup.zone) && key.server === backup.server
-      );
-      
-      if (!keyConfig) {
-        throw new Error('No key configuration found for this zone and server');
-      }
 
+      // Keys are now handled server-side, no need for keyConfig
       for (const record of recordsToRestore) {
-        await dnsService.addRecord(backup.zone, record, keyConfig);
+        await dnsService.addRecord(backup.zone, record);
       }
     } catch (error: unknown) {
       console.error('Failed to restore records:', error);
@@ -126,22 +186,34 @@ export class BackupService {
     try {
       const content = await file.text();
       const backup = JSON.parse(content);
-      
+
       // Validate backup structure
       if (!this.isValidBackup(backup)) {
         throw new Error('Invalid backup format');
       }
 
-      const backups = this.getBackups();
-      backups.unshift(backup);
+      // Import by creating a new backup on the server
+      const response = await fetch(`${API_URL}/api/backups/zone/${encodeURIComponent(backup.zone)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          records: backup.records,
+          server: backup.server,
+          type: backup.type || 'manual',
+          description: backup.description || `Imported from ${file.name}`,
+        }),
+      });
 
-      // Maintain storage limits
-      while (this.calculateSize(backups) > this.MAX_STORAGE_SIZE || backups.length > this.MAX_BACKUPS) {
-        backups.pop();
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to import backup');
       }
 
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(backups));
-      return backup;
+      const data = await response.json();
+      return data.backup;
     } catch (error: unknown) {
       console.error('Failed to import backup:', error);
       if (error instanceof Error) {
@@ -165,14 +237,22 @@ export class BackupService {
     );
   }
 
-  deleteBackup(backupId: string): boolean {
+  async deleteBackup(zone: string, backupId: string): Promise<boolean> {
     try {
-      const backups = this.getBackups().filter(b => b.id !== backupId);
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(backups));
+      const response = await fetch(`${API_URL}/api/backups/zone/${encodeURIComponent(zone)}/${backupId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete backup');
+      }
+
       return true;
     } catch (error) {
       console.error('Failed to delete backup:', error);
-      return false;
+      throw error;
     }
   }
 }
