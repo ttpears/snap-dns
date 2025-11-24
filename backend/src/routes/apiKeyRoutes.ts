@@ -9,10 +9,80 @@ import { requireAuth, requireRole } from '../middleware/auth';
 const router = Router();
 
 /**
- * Create a new API key
- * POST /api/api-keys
- * Body: { name: string, scopes: ApiKeyScope[], expiresInDays?: number }
- * Requires: Session authentication (not API key auth)
+ * @openapi
+ * /api/api-keys:
+ *   post:
+ *     tags:
+ *       - API Keys
+ *     summary: Create API Key
+ *     description: Create a new API key for programmatic access. The key is shown only once at creation.
+ *     security:
+ *       - BearerAuth: []
+ *       - SessionAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - scopes
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Human-readable name for the API key
+ *                 example: Production API Key
+ *               scopes:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   enum: [read, write, admin]
+ *                 description: Permissions granted to this key
+ *                 example: [read, write]
+ *               expiresInDays:
+ *                 type: integer
+ *                 minimum: 1
+ *                 description: Number of days until expiration (optional, omit for never)
+ *                 example: 90
+ *     responses:
+ *       201:
+ *         description: API key created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     key:
+ *                       type: string
+ *                       description: The plain API key - shown only once!
+ *                       example: snap_iKgjCtt0qDZq264B7C7R83Xk1pea4xmo
+ *                     metadata:
+ *                       $ref: '#/components/schemas/ApiKey'
+ *       400:
+ *         description: Invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Not authenticated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Insufficient permissions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -112,9 +182,37 @@ router.post('/', requireAuth, async (req: Request, res: Response): Promise<void>
 });
 
 /**
- * List user's API keys
- * GET /api/api-keys
- * Requires: Authentication (session or API key)
+ * @openapi
+ * /api/api-keys:
+ *   get:
+ *     tags:
+ *       - API Keys
+ *     summary: List API Keys
+ *     description: Get all API keys for the authenticated user
+ *     security:
+ *       - BearerAuth: []
+ *       - SessionAuth: []
+ *     responses:
+ *       200:
+ *         description: List of API keys
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/ApiKey'
+ *       401:
+ *         description: Not authenticated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {

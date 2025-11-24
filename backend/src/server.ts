@@ -4,7 +4,9 @@ import dotenv from 'dotenv';
 import path from 'path';
 import session from 'express-session';
 import FileStore from 'session-file-store';
+import swaggerUi from 'swagger-ui-express';
 import { config } from './config';
+import { swaggerSpec } from './config/swagger';
 import { requestLogger } from './middleware/logging';
 import { generalApiLimiter, apiKeyManagementLimiter } from './middleware/rateLimiter';
 import { userService } from './services/userService';
@@ -115,6 +117,19 @@ app.use(express.json({ limit: process.env.MAX_REQUEST_SIZE || '10mb' }));
 app.use(express.raw({ type: 'application/dns-message', limit: '512b' }));
 app.use(requestLogger);
 
+// API Documentation
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Snap DNS API Documentation',
+  customfavIcon: '/favicon.ico'
+}));
+
+// Serve OpenAPI JSON spec
+app.get('/api/openapi.json', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+
 // Apply general rate limiting to all API endpoints
 app.use('/api', generalApiLimiter);
 
@@ -150,13 +165,47 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+/**
+ * @openapi
+ * /:
+ *   get:
+ *     tags:
+ *       - Health
+ *     summary: API Information
+ *     description: Returns basic API information and available endpoints
+ *     responses:
+ *       200:
+ *         description: API information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 service:
+ *                   type: string
+ *                   example: Snap DNS API
+ *                 version:
+ *                   type: string
+ *                   example: 2.0.0
+ *                 status:
+ *                   type: string
+ *                   example: running
+ *                 documentation:
+ *                   type: string
+ *                   example: /api/docs
+ *                 endpoints:
+ *                   type: object
+ */
 app.get('/', (req: Request, res: Response) => {
   res.json({
     service: 'Snap DNS API',
-    version: '1.0.0',
+    version: '2.0.0',
     status: 'running',
+    documentation: '/api/docs',
+    openapi: '/api/openapi.json',
     endpoints: {
       health: '/health or /api/health',
+      docs: '/api/docs',
       auth: '/api/auth/*',
       zones: '/api/zones/*',
       keys: '/api/tsig-keys/*',
