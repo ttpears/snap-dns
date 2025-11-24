@@ -377,11 +377,22 @@ export const APIKeyManagement: React.FC = () => {
             }}
           />
 
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          <Typography variant="body2" sx={{ mt: 2, mb: 1 }}>
             Use this key in your API requests by adding the Authorization header:
           </Typography>
-          <Paper sx={{ p: 1, mt: 1, bgcolor: 'grey.100' }}>
-            <code style={{ fontSize: '0.75rem' }}>
+          <Paper
+            sx={{
+              p: 2,
+              bgcolor: 'action.hover',
+              border: 1,
+              borderColor: 'divider'
+            }}
+          >
+            <code style={{
+              fontSize: '0.875rem',
+              fontFamily: 'monospace',
+              wordBreak: 'break-all'
+            }}>
               Authorization: Bearer {displayedKey.substring(0, 16)}...
             </code>
           </Paper>
