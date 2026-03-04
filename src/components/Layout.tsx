@@ -1,5 +1,6 @@
+// src/components/Layout.tsx
 import React from 'react';
-import { Box, Typography, IconButton, Toolbar, Divider, Button, Menu, MenuItem, Chip } from '@mui/material';
+import { Box, Typography, IconButton, Divider, Button, Menu, MenuItem, Chip } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 import { Brightness4, Brightness7, AccountCircle, Logout } from '@mui/icons-material';
 import Navigation from './Navigation';
@@ -10,23 +11,21 @@ import { useAuth } from '../context/AuthContext';
 import Footer from './Footer';
 import { useTheme } from '../context/ThemeContext';
 
-function Layout({ children }) {
+function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { darkMode, toggleDarkMode } = useTheme();
   const { config } = useConfig();
   const { user, logout } = useAuth();
-  const [anchorEl, setAnchorEl] = React.useState(null);
+  const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
   const {
     pendingChanges,
-    setPendingChanges,
     showPendingDrawer,
     setShowPendingDrawer,
-    addPendingChange,
     removePendingChange,
     clearPendingChanges
   } = usePendingChanges();
 
-  const handleUserMenuOpen = (event) => {
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
   };
 
@@ -38,7 +37,7 @@ function Layout({ children }) {
     handleUserMenuClose();
     await logout();
   };
-  
+
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/':
@@ -55,16 +54,16 @@ function Layout({ children }) {
   };
 
   return (
-    <Box sx={{ 
-      display: 'flex', 
+    <Box sx={{
+      display: 'flex',
       minHeight: '100vh',
       bgcolor: 'background.default',
       color: 'text.primary'
     }}>
-      <Box 
+      <Box
         component="nav"
-        sx={{ 
-          width: 240, 
+        sx={{
+          width: 240,
           flexShrink: 0,
           borderRight: 1,
           borderColor: 'divider',
@@ -76,15 +75,15 @@ function Layout({ children }) {
       >
         <Navigation />
       </Box>
-      <Box sx={{ 
-        flexGrow: 1, 
-        ml: '240px', // Match drawer width
+      <Box sx={{
+        flexGrow: 1,
+        ml: '240px',
         p: 3,
-        pb: 8 // Add padding at bottom to prevent content from being hidden behind footer
+        pb: 8
       }}>
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
           alignItems: 'center',
           mb: 3
         }}>
@@ -137,11 +136,9 @@ function Layout({ children }) {
         {children}
       </Box>
       <Footer />
-      <PendingChangesDrawer 
+      <PendingChangesDrawer
         open={showPendingDrawer}
         onClose={() => setShowPendingDrawer(false)}
-        pendingChanges={pendingChanges}
-        setPendingChanges={setPendingChanges}
         removePendingChange={removePendingChange}
         clearPendingChanges={clearPendingChanges}
       />
@@ -149,4 +146,4 @@ function Layout({ children }) {
   );
 }
 
-export default Layout; 
+export default Layout;

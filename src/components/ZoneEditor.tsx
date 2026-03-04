@@ -14,7 +14,6 @@ import {
   CircularProgress,
   Alert,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Dialog,
@@ -45,30 +44,37 @@ import RecordEditor from './RecordEditor';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useKey } from '../context/KeyContext';
 import PendingChangesDrawer from './PendingChangesDrawer';
+import { DNSRecord } from '../types/dns';
 
 const recordTypes = [
   'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP', 'SOA'
 ];
 
-function MultilineRecordDialog({ record, open, onClose }) {
-  const formatDuration = (seconds) => {
+interface MultilineRecordDialogProps {
+  record: DNSRecord | null;
+  open: boolean;
+  onClose: () => void;
+}
+
+function MultilineRecordDialog({ record, open, onClose }: MultilineRecordDialogProps) {
+  const formatDuration = (seconds: number | undefined): string => {
     if (!seconds) return 'N/A';
-    
+
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    
-    const parts = [];
+
+    const parts: string[] = [];
     if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
     if (minutes > 0) parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
-    
+
     return parts.join(' ') || `${seconds} seconds`;
   };
 
   const formattedValue = useMemo(() => {
     if (!record) return '';
-    
+
     if (record.type === 'SOA') {
-      const soa = record.value || {};
+      const soa = record.value as any;
       return [
         `Primary Nameserver: ${soa.mname || 'N/A'}`,
         `Admin Email: ${soa.rname || 'N/A'}`,
@@ -83,7 +89,7 @@ function MultilineRecordDialog({ record, open, onClose }) {
     if (typeof record.value === 'object') {
       return JSON.stringify(record.value, null, 2);
     }
-    
+
     return record.value;
   }, [record]);
 
@@ -96,19 +102,18 @@ function MultilineRecordDialog({ record, open, onClose }) {
         <Box sx={{ mt: 2 }}>
           <Typography variant="subtitle2" color="text.secondary">Name:</Typography>
           <Typography color="text.primary" sx={{ mb: 2 }}>{record?.name}</Typography>
-          
+
           <Typography variant="subtitle2" color="text.secondary">TTL:</Typography>
           <Typography color="text.primary" sx={{ mb: 2 }}>
             {record?.ttl} seconds ({formatDuration(record?.ttl)})
           </Typography>
-          
+
           <Typography variant="subtitle2" color="text.secondary">Value:</Typography>
-          <pre style={{ 
+          <pre style={{
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             fontFamily: 'monospace',
-            backgroundColor: (theme) => 
-              theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: 'rgba(0, 0, 0, 0.04)',
             padding: '16px',
             borderRadius: '4px',
             color: 'inherit',
@@ -125,60 +130,61 @@ function MultilineRecordDialog({ record, open, onClose }) {
   );
 }
 
+type SortOrder = 'asc' | 'desc';
+type SortableField = 'name' | 'type' | 'value' | 'ttl';
+
 function ZoneEditor() {
   const { config, updateConfig } = useConfig();
-  const { 
-    pendingChanges, 
+  const {
+    pendingChanges,
     setPendingChanges,
-    addPendingChange, 
-    removePendingChange, 
+    addPendingChange,
+    removePendingChange,
     clearPendingChanges,
     showPendingDrawer,
     setShowPendingDrawer
   } = usePendingChanges();
 
-  const { 
-    selectedKey, 
-    selectedZone, 
+  const {
+    selectedKey,
+    selectedZone,
     availableZones = []
   } = useKey();
 
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [showPreview, setShowPreview] = useState(false);
-  const [filter, setFilter] = useState('');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(config.rowsPerPage || 10);
-  const [selectedTypes, setSelectedTypes] = useState([]);
-  const [searchText, setSearchText] = useState('');
-  const [filterType, setFilterType] = useState('ALL');
-  const [selectedRecords, setSelectedRecords] = useState([]);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState(null);
-  const [multilineRecord, setMultilineRecord] = useState(null);
-  const [changeHistory, setChangeHistory] = useState([[]]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const [showAddRecord, setShowAddRecord] = useState(false);
-  const [addRecordDialogOpen, setAddRecordDialogOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [copyingRecord, setCopyingRecord] = useState(null);
-  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [orderBy, setOrderBy] = useState('name');
-  const [order, setOrder] = useState('asc');
+  const [records, setRecords] = useState<DNSRecord[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState<boolean>(false);
+  const [filter, setFilter] = useState<string>('');
+  const [page, setPage] = useState<number>(0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(config.rowsPerPage || 10);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [searchText, setSearchText] = useState<string>('');
+  const [filterType, setFilterType] = useState<string>('ALL');
+  const [selectedRecords, setSelectedRecords] = useState<DNSRecord[]>([]);
+  const [editDialogOpen, setEditDialogOpen] = useState<boolean>(false);
+  const [editingRecord, setEditingRecord] = useState<DNSRecord | null>(null);
+  const [multilineRecord, setMultilineRecord] = useState<DNSRecord | null>(null);
+  const [changeHistory, setChangeHistory] = useState<any[][]>([[]]);
+  const [historyIndex, setHistoryIndex] = useState<number>(0);
+  const [showAddRecord, setShowAddRecord] = useState<boolean>(false);
+  const [addRecordDialogOpen, setAddRecordDialogOpen] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [copyingRecord, setCopyingRecord] = useState<DNSRecord | null>(null);
+  const [copyDialogOpen, setCopyDialogOpen] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [orderBy, setOrderBy] = useState<SortableField>('name');
+  const [order, setOrder] = useState<SortOrder>('asc');
 
-  // Update initialization effect
   useEffect(() => {
-    // Set initializing based on whether we have keys and zones available
     const hasData = (config.keys?.length > 0 || availableZones.length > 0);
     setIsInitializing(!hasData);
   }, [config.keys, availableZones]);
 
   const loadZoneRecords = useCallback(async () => {
     if (!selectedZone || !selectedKey) return;
-    
+
     setRefreshing(true);
     setError(null);
 
@@ -187,14 +193,13 @@ function ZoneEditor() {
       setRecords(records);
     } catch (err) {
       console.error('Failed to load zone records:', err);
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setRefreshing(false);
     }
   }, [selectedZone, selectedKey]);
 
   useEffect(() => {
-    // Only load if we have all required data and zone is valid
     if (selectedZone &&
         selectedKey &&
         availableZones.includes(selectedZone) &&
@@ -204,7 +209,7 @@ function ZoneEditor() {
     }
   }, [selectedZone, selectedKey, availableZones, isInitializing, loadZoneRecords]);
 
-  const handleSelectAllClick = (event) => {
+  const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
       setSelectedRecords(records);
     } else {
@@ -212,17 +217,17 @@ function ZoneEditor() {
     }
   };
 
-  const handleSelectRecord = useCallback((record) => {
+  const handleSelectRecord = useCallback((record: DNSRecord) => {
     setSelectedRecords(prev => {
-      const isSelected = prev.some(r => 
-        r.name === record.name && 
-        r.type === record.type && 
+      const isSelected = prev.some(r =>
+        r.name === record.name &&
+        r.type === record.type &&
         r.value === record.value
       );
       if (isSelected) {
-        return prev.filter(r => 
-          r.name !== record.name || 
-          r.type !== record.type || 
+        return prev.filter(r =>
+          r.name !== record.name ||
+          r.type !== record.type ||
           r.value !== record.value
         );
       }
@@ -230,13 +235,13 @@ function ZoneEditor() {
     });
   }, []);
 
-  const handleDeleteRecord = async (record) => {
+  const handleDeleteRecord = async (record: DNSRecord) => {
     try {
       const change = {
         id: Date.now(),
-        type: 'DELETE',
-        zone: selectedZone,
-        keyId: selectedKey.id,
+        type: 'DELETE' as const,
+        zone: selectedZone!,
+        keyId: selectedKey!.id,
         record: record
       };
 
@@ -245,7 +250,7 @@ function ZoneEditor() {
       setEditDialogOpen(false);
       setEditingRecord(null);
     } catch (error) {
-      setError(`Failed to delete record: ${error.message}`);
+      setError(`Failed to delete record: ${(error as Error).message}`);
     }
   };
 
@@ -254,9 +259,9 @@ function ZoneEditor() {
       selectedRecords.forEach(record => {
         const change = {
           id: Date.now() + Math.random(),
-          type: 'DELETE',
-          zone: selectedZone,
-          keyId: selectedKey.id,
+          type: 'DELETE' as const,
+          zone: selectedZone!,
+          keyId: selectedKey!.id,
           record: record
         };
         addPendingChange(change);
@@ -267,26 +272,26 @@ function ZoneEditor() {
       setEditDialogOpen(false);
       setEditingRecord(null);
     } catch (error) {
-      setError(`Failed to delete records: ${error.message}`);
+      setError(`Failed to delete records: ${(error as Error).message}`);
     }
   };
 
-  const handleEditRecord = (record) => {
+  const handleEditRecord = (record: DNSRecord) => {
     setEditingRecord(record);
     setEditDialogOpen(true);
   };
 
-  const handleEditSave = async (updatedRecord) => {
+  const handleEditSave = async (updatedRecord: DNSRecord) => {
     try {
       const change = {
         id: Date.now(),
-        type: 'MODIFY',
-        zone: selectedZone,
-        keyId: selectedKey.id,
-        originalRecord: editingRecord,
+        type: 'MODIFY' as const,
+        zone: selectedZone!,
+        keyId: selectedKey!.id,
+        originalRecord: editingRecord!,
         newRecord: updatedRecord
       };
-      
+
       addPendingChange(change);
       setShowPendingDrawer(true);
       setEditDialogOpen(false);
@@ -294,58 +299,52 @@ function ZoneEditor() {
       setCopyDialogOpen(false);
       setCopyingRecord(null);
     } catch (error) {
-      setError(error.message);
+      setError((error as Error).message);
     }
   };
 
-  const formatRecordValue = (record) => {
+  const formatRecordValue = (record: DNSRecord): string => {
     if (record.type === 'SOA') {
-      const soa = record.value;
+      const soa = record.value as any;
       return `${soa.mname} ${soa.rname} ${soa.serial} ${soa.refresh} ${soa.retry} ${soa.expire} ${soa.minimum}`;
     }
-    return record.value;
+    return record.value as string;
   };
 
-  const isMultilineRecord = (record) => {
+  const isMultilineRecord = (record: DNSRecord | null): boolean => {
     if (!record) return false;
-    
-    // SOA records are always shown in the modal
+
     if (record.type === 'SOA') return true;
-    
-    // TXT records with long values
-    if (record.type === 'TXT' && record.value.length > 40) return true;
-    
-    // Any record with an object value
+
+    if (record.type === 'TXT' && (record.value as string).length > 40) return true;
+
     if (typeof record.value === 'object') return true;
-    
+
     return false;
   };
 
-  const handleRequestSort = (property) => {
+  const handleRequestSort = (property: SortableField) => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
   };
 
-  const sortRecords = (records) => {
+  const sortRecords = (records: DNSRecord[]): DNSRecord[] => {
     return records.sort((a, b) => {
-      let aValue = a[orderBy];
-      let bValue = b[orderBy];
+      let aValue: any = a[orderBy];
+      let bValue: any = b[orderBy];
 
-      // Special handling for different types of values
       if (orderBy === 'value') {
         if (typeof aValue === 'object') aValue = JSON.stringify(aValue);
         if (typeof bValue === 'object') bValue = JSON.stringify(bValue);
       }
 
-      // Convert to strings for comparison
       aValue = String(aValue).toLowerCase();
       bValue = String(bValue).toLowerCase();
 
-      // Handle numeric parts in strings
       if (aValue.match(/^\d+/) && bValue.match(/^\d+/)) {
-        const aNum = parseInt(aValue.match(/^\d+/)[0]);
-        const bNum = parseInt(bValue.match(/^\d+/)[0]);
+        const aNum = parseInt((aValue.match(/^\d+/) as RegExpMatchArray)[0]);
+        const bNum = parseInt((bValue.match(/^\d+/) as RegExpMatchArray)[0]);
         if (aNum !== bNum) {
           return order === 'asc' ? aNum - bNum : bNum - aNum;
         }
@@ -361,14 +360,13 @@ function ZoneEditor() {
   const filteredRecords = useMemo(() => {
     const filtered = records.filter(record => {
       const searchLower = searchText.toLowerCase();
-      
-      // Type filter
+
       if (filterType !== 'ALL' && record.type !== filterType) {
         return false;
       }
 
       if (!searchLower) return true;
-      
+
       return record.name.toLowerCase().includes(searchLower) ||
              record.type.toLowerCase().includes(searchLower) ||
              String(record.value).toLowerCase().includes(searchLower);
@@ -382,7 +380,7 @@ function ZoneEditor() {
 
   const handleUndo = useCallback(() => {
     if (!canUndo) return;
-    
+
     const previousChanges = changeHistory[historyIndex - 1];
     setPendingChanges([...previousChanges]);
     setHistoryIndex(historyIndex - 1);
@@ -390,7 +388,7 @@ function ZoneEditor() {
 
   const handleRedo = useCallback(() => {
     if (!canRedo) return;
-    
+
     const nextChanges = changeHistory[historyIndex + 1];
     setPendingChanges([...nextChanges]);
     setHistoryIndex(historyIndex + 1);
@@ -399,12 +397,10 @@ function ZoneEditor() {
   useEffect(() => {
     const currentChanges = JSON.stringify(pendingChanges);
     const historyChanges = JSON.stringify(changeHistory[historyIndex]);
-    
+
     if (currentChanges !== historyChanges) {
       setChangeHistory(prev => {
-        // Remove any future states if we're not at the end
         const newHistory = prev.slice(0, historyIndex + 1);
-        // Add current changes as new state
         return [...newHistory, [...pendingChanges]];
       });
       setHistoryIndex(prev => prev + 1);
@@ -415,15 +411,13 @@ function ZoneEditor() {
     setAddRecordDialogOpen(true);
   };
 
-  // Add effect to listen for applied changes
   useEffect(() => {
-    const handleChangesApplied = (event) => {
-      const { zones } = event.detail;
-      
+    const handleChangesApplied = (event: Event) => {
+      const { zones } = (event as CustomEvent<{ zones: string[] }>).detail;
+
       if (selectedZone && zones.includes(selectedZone)) {
         setIsRefreshing(true);
-        
-        // Add a delay to allow DNS propagation
+
         setTimeout(async () => {
           try {
             await loadZoneRecords();
@@ -433,7 +427,7 @@ function ZoneEditor() {
           } finally {
             setIsRefreshing(false);
           }
-        }, 2000); // 2 second delay
+        }, 2000);
       }
     };
 
@@ -441,20 +435,19 @@ function ZoneEditor() {
     return () => window.removeEventListener('dnsChangesApplied', handleChangesApplied);
   }, [selectedZone, loadZoneRecords]);
 
-  const handleCopyRecord = (record) => {
+  const handleCopyRecord = (record: DNSRecord) => {
     setCopyingRecord({
       ...record,
-      id: undefined,
       name: `${record.name}`
     });
     setCopyDialogOpen(true);
   };
 
-  const handleCopySave = (newRecord) => {
+  const handleCopySave = (newRecord: DNSRecord) => {
     addPendingChange({
       type: 'ADD',
-      zone: selectedZone,
-      keyId: selectedKey.id,
+      zone: selectedZone!,
+      keyId: selectedKey!.id,
       record: newRecord
     });
 
@@ -463,11 +456,10 @@ function ZoneEditor() {
     setShowPendingDrawer(true);
   };
 
-  const handleChangeRowsPerPage = (event) => {
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const newRowsPerPage = parseInt(event.target.value, 10);
     setRowsPerPage(newRowsPerPage);
     setPage(0);
-    // Save to config
     updateConfig({
       ...config,
       rowsPerPage: newRowsPerPage
@@ -476,9 +468,9 @@ function ZoneEditor() {
 
   return (
     <Paper sx={{ p: 3 }}>
-      <Box sx={{ 
-        display: 'flex', 
-        gap: 2, 
+      <Box sx={{
+        display: 'flex',
+        gap: 2,
         mb: 3,
         p: 2,
         backgroundColor: 'background.paper',
@@ -490,7 +482,7 @@ function ZoneEditor() {
         <TextField
           fullWidth
           value={searchText || ''}
-          onChange={(e) => setSearchText(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchText(e.target.value)}
           placeholder="Search records..."
           size="small"
           InputProps={{
@@ -505,7 +497,7 @@ function ZoneEditor() {
         <FormControl sx={{ minWidth: 200 }}>
           <Select
             value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
+            onChange={(e) => setFilterType(e.target.value as string)}
             size="small"
             displayEmpty
           >
@@ -517,8 +509,8 @@ function ZoneEditor() {
         </FormControl>
 
         <Tooltip title="Refresh Records">
-          <IconButton 
-            onClick={loadZoneRecords} 
+          <IconButton
+            onClick={loadZoneRecords}
             disabled={!selectedZone || !selectedKey || refreshing}
             size="small"
             sx={{ alignSelf: 'center' }}
@@ -573,15 +565,15 @@ function ZoneEditor() {
             )}
           </Box>
 
-          <Dialog 
-            open={addRecordDialogOpen} 
+          <Dialog
+            open={addRecordDialogOpen}
             onClose={() => setAddRecordDialogOpen(false)}
             maxWidth="md"
             fullWidth
           >
             <DialogTitle>Add DNS Record</DialogTitle>
             {selectedZone && selectedKey && (
-              <AddDNSRecord 
+              <AddDNSRecord
                 zone={selectedZone}
                 onSuccess={() => {
                   setAddRecordDialogOpen(false);
@@ -649,9 +641,9 @@ function ZoneEditor() {
                   .map((record, index) => (
                     <TableRow
                       key={`${record.name}-${record.type}-${index}`}
-                      selected={selectedRecords.some(r => 
-                        r.name === record.name && 
-                        r.type === record.type && 
+                      selected={selectedRecords.some(r =>
+                        r.name === record.name &&
+                        r.type === record.type &&
                         r.value === record.value
                       )}
                       hover
@@ -659,9 +651,9 @@ function ZoneEditor() {
                       <TableCell padding="checkbox">
                         <Checkbox
                           size="small"
-                          checked={selectedRecords.some(r => 
-                            r.name === record.name && 
-                            r.type === record.type && 
+                          checked={selectedRecords.some(r =>
+                            r.name === record.name &&
+                            r.type === record.type &&
                             r.value === record.value
                           )}
                           onChange={() => handleSelectRecord(record)}
@@ -670,9 +662,9 @@ function ZoneEditor() {
                       <TableCell>{record.name}</TableCell>
                       <TableCell>
                         <Box component="span">
-                          <Chip 
-                            label={record.type} 
-                            size="small" 
+                          <Chip
+                            label={record.type}
+                            size="small"
                             component="span"
                           />
                         </Box>
@@ -680,15 +672,15 @@ function ZoneEditor() {
                       <TableCell>
                         <Box component="span">
                           {isMultilineRecord(record) ? (
-                            <Button 
-                              size="small" 
+                            <Button
+                              size="small"
                               onClick={() => setMultilineRecord(record)}
                               sx={{ display: 'inline-flex' }}
                             >
                               View Full Record
                             </Button>
                           ) : (
-                            record.value
+                            record.value as string
                           )}
                         </Box>
                       </TableCell>
@@ -733,7 +725,7 @@ function ZoneEditor() {
             component="div"
             count={filteredRecords.length}
             page={page}
-            onPageChange={(e, newPage) => setPage(newPage)}
+            onPageChange={(_e, newPage) => setPage(newPage)}
             rowsPerPage={rowsPerPage}
             onRowsPerPageChange={handleChangeRowsPerPage}
             rowsPerPageOptions={[5, 10, 25, 50, 100]}
@@ -749,8 +741,8 @@ function ZoneEditor() {
         />
       )}
 
-      <Dialog 
-        open={editDialogOpen} 
+      <Dialog
+        open={editDialogOpen}
         onClose={() => setEditDialogOpen(false)}
         maxWidth="md"
         fullWidth
@@ -758,15 +750,14 @@ function ZoneEditor() {
         {editingRecord && (
           <RecordEditor
             record={editingRecord}
-            selectedKey={selectedKey}
             onSave={handleEditSave}
             onCancel={() => setEditDialogOpen(false)}
           />
         )}
       </Dialog>
 
-      <Dialog 
-        open={copyDialogOpen} 
+      <Dialog
+        open={copyDialogOpen}
         onClose={() => setCopyDialogOpen(false)}
         maxWidth="md"
         fullWidth

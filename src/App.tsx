@@ -39,7 +39,7 @@ function AuthenticatedApp() {
         <ZoneProvider>
           <PendingChangesProvider>
             <BrowserRouter>
-              <AppContent drawerWidth={240} />
+              <AppContent />
             </BrowserRouter>
           </PendingChangesProvider>
         </ZoneProvider>

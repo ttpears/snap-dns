@@ -20,8 +20,24 @@ import { useConfig } from '../context/ConfigContext';
 import { DNSValidationService } from '../services/dnsValidationService';
 import { DNSRecordFormatter } from '../services/dnsRecordFormatter';
 
-// Record type definitions with their specific fields and validations
-const RECORD_TYPES = {
+interface FieldDefinition {
+  name: string;
+  label: string;
+  type?: string;
+  helperText?: string;
+  validate?: (value: any) => boolean;
+  required?: boolean;
+  multiline?: boolean;
+  rows?: number;
+  select?: boolean;
+  options?: Array<string | { value: number; label: string }>;
+}
+
+interface RecordTypeDefinition {
+  fields: FieldDefinition[];
+}
+
+const RECORD_TYPES: Record<string, RecordTypeDefinition> = {
   A: {
     fields: [{
       name: 'value',
@@ -186,32 +202,34 @@ const RECORD_TYPES = {
   }
 };
 
-// Helper to map validation error messages to specific fields without false positives
-const mapErrorToField = (error) => {
+const mapErrorToField = (error: string): string => {
   const lower = (error || '').toLowerCase();
-  // If TTL mentioned, it's TTL
   if (lower.includes('ttl')) return 'ttl';
-  // Explicit record name errors map to name
   if (/\brecord name\b/.test(lower)) return 'name';
-  // Avoid matching 'hostname' as 'name'
   if (/\bname\b/.test(lower) && !/host\s*name|hostname/.test(lower)) return 'name';
-  // Default to value-specific error
   return 'value';
 };
 
-const getReverseDNSZone = (zone) => {
-  // Check if this is already a reverse DNS zone
+const getReverseDNSZone = (zone: string): string | null => {
   if (zone.endsWith('.in-addr.arpa') || zone.endsWith('.ip6.arpa')) {
     return zone;
   }
   return null;
 };
 
-function AddDNSRecord({ zone, onSuccess, onClose }) {
+interface AddDNSRecordProps {
+  zone?: string;
+  onSuccess?: () => void;
+  onClose?: () => void;
+}
+
+type ErrorState = string | { severity?: string; message: string; details?: any } | null;
+
+function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
   const { selectedKey, selectedZone } = useKey();
   const { addPendingChange, setShowPendingDrawer, pendingChanges } = usePendingChanges();
   const { config } = useConfig();
-  const [record, setRecord] = useState({
+  const [record, setRecord] = useState<Record<string, any>>({
     name: '',
     ttl: config.defaultTTL || 3600,
     type: 'A',
@@ -226,16 +244,16 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
     fptype: 1,
     fingerprint: ''
   });
-  const [error, setError] = useState(null);
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [validationErrors, setValidationErrors] = useState({});
+  const [error, setError] = useState<ErrorState>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
+  const [validationErrors, setValidationErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [ptrPreview, setPtrPreview] = useState('');
 
   useEffect(() => {
     if (record.type === 'PTR') {
-      const reverseZone = getReverseDNSZone(selectedZone);
+      const reverseZone = getReverseDNSZone(selectedZone ?? '');
       if (!reverseZone) {
         setError({
           severity: 'warning',
@@ -245,26 +263,20 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       }
 
       try {
-        // Format the input as a proper PTR record
         let name = record.name;
         if (name) {
-          // Remove any non-numeric characters except dots
           name = name.replace(/[^\d.]/g, '');
-          
-          // Split and reverse the octets if they haven't been reversed already
+
           if (!name.endsWith('.in-addr.arpa')) {
             const octets = name.split('.');
-            if (octets.length <= 4) { // Handle partial IP address
-              // Pad with empty strings to always have 4 parts
+            if (octets.length <= 4) {
               while (octets.length < 4) {
                 octets.push('');
               }
-              // Reverse the octets
               name = octets.reverse().filter(Boolean).join('.');
             }
           }
 
-          // Show the full PTR record name
           setPtrPreview(`${name}${name.endsWith('.') ? '' : '.'}${reverseZone}`);
         } else {
           setPtrPreview('');
@@ -277,7 +289,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
 
   const currentTypeFields = useMemo(() => {
     const fields = RECORD_TYPES[record.type]?.fields || [];
-    
+
     if (record.type === 'PTR') {
       return [{
         name: 'name',
@@ -286,24 +298,21 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
         required: true
       }, ...fields];
     }
-    
+
     return fields;
   }, [record.type]);
 
-  const handleFieldChange = (fieldName, value) => {
+  const handleFieldChange = (fieldName: string, value: any) => {
     setRecord(prev => {
       const newRecord = {
         ...prev,
         [fieldName]: value
       };
 
-      // Only validate the record name and TTL while typing
       if (selectedZone && (fieldName === 'name' || fieldName === 'ttl')) {
         let validationRecord = { ...newRecord };
-        
-        // Skip live validation for SRV records during typing
+
         if (newRecord.type === 'SRV' && fieldName === 'name') {
-          // Clear any existing validation errors for the name field
           setValidationErrors(prev => ({
             ...prev,
             [fieldName]: null
@@ -311,10 +320,8 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
           return newRecord;
         }
 
-        // For other record types or TTL validation, proceed as normal
         const validation = DNSValidationService.validateRecord(validationRecord, selectedZone);
-        setValidationErrors(validation.errors.reduce((acc, error) => {
-          // Only show errors related to the current field using strict mapping
+        setValidationErrors(validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           if (mapErrorToField(error) === fieldName) {
             acc[fieldName] = error;
           }
@@ -325,7 +332,6 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       return newRecord;
     });
 
-    // Clear field error when value changes
     if (fieldErrors[fieldName]) {
       setFieldErrors(prev => ({
         ...prev,
@@ -340,20 +346,18 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       return false;
     }
 
-    // For SRV records, validate individual fields first
     if (record.type === 'SRV') {
       if (!record.priority || !record.weight || !record.port || !record.target) {
         setError('All SRV fields are required');
         return false;
       }
-      // Create a temporary record with formatted value for validation
       const tempRecord = {
         ...record,
         value: `${record.priority} ${record.weight} ${record.port} ${record.target}`
       };
       const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
       if (!validation.isValid) {
-        setValidationErrors(validation.errors.reduce((acc, error) => {
+        setValidationErrors(validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           const field = mapErrorToField(error);
           acc[field] = error;
           return acc;
@@ -361,7 +365,6 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
         return false;
       }
     } else if (record.type === 'MX') {
-      // Validate MX fields and compose value for validation
       if (record.priority == null || record.priority === '' || !record.value) {
         setError('Both MX priority and mail server are required');
         return false;
@@ -372,7 +375,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       };
       const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
       if (!validation.isValid) {
-        setValidationErrors(validation.errors.reduce((acc, error) => {
+        setValidationErrors(validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           const field = mapErrorToField(error);
           acc[field] = error;
           return acc;
@@ -380,10 +383,9 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
         return false;
       }
     } else {
-      // For other record types, validate normally
       const validation = DNSValidationService.validateRecord(record, selectedZone);
       if (!validation.isValid) {
-        setValidationErrors(validation.errors.reduce((acc, error) => {
+        setValidationErrors(validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           const field = mapErrorToField(error);
           acc[field] = error;
           return acc;
@@ -395,15 +397,13 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
     return true;
   };
 
-  const getRecordForSubmission = (record) => {
-    // Base record fields that are always included
+  const getRecordForSubmission = (record: any): any => {
     const baseRecord = {
       name: record.name,
       ttl: record.ttl,
       type: record.type
     };
 
-    // Add type-specific fields
     switch (record.type) {
       case 'A':
       case 'AAAA':
@@ -441,7 +441,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
     }
   };
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -454,11 +454,10 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       }
 
       const cleanRecord = getRecordForSubmission(record);
-      const formattedRecord = DNSRecordFormatter.formatRecord(cleanRecord, selectedZone);
+      const formattedRecord = DNSRecordFormatter.formatRecord(cleanRecord, selectedZone ?? '');
 
-      // Check for duplicate records in pending changes
-      const isDuplicatePending = pendingChanges.some(change => 
-        change.type === 'ADD' && 
+      const isDuplicatePending = pendingChanges.some((change: any) =>
+        change.type === 'ADD' &&
         change.record.name === formattedRecord.name &&
         change.record.type === formattedRecord.type &&
         change.record.value === formattedRecord.value
@@ -470,17 +469,16 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
         return;
       }
 
-      const change = {
+      const change: import('../types/dns').PendingChange = {
         type: 'ADD',
-        zone: selectedZone,
-        keyId: selectedKey.id,
+        zone: selectedZone ?? '',
+        keyId: selectedKey!.id,
         record: formattedRecord
       };
 
       addPendingChange(change);
       setShowPendingDrawer(true);
-      
-      // Reset form
+
       setRecord({
         name: '',
         ttl: config.defaultTTL || 3600,
@@ -496,22 +494,20 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
         fptype: 1,
         fingerprint: ''
       });
-      
-      // Close the dialog if it's in a dialog
+
       if (onClose) {
         onClose();
       }
 
-      // Call onSuccess if provided
       if (onSuccess) {
         onSuccess();
       }
-      
+
     } catch (error) {
-      if (error.message.includes('Record already exists')) {
+      if ((error as Error).message.includes('Record already exists')) {
         setError('This record already exists in the zone');
       } else {
-        setError(`Failed to add record: ${error.message}`);
+        setError(`Failed to add record: ${(error as Error).message}`);
       }
     } finally {
       setSubmitting(false);
@@ -519,13 +515,12 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
   };
 
   return (
-    <Box 
-      component="form" 
-      onSubmit={handleSubmit} 
+    <Box
+      component="form"
+      onSubmit={handleSubmit}
       sx={{ p: 3 }}
     >
       <Grid container spacing={2}>
-        {/* Common fields */}
         <Grid item xs={12}>
           <TextField
             fullWidth
@@ -566,20 +561,19 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
           </FormControl>
         </Grid>
 
-        {/* Dynamic fields based on record type */}
         {currentTypeFields.map((field) => (
           <Grid item xs={12} sm={field.type === 'number' ? 6 : 12} key={field.name}>
             {field.select ? (
               <FormControl fullWidth error={!!fieldErrors[field.name]}>
                 <InputLabel>{field.label}</InputLabel>
                 <Select
-                  value={record[field.name] || ''}
+                  value={(record as any)[field.name] || ''}
                   onChange={(e) => handleFieldChange(field.name, e.target.value)}
                   label={field.label}
                 >
-                  {field.options.map((option) => (
-                    <MenuItem 
-                      key={typeof option === 'object' ? option.value : option} 
+                  {(field.options || []).map((option) => (
+                    <MenuItem
+                      key={typeof option === 'object' ? option.value : option}
                       value={typeof option === 'object' ? option.value : option}
                     >
                       {typeof option === 'object' ? option.label : option}
@@ -593,7 +587,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
                 fullWidth
                 label={field.label}
                 type={field.type || 'text'}
-                value={record[field.name] || ''}
+                value={(record as any)[field.name] || ''}
                 onChange={(e) => handleFieldChange(field.name, e.target.value)}
                 error={!!fieldErrors[field.name]}
                 helperText={fieldErrors[field.name] || field.helperText}
@@ -618,25 +612,24 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       )}
 
       {error && (
-        <Alert 
-          severity={error.severity || 'error'} 
+        <Alert
+          severity={(typeof error === 'object' && error !== null ? error.severity : undefined) as any || 'error'}
           sx={{ mt: 2 }}
           action={
-            error.details && (
-              <Button 
-                color="inherit" 
+            typeof error === 'object' && error !== null && error.details ? (
+              <Button
+                color="inherit"
                 size="small"
                 onClick={() => {
-                  console.info('Error details:', error.details);
-                  // Could also show details in a dialog/tooltip
+                  console.info('Error details:', (error as { severity?: string; message: string; details?: any }).details);
                 }}
               >
                 Details
               </Button>
-            )
+            ) : undefined
           }
         >
-          {error.message}
+          {typeof error === 'string' ? error : error.message}
         </Alert>
       )}
 
@@ -647,9 +640,9 @@ function AddDNSRecord({ zone, onSuccess, onClose }) {
       )}
 
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 3 }}>
-        <Button 
-          type="submit" 
-          variant="contained" 
+        <Button
+          type="submit"
+          variant="contained"
           color="primary"
           disabled={submitting}
         >

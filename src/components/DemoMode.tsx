@@ -1,3 +1,4 @@
+// src/components/DemoMode.tsx
 import React, { useState } from 'react';
 import {
   Paper,
@@ -13,11 +14,12 @@ import {
   MenuItem,
 } from '@mui/material';
 import { usePendingChanges } from '../context/PendingChangesContext';
-import { qualifyDnsName } from '../utils/utils';
+import { qualifyDnsName } from '../utils/dnsUtils';
+import { PendingChange } from '../types/dns';
 
 function DemoMode() {
   const [activeStep, setActiveStep] = useState(0);
-  const { addPendingChange, pendingChanges, clearChanges } = usePendingChanges();
+  const { addPendingChange, pendingChanges, clearPendingChanges } = usePendingChanges();
   const [demoInput, setDemoInput] = useState({
     zone: 'example.com',
     recordType: 'A',
@@ -93,9 +95,14 @@ function DemoMode() {
               variant="contained"
               onClick={() => {
                 addPendingChange({
-                  ...demoInput,
-                  command: `update add ${demoInput.name}.${demoInput.zone} ${demoInput.ttl} ${demoInput.recordType} ${demoInput.value}`
-                });
+                  type: 'ADD',
+                  zone: demoInput.zone,
+                  keyId: 'demo',
+                  name: demoInput.name,
+                  recordType: demoInput.recordType as any,
+                  value: demoInput.value,
+                  ttl: demoInput.ttl
+                } as PendingChange);
               }}
             >
               Add to Pending Changes
@@ -111,14 +118,14 @@ function DemoMode() {
           <Typography sx={{ mb: 2 }}>
             Before applying changes, always review them carefully. Here are your pending changes:
           </Typography>
-          
+
           {pendingChanges.length > 0 ? (
             <Box>
               {pendingChanges.map((change, index) => (
                 <Alert key={index} severity="info" sx={{ mb: 1 }}>
-                  {change.type === 'ADD' 
-                    ? `${qualifyDnsName(change.name, change.zone)} ${change.recordType} ${change.value}`
-                    : `${qualifyDnsName(change.record.name, change.zone)} ${change.record.type} ${change.record.value}`
+                  {change.type === 'ADD'
+                    ? `${qualifyDnsName(change.name || '', change.zone)} ${change.recordType} ${change.value}`
+                    : `${qualifyDnsName(change.record?.name || '', change.zone)} ${change.record?.type} ${change.record?.value}`
                   }
                 </Alert>
               ))}
@@ -138,7 +145,7 @@ function DemoMode() {
           <Typography sx={{ mb: 2 }}>
             In a production environment, you can validate records against different resolvers:
           </Typography>
-          
+
           <Box component="div" sx={{ mb: 2 }}>
             <Typography component="div">
               <Box component="ul" sx={{ pl: 3 }}>
@@ -148,7 +155,7 @@ function DemoMode() {
               </Box>
             </Typography>
           </Box>
-          
+
           <Alert severity="info" sx={{ mt: 2 }}>
             Demo Mode: Validation is simulated. In production, real DNS queries will be performed.
           </Alert>
@@ -169,7 +176,7 @@ function DemoMode() {
           </ul>
           <Button
             variant="contained"
-            onClick={() => clearChanges()}
+            onClick={() => clearPendingChanges()}
             sx={{ mt: 2 }}
           >
             Clear Demo Changes
@@ -189,7 +196,7 @@ function DemoMode() {
 
   const handleReset = () => {
     setActiveStep(0);
-    clearChanges();
+    clearPendingChanges();
   };
 
   return (
@@ -197,7 +204,7 @@ function DemoMode() {
       <Typography variant="h5" gutterBottom>
         Demo Mode
       </Typography>
-      
+
       <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
         {steps.map((step) => (
           <Step key={step.label}>
@@ -225,7 +232,7 @@ function DemoMode() {
             Reset Demo
           </Button>
           {activeStep === steps.length - 1 ? (
-            <Button 
+            <Button
               variant="contained"
               onClick={handleReset}
             >
@@ -245,4 +252,4 @@ function DemoMode() {
   );
 }
 
-export default DemoMode; 
+export default DemoMode;

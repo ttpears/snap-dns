@@ -1,3 +1,4 @@
+// src/components/Snapshots.tsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
@@ -59,19 +60,49 @@ import {
 } from '@mui/icons-material';
 import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
-import { backupService } from '../services/backupService.ts';
+import { backupService } from '../services/backupService';
 import { notificationService } from '../services/notificationService';
 import { useKey } from '../context/KeyContext';
 import { usePendingChanges } from '../context/PendingChangesContext';
-import { tsigKeyService } from '../services/tsigKeyService';
+import { tsigKeyService, TSIGKey } from '../services/tsigKeyService';
+import { DNSRecord } from '../types/dns';
 
-// Add this utility function near the top of the file
-const getRelativeTimeString = (timestamp) => {
+interface NormalizedRecord {
+  key: string;
+  normalizedRecord: {
+    name: string;
+    type: string;
+    value: any;
+    ttl: number;
+    class: string;
+  };
+  originalRecord: DNSRecord;
+}
+
+interface RecordChange {
+  field: string;
+  old: any;
+  new: any;
+}
+
+interface ModifiedRecord {
+  old: DNSRecord;
+  new: DNSRecord;
+  changes: RecordChange[];
+}
+
+interface ComparisonData {
+  added: DNSRecord[];
+  removed: DNSRecord[];
+  modified: ModifiedRecord[];
+  unchanged: DNSRecord[];
+}
+
+const getRelativeTimeString = (timestamp: number): string => {
   const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
   const now = Date.now();
   const diff = timestamp - now;
-  
-  // Convert to appropriate time unit
+
   const diffSeconds = Math.round(diff / 1000);
   const diffMinutes = Math.round(diffSeconds / 60);
   const diffHours = Math.round(diffMinutes / 60);
@@ -80,7 +111,6 @@ const getRelativeTimeString = (timestamp) => {
   const diffMonths = Math.round(diffDays / 30);
   const diffYears = Math.round(diffDays / 365);
 
-  // Choose appropriate time unit based on difference
   if (Math.abs(diffYears) >= 1) {
     return rtf.format(diffYears, 'year');
   }
@@ -102,26 +132,21 @@ const getRelativeTimeString = (timestamp) => {
   return rtf.format(diffSeconds, 'second');
 };
 
-// Add this helper function at the top level
-const normalizeRecord = (record) => {
+const normalizeRecord = (record: DNSRecord): NormalizedRecord | null => {
   const name = record.name.replace(/\.+$/, '').toLowerCase();
-  let value = record.value;
+  let value: any = record.value;
 
-  // Skip TSIG records
   if (record.type === 'TSIG') {
     return null;
   }
 
-  // Handle different record types
   switch (record.type) {
     case 'SOA': {
-      // For SOA records, parse and normalize each component
-      let soaValue;
+      let soaValue: any;
       if (typeof value === 'object') {
         soaValue = value;
       } else {
-        // Parse space-separated SOA string
-        const [mname, rname, serial, refresh, retry, expire, minimum] = value.split(/\s+/);
+        const [mname, rname, serial, refresh, retry, expire, minimum] = (value as string).split(/\s+/);
         soaValue = {
           mname,
           rname,
@@ -132,18 +157,15 @@ const normalizeRecord = (record) => {
         };
       }
 
-      // Normalize the values consistently, excluding serial number for comparison
       value = {
         mname: soaValue.mname?.toLowerCase().replace(/\.+$/, ''),
         rname: soaValue.rname?.toLowerCase().replace(/\.+$/, ''),
-        // Exclude serial from the comparison value
         refresh: parseInt(soaValue.refresh) || 0,
         retry: parseInt(soaValue.retry) || 0,
         expire: parseInt(soaValue.expire) || 0,
         minimum: parseInt(soaValue.minimum) || 0
       };
 
-      // Create comparison key without serial number
       return {
         key: `${name}|${record.type}|${JSON.stringify(value)}|${record.ttl}|${record.class || 'IN'}`,
         normalizedRecord: {
@@ -157,13 +179,11 @@ const normalizeRecord = (record) => {
       };
     }
     case 'MX': {
-      // For MX records, normalize priority and domain
       const [priority, domain] = typeof value === 'string' ? value.split(/\s+/) : [value.priority, value.exchange];
       value = `${parseInt(priority)} ${domain.toLowerCase().replace(/\.+$/, '')}`;
       break;
     }
     case 'SRV': {
-      // For SRV records, normalize all components
       if (typeof value === 'string') {
         const [priority, weight, port, target] = value.split(/\s+/);
         value = `${parseInt(priority)} ${parseInt(weight)} ${parseInt(port)} ${target.toLowerCase().replace(/\.+$/, '')}`;
@@ -173,17 +193,14 @@ const normalizeRecord = (record) => {
       break;
     }
     case 'TXT':
-      // Normalize TXT records by removing quotes and normalizing whitespace
       value = String(value).replace(/^"(.*)"$/, '$1').replace(/\s+/g, ' ').trim();
       break;
     case 'CNAME':
     case 'NS':
     case 'PTR':
-      // Normalize domain names
       value = String(value).toLowerCase().replace(/\.+$/, '');
       break;
     default:
-      // For other record types, just convert to string
       value = String(value).trim();
   }
 
@@ -200,62 +217,59 @@ const normalizeRecord = (record) => {
   };
 };
 
-const normalizeValue = (record) => {
+const normalizeValue = (record: DNSRecord): string => {
   let value = record.value;
-  
-  // Handle object values (like for CAA records)
+
   if (typeof value === 'object') {
     return JSON.stringify(value);
   }
 
-  value = value.toString();
+  const strValue = value.toString();
 
   switch (record.type.toUpperCase()) {
     case 'TXT':
-      // Remove enclosing quotes and normalize whitespace
-      return value.replace(/^["'](.*)["']$/, '$1')
+      return strValue.replace(/^["'](.*)["']$/, '$1')
                  .replace(/\s+/g, ' ')
                  .trim();
-    
+
     case 'MX':
     case 'SRV':
-      // Normalize priority-based records
-      return value.replace(/\s+/g, ' ').trim();
-    
+      return strValue.replace(/\s+/g, ' ').trim();
+
     case 'CNAME':
     case 'NS':
     case 'PTR':
     case 'DNAME':
-      // Normalize domain names
-      return value.toLowerCase().replace(/\.+$/, '');
-    
+      return strValue.toLowerCase().replace(/\.+$/, '');
+
     case 'A':
     case 'AAAA':
-      // Normalize IP addresses
-      return value.trim();
-    
+      return strValue.trim();
+
     case 'CAA':
-      // Handle CAA record format
       try {
-        const [flags, tag, value] = value.split(/\s+/);
-        return `${parseInt(flags)} ${tag.toLowerCase()} ${value.replace(/^["'](.*)["']$/, '$1')}`;
+        const parts = strValue.split(/\s+/);
+        const flags = parts[0];
+        const tag = parts[1];
+        const caaValue = parts[2];
+        return `${parseInt(flags)} ${tag.toLowerCase()} ${caaValue.replace(/^["'](.*)["']$/, '$1')}`;
       } catch {
-        return value;
+        return strValue;
       }
-    
+
     default:
-      return value;
+      return strValue;
   }
 };
 
-const normalizeSOA = (record) => {
+const normalizeSOA = (record: DNSRecord): any => {
   if (!record || record.type !== 'SOA') return null;
 
-  let soaValue;
+  let soaValue: any;
   if (typeof record.value === 'object') {
     soaValue = record.value;
   } else {
-    const [mname, rname, serial, refresh, retry, expire, minimum] = record.value.split(/\s+/);
+    const [mname, rname, serial, refresh, retry, expire, minimum] = (record.value as string).split(/\s+/);
     soaValue = {
       mname,
       rname,
@@ -266,7 +280,6 @@ const normalizeSOA = (record) => {
     };
   }
 
-  // Return normalized SOA without serial
   return {
     mname: soaValue.mname?.toLowerCase().replace(/\.+$/, ''),
     rname: soaValue.rname?.toLowerCase().replace(/\.+$/, ''),
@@ -277,46 +290,44 @@ const normalizeSOA = (record) => {
   };
 };
 
-const compareSOA = (record1, record2) => {
+const compareSOA = (record1: DNSRecord, record2: DNSRecord): boolean => {
   const soa1 = normalizeSOA(record1);
   const soa2 = normalizeSOA(record2);
-  
+
   if (!soa1 || !soa2) return false;
-  
+
   return JSON.stringify(soa1) === JSON.stringify(soa2);
 };
 
 function Snapshots() {
   const { addPendingChange, setShowPendingDrawer } = usePendingChanges();
-  // Move all state from BackupImport
   const { config } = useConfig();
   const { selectedKey } = useKey();
-  const [selectedZone, setSelectedZone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  const [backups, setBackups] = useState([]);
-  const [selectedBackup, setSelectedBackup] = useState(null);
-  const [loadingBackups, setLoadingBackups] = useState(false);
-  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
-  const [compareDialogOpen, setCompareDialogOpen] = useState(false);
-  const [comparisonData, setComparisonData] = useState(null);
-  const [loadingComparison, setLoadingComparison] = useState(false);
-  const [expandedRecords, setExpandedRecords] = useState({});
-  const [recordsToRestore, setRecordsToRestore] = useState([]);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterZone, setFilterZone] = useState('all');
-  const [sortBy, setSortBy] = useState('date');
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [selectedKeyId, setSelectedKeyId] = useState('');
-  const [backendKeys, setBackendKeys] = useState([]);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importFile, setImportFile] = useState(null);
-  const [importing, setImporting] = useState(false);
+  const [selectedZone, setSelectedZone] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [backups, setBackups] = useState<any[]>([]);
+  const [selectedBackup, setSelectedBackup] = useState<any>(null);
+  const [loadingBackups, setLoadingBackups] = useState<boolean>(false);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState<boolean>(false);
+  const [compareDialogOpen, setCompareDialogOpen] = useState<boolean>(false);
+  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
+  const [loadingComparison, setLoadingComparison] = useState<boolean>(false);
+  const [expandedRecords, setExpandedRecords] = useState<Record<string, boolean>>({});
+  const [recordsToRestore, setRecordsToRestore] = useState<DNSRecord[]>([]);
+  const [page, setPage] = useState<number>(0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [filterZone, setFilterZone] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('date');
+  const [sortOrder, setSortOrder] = useState<string>('desc');
+  const [selectedKeyId, setSelectedKeyId] = useState<string>('');
+  const [backendKeys, setBackendKeys] = useState<TSIGKey[]>([]);
+  const [importDialogOpen, setImportDialogOpen] = useState<boolean>(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState<boolean>(false);
 
-  // Load keys from backend API
   useEffect(() => {
     const loadKeys = async () => {
       try {
@@ -324,17 +335,15 @@ function Snapshots() {
         setBackendKeys(keys);
       } catch (error) {
         console.error('Failed to load keys:', error);
-        // Fall back to config keys if backend fails
-        setBackendKeys(config.keys || []);
+        setBackendKeys(config.keys as any[] || []);
       }
     };
 
     loadKeys();
   }, [config.keys]);
 
-  // Get available zones from backend keys
   const availableZones = useMemo(() => {
-    const zones = new Set();
+    const zones = new Set<string>();
     backendKeys.forEach(key => {
       key.zones?.forEach(zone => zones.add(zone));
     });
@@ -346,7 +355,6 @@ function Snapshots() {
     return backendKeys.filter(key => key.zones?.includes(selectedZone)) || [];
   }, [backendKeys, selectedZone]);
 
-  // Load backups from backend API on mount
   useEffect(() => {
     const loadBackups = async () => {
       setLoadingBackups(true);
@@ -355,7 +363,7 @@ function Snapshots() {
         setBackups(backupList);
       } catch (error) {
         console.error('Failed to load backups:', error);
-        setError(`Failed to load snapshots: ${error.message}`);
+        setError(`Failed to load snapshots: ${(error as Error).message}`);
       } finally {
         setLoadingBackups(false);
       }
@@ -364,7 +372,6 @@ function Snapshots() {
     loadBackups();
   }, []);
 
-  // Move all the helper functions and handlers from BackupImport
   const handleBackup = async () => {
     if (!selectedZone || !selectedKeyId) {
       setError('Please select both a zone and a key');
@@ -381,23 +388,21 @@ function Snapshots() {
         throw new Error('No key configuration found');
       }
 
-      // Fetch zone records - backend will look up key server-side
       const records = await dnsService.fetchZoneRecords(selectedZone);
 
       const backup = await backupService.createBackup(selectedZone, records, {
         type: 'manual',
         description: 'Manual snapshot',
         server: keyConfig.server,
-        config: config
+        config: config as any
       });
 
-      // Reload all backups from server
       const backupList = await backupService.getBackups();
       setBackups(backupList);
       setSuccess('Snapshot created successfully');
     } catch (err) {
       console.error('Backup failed:', err);
-      setError(`Failed to create snapshot: ${err.message}`);
+      setError(`Failed to create snapshot: ${(err as Error).message}`);
     } finally {
       setLoading(false);
     }
@@ -416,15 +421,12 @@ function Snapshots() {
       const fileContent = await importFile.text();
       const snapshotData = JSON.parse(fileContent);
 
-      // Validate snapshot format
       if (!snapshotData.zone || !snapshotData.records || !Array.isArray(snapshotData.records)) {
         throw new Error('Invalid snapshot format. Must contain zone and records array.');
       }
 
-      // Import the snapshot
-      await backupService.importBackup(snapshotData);
+      await backupService.importBackup(importFile);
 
-      // Reload backups
       const backupList = await backupService.getBackups();
       setBackups(backupList);
 
@@ -433,30 +435,28 @@ function Snapshots() {
       setImportFile(null);
     } catch (err) {
       console.error('Import failed:', err);
-      setError(`Failed to import snapshot: ${err.message}`);
+      setError(`Failed to import snapshot: ${(err as Error).message}`);
     } finally {
       setImporting(false);
     }
   };
 
-  const handleDeleteBackup = async (backup) => {
+  const handleDeleteBackup = async (backup: any) => {
     if (window.confirm('Are you sure you want to delete this snapshot?')) {
       try {
         await backupService.deleteBackup(backup.zone, backup.id);
-        // Reload backups after deletion
         const backupList = await backupService.getBackups();
         setBackups(backupList);
         setSuccess('Snapshot deleted successfully');
       } catch (error) {
-        setError(`Failed to delete snapshot: ${error.message}`);
+        setError(`Failed to delete snapshot: ${(error as Error).message}`);
         console.error('Delete backup error:', error);
       }
     }
   };
 
-  const handleDownloadBackup = async (backupListItem) => {
+  const handleDownloadBackup = async (backupListItem: any) => {
     try {
-      // Load full backup with records from backend
       const fullBackup = await backupService.getBackup(backupListItem.zone, backupListItem.id);
 
       const blob = new Blob([JSON.stringify(fullBackup, null, 2)], {
@@ -471,26 +471,24 @@ function Snapshots() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      setError(`Failed to download snapshot: ${error.message}`);
+      setError(`Failed to download snapshot: ${(error as Error).message}`);
     }
   };
 
-  // Group backups by date
   const groupedBackups = useMemo(() => {
     const filtered = backups
       .filter(backup => {
-        const matchesSearch = searchTerm === '' || 
+        const matchesSearch = searchTerm === '' ||
           backup.zone.toLowerCase().includes(searchTerm.toLowerCase()) ||
           backup.description?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesZone = filterZone === 'all' || backup.zone === filterZone;
         return matchesSearch && matchesZone;
       });
 
-    // Sort backups
     const sorted = [...filtered].sort((a, b) => {
       if (sortBy === 'date') {
-        return sortOrder === 'desc' 
-          ? b.timestamp - a.timestamp 
+        return sortOrder === 'desc'
+          ? b.timestamp - a.timestamp
           : a.timestamp - b.timestamp;
       } else if (sortBy === 'zone') {
         return sortOrder === 'desc'
@@ -500,8 +498,7 @@ function Snapshots() {
       return 0;
     });
 
-    // Group by date
-    return sorted.reduce((groups, backup) => {
+    return sorted.reduce<Record<string, any[]>>((groups, backup) => {
       const date = new Date(backup.timestamp).toLocaleDateString();
       if (!groups[date]) {
         groups[date] = [];
@@ -511,38 +508,32 @@ function Snapshots() {
     }, {});
   }, [backups, searchTerm, filterZone, sortBy, sortOrder]);
 
-  // Get unique zones from backups
   const availableZonesInBackups = useMemo(() => {
-    const zones = new Set(backups.map(backup => backup.zone));
+    const zones = new Set(backups.map((backup: any) => backup.zone));
     return ['all', ...Array.from(zones)];
   }, [backups]);
 
-  // Add these functions after the existing handlers:
-
-  const handleRestoreBackup = async (backupListItem) => {
+  const handleRestoreBackup = async (backupListItem: any) => {
     try {
-      // Load full backup with records from backend
       const fullBackup = await backupService.getBackup(backupListItem.zone, backupListItem.id);
       setSelectedBackup(fullBackup);
       setRestoreDialogOpen(true);
     } catch (error) {
       console.error('Failed to load backup:', error);
-      setError(`Failed to load snapshot: ${error.message}`);
+      setError(`Failed to load snapshot: ${(error as Error).message}`);
     }
   };
 
-  const handleCompareBackup = async (backupListItem) => {
+  const handleCompareBackup = async (backupListItem: any) => {
     setCompareDialogOpen(true);
     setLoadingComparison(true);
 
     try {
-      // Load full backup with records from backend
       const fullBackup = await backupService.getBackup(backupListItem.zone, backupListItem.id);
       setSelectedBackup(fullBackup);
 
       console.log('Fetching current records for zone:', backupListItem.zone);
 
-      // Fetch current zone records - backend will look up key server-side
       const currentRecords = await dnsService.fetchZoneRecords(backupListItem.zone);
 
       console.log('Fetched current records:', currentRecords);
@@ -551,35 +542,30 @@ function Snapshots() {
         throw new Error('Failed to fetch current zone records or zone is empty');
       }
 
-      // Compare records
       const comparison = compareZoneRecords(fullBackup.records, currentRecords);
       setComparisonData(comparison);
     } catch (error) {
       console.error('Failed to load current zone records:', error);
-      setError(`Failed to load current zone records: ${error.message}`);
+      setError(`Failed to load current zone records: ${(error as Error).message}`);
     } finally {
       setLoadingComparison(false);
     }
   };
 
-  // Replace the existing compareZoneRecords function with this corrected version
-  const findRecordChanges = (oldRecord, newRecord) => {
-    const changes = [];
-    
-    // Normalize values for comparison
-    const normalizeValue = (record) => {
+  const findRecordChanges = (oldRecord: DNSRecord, newRecord: DNSRecord): RecordChange[] => {
+    const changes: RecordChange[] = [];
+
+    const normalizeRecordValue = (record: DNSRecord): string => {
       if (record.type === 'TSIG') {
-        // Skip TSIG record comparison
         return '';
       }
 
       if (record.type === 'SOA') {
-        // For SOA records, parse and normalize
-        let soaValue;
+        let soaValue: any;
         if (typeof record.value === 'object') {
           soaValue = record.value;
         } else {
-          const [mname, rname, serial, refresh, retry, expire, minimum] = record.value.split(/\s+/);
+          const [mname, rname, serial, refresh, retry, expire, minimum] = (record.value as string).split(/\s+/);
           soaValue = {
             mname,
             rname,
@@ -590,7 +576,6 @@ function Snapshots() {
           };
         }
 
-        // Return normalized SOA value without serial
         return JSON.stringify({
           mname: soaValue.mname?.toLowerCase().replace(/\.+$/, ''),
           rname: soaValue.rname?.toLowerCase().replace(/\.+$/, ''),
@@ -604,9 +589,9 @@ function Snapshots() {
       if (typeof record.value === 'object') {
         return JSON.stringify(record.value);
       }
-      
+
       const value = String(record.value);
-      
+
       switch (record.type) {
         case 'TXT':
           return value.replace(/^"(.*)"$/, '$1').trim();
@@ -622,9 +607,9 @@ function Snapshots() {
       }
     };
 
-    const oldValue = normalizeValue(oldRecord);
-    const newValue = normalizeValue(newRecord);
-    
+    const oldValue = normalizeRecordValue(oldRecord);
+    const newValue = normalizeRecordValue(newRecord);
+
     if (oldValue !== newValue) {
       changes.push({
         field: 'value',
@@ -650,60 +635,48 @@ function Snapshots() {
     return changes;
   };
 
-  const compareZoneRecords = (backupRecords, currentRecords) => {
-    const added = [];
-    const removed = [];
-    const modified = [];
-    const unchanged = [];
+  const compareZoneRecords = (backupRecords: DNSRecord[], currentRecords: DNSRecord[]): ComparisonData => {
+    const added: DNSRecord[] = [];
+    const removed: DNSRecord[] = [];
+    const modified: ModifiedRecord[] = [];
 
-    // Filter out TSIG records and normalize all records
-    const backupMap = new Map();
-    const currentMap = new Map();
+    const backupMap = new Map<string, NormalizedRecord>();
+    const currentMap = new Map<string, NormalizedRecord>();
 
-    // Process backup records
     backupRecords
       .map(record => normalizeRecord(record))
-      .filter(Boolean)
+      .filter((r): r is NormalizedRecord => r !== null)
       .forEach(normalized => {
         backupMap.set(normalized.key, normalized);
       });
 
-    // Process current records
     currentRecords
       .map(record => normalizeRecord(record))
-      .filter(Boolean)
+      .filter((r): r is NormalizedRecord => r !== null)
       .forEach(normalized => {
         currentMap.set(normalized.key, normalized);
 
         if (backupMap.has(normalized.key)) {
-          // Record exists in both - it's unchanged
-          unchanged.push(normalized.originalRecord);
           backupMap.delete(normalized.key);
         } else {
-          // Check if a record with same name and type exists (possible modification)
           const possibleMatch = Array.from(backupMap.values()).find(
             backup => backup.normalizedRecord.name === normalized.normalizedRecord.name &&
                       backup.normalizedRecord.type === normalized.normalizedRecord.type
           );
 
           if (!possibleMatch) {
-            // No matching record found - it's new
             added.push(normalized.originalRecord);
           }
-          // If there's a possible match, wait to process it in the backupMap loop
         }
       });
 
-    // Process remaining backup records
     backupMap.forEach(backup => {
-      // Look for modifications
       const possibleMatch = Array.from(currentMap.values()).find(
         current => current.normalizedRecord.name === backup.normalizedRecord.name &&
                    current.normalizedRecord.type === backup.normalizedRecord.type
       );
 
       if (possibleMatch) {
-        // Record exists but with different value/ttl - it's modified
         const changes = findRecordChanges(backup.originalRecord, possibleMatch.originalRecord);
         if (changes.length > 0) {
           modified.push({
@@ -713,7 +686,6 @@ function Snapshots() {
           });
         }
       } else {
-        // Record doesn't exist anymore - it was removed
         removed.push(backup.originalRecord);
       }
     });
@@ -721,66 +693,59 @@ function Snapshots() {
     return { added, removed, modified, unchanged: [] };
   };
 
-  const isRecordEqual = (record1, record2) => {
-    // Must be same type and name
+  const isRecordEqual = (record1: DNSRecord, record2: DNSRecord): boolean => {
     if (record1.name !== record2.name || record1.type !== record2.type) {
       return false;
     }
 
-    // Special handling for different record types
     switch (record1.type) {
       case 'SOA':
         return compareSOA(record1, record2);
-      case 'MX':
-        // Compare priority and exchange separately
-        const [prio1, exchange1] = record1.value.split(/\s+/);
-        const [prio2, exchange2] = record2.value.split(/\s+/);
-        return parseInt(prio1) === parseInt(prio2) && 
+      case 'MX': {
+        const [prio1, exchange1] = String(record1.value).split(/\s+/);
+        const [prio2, exchange2] = String(record2.value).split(/\s+/);
+        return parseInt(prio1) === parseInt(prio2) &&
                exchange1.toLowerCase().replace(/\.+$/, '') === exchange2.toLowerCase().replace(/\.+$/, '');
-      case 'SRV':
-        // Compare all SRV components
-        const [p1, w1, port1, target1] = record1.value.split(/\s+/);
-        const [p2, w2, port2, target2] = record2.value.split(/\s+/);
+      }
+      case 'SRV': {
+        const [p1, w1, port1, target1] = String(record1.value).split(/\s+/);
+        const [p2, w2, port2, target2] = String(record2.value).split(/\s+/);
         return parseInt(p1) === parseInt(p2) &&
                parseInt(w1) === parseInt(w2) &&
                parseInt(port1) === parseInt(port2) &&
                target1.toLowerCase().replace(/\.+$/, '') === target2.toLowerCase().replace(/\.+$/, '');
+      }
       default:
-        // For other records, normalize and compare
-        return record1.value.toString().toLowerCase().replace(/\.+$/, '') === 
+        return record1.value.toString().toLowerCase().replace(/\.+$/, '') ===
                record2.value.toString().toLowerCase().replace(/\.+$/, '') &&
                record1.ttl === record2.ttl &&
                (record1.class || 'IN') === (record2.class || 'IN');
     }
   };
 
-  const confirmRestore = async (recordsToRestore) => {
+  const confirmRestore = async (recordsToRestore: DNSRecord[]) => {
     try {
-      // Find the key that manages this zone
       const keyForZone = backendKeys.find(k => k.zones.includes(selectedBackup.zone));
 
       if (!keyForZone) {
         throw new Error('No key found for this zone');
       }
 
-      // Fetch current zone records to check what exists
       const currentRecords = await dnsService.fetchZoneRecords(selectedBackup.zone);
 
-      const changes = [];
+      const changes: any[] = [];
 
       console.log('=== RESTORE DEBUG ===');
       console.log('Records to restore:', recordsToRestore.length);
       console.log('Current zone records:', currentRecords.length);
 
-      // Filter out TSIG records from both snapshot and current records
       const filteredRecordsToRestore = recordsToRestore.filter(r => r.type !== 'TSIG');
-      const filteredCurrentRecords = currentRecords.filter(r => r.type !== 'TSIG');
+      const filteredCurrentRecords = currentRecords.filter(r => (r.type as string) !== 'TSIG');
 
       console.log('After filtering TSIG - Snapshot:', filteredRecordsToRestore.length, 'Current:', filteredCurrentRecords.length);
 
-      // Process records from snapshot (ADD or MODIFY)
       filteredRecordsToRestore.forEach(record => {
-        const normalizedRecord = {
+        const normalizedRecord: DNSRecord = {
           ...record,
           name: record.name,
           type: record.type,
@@ -789,7 +754,6 @@ function Snapshots() {
           class: record.class || 'IN'
         };
 
-        // Find EXACT match by name, type, AND value (not just name/type)
         const exactMatch = filteredCurrentRecords.find(r =>
           r.name === normalizedRecord.name &&
           r.type === normalizedRecord.type &&
@@ -797,19 +761,16 @@ function Snapshots() {
         );
 
         if (exactMatch) {
-          // Exact match found - skip it (no change needed)
           if (record.type !== 'SOA') {
             console.log(`Skipping ${normalizedRecord.name} (${normalizedRecord.type}) - exact match`);
           }
         } else {
-          // No exact match - check if there's a record with same name/type but different value
           const partialMatch = filteredCurrentRecords.find(r =>
             r.name === normalizedRecord.name &&
             r.type === normalizedRecord.type
           );
 
           if (partialMatch) {
-            // Record exists with same name/type but different value - use MODIFY
             if (record.type !== 'SOA') {
               console.log(`MODIFY ${normalizedRecord.name} (${normalizedRecord.type}):`, {
                 from: partialMatch.value,
@@ -831,7 +792,6 @@ function Snapshots() {
               }
             });
           } else {
-            // Record doesn't exist at all - use ADD
             console.log(`ADD ${normalizedRecord.name} (${normalizedRecord.type})`);
 
             changes.push({
@@ -850,12 +810,9 @@ function Snapshots() {
         }
       });
 
-      // Process records in current zone that are NOT in snapshot (DELETE)
       filteredCurrentRecords.forEach(currentRecord => {
-        // Skip SOA records - never delete these
         if (currentRecord.type === 'SOA') return;
 
-        // Check if this EXACT current record (name+type+value) exists in the snapshot
         const inSnapshot = filteredRecordsToRestore.find(r =>
           r.name === currentRecord.name &&
           r.type === currentRecord.type &&
@@ -863,7 +820,6 @@ function Snapshots() {
         );
 
         if (!inSnapshot) {
-          // This exact record exists now but wasn't in the snapshot - mark for deletion
           console.log(`DELETE ${currentRecord.name} (${currentRecord.type}) - value: ${currentRecord.value}`);
 
           changes.push({
@@ -888,18 +844,16 @@ function Snapshots() {
         return;
       }
 
-      // Add each change individually using addPendingChange
       changes.forEach(change => {
-        console.log('Adding pending change:', change); // Debug log
+        console.log('Adding pending change:', change);
         addPendingChange(change);
       });
 
-      // Count change types for informative message
       const adds = changes.filter(c => c.type === 'ADD').length;
       const modifies = changes.filter(c => c.type === 'MODIFY').length;
       const deletes = changes.filter(c => c.type === 'DELETE').length;
 
-      const parts = [];
+      const parts: string[] = [];
       if (adds > 0) parts.push(`${adds} add${adds !== 1 ? 's' : ''}`);
       if (modifies > 0) parts.push(`${modifies} modification${modifies !== 1 ? 's' : ''}`);
       if (deletes > 0) parts.push(`${deletes} deletion${deletes !== 1 ? 's' : ''}`);
@@ -910,23 +864,22 @@ function Snapshots() {
       setSuccess(`Restore queued: ${parts.join(', ')}`);
     } catch (error) {
       console.error('Failed to restore records:', error);
-      setError('Failed to restore zone: ' + error.message);
+      setError('Failed to restore zone: ' + (error as Error).message);
     }
   };
 
-  // Update the comparison display in the dialog
-  const renderComparisonDetails = (record) => {
+  const renderComparisonDetails = (record: ModifiedRecord) => {
     return record.changes.map((change, index) => (
       <TableRow key={`${record.old.name}-${record.old.type}-${change.field}-${index}`}>
         <TableCell component="th" scope="row">
           {change.field}
         </TableCell>
         <TableCell>
-          <Typography 
-            component="pre" 
-            sx={{ 
-              m: 0, 
-              p: 1, 
+          <Typography
+            component="pre"
+            sx={{
+              m: 0,
+              p: 1,
               backgroundColor: 'error.light',
               borderRadius: 1,
               fontSize: '0.875rem',
@@ -938,11 +891,11 @@ function Snapshots() {
           </Typography>
         </TableCell>
         <TableCell>
-          <Typography 
-            component="pre" 
-            sx={{ 
-              m: 0, 
-              p: 1, 
+          <Typography
+            component="pre"
+            sx={{
+              m: 0,
+              p: 1,
               backgroundColor: 'success.light',
               borderRadius: 1,
               fontSize: '0.875rem',
@@ -1021,7 +974,6 @@ function Snapshots() {
           Snapshots
         </Typography>
 
-        {/* Search and Filter Controls */}
         <Grid container spacing={2} sx={{ mb: 2 }}>
           <Grid item xs={12} sm={4}>
             <TextField
@@ -1048,8 +1000,8 @@ function Snapshots() {
                 label="Filter by Zone"
               >
                 {availableZonesInBackups.map(zone => (
-                  <MenuItem key={zone} value={zone}>
-                    {zone === 'all' ? 'All Zones' : zone}
+                  <MenuItem key={zone as string} value={zone as string}>
+                    {zone === 'all' ? 'All Zones' : zone as string}
                   </MenuItem>
                 ))}
               </Select>
@@ -1083,30 +1035,29 @@ function Snapshots() {
           </Grid>
         </Grid>
 
-        {/* Backup Groups */}
         {loadingBackups ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress />
           </Box>
         ) : Object.entries(groupedBackups).length > 0 ? (
-          Object.entries(groupedBackups).map(([date, backups]) => (
+          Object.entries(groupedBackups).map(([date, dateBackups]) => (
             <Accordion key={date} defaultExpanded={date === Object.keys(groupedBackups)[0]}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography>{date}</Typography>
-                  <Chip 
-                    size="small" 
-                    label={`${backups.length} snapshot${backups.length !== 1 ? 's' : ''}`}
+                  <Chip
+                    size="small"
+                    label={`${dateBackups.length} snapshot${dateBackups.length !== 1 ? 's' : ''}`}
                   />
                 </Box>
               </AccordionSummary>
               <AccordionDetails>
                 <Grid container spacing={2}>
-                  {backups.map((backup) => (
+                  {dateBackups.map((backup: any) => (
                     <Grid item xs={12} md={6} key={backup.id}>
-                      <Paper 
-                        elevation={2} 
-                        sx={{ 
+                      <Paper
+                        elevation={2}
+                        sx={{
                           p: 2,
                           backgroundColor: 'background.default',
                           '&:hover': {
@@ -1121,8 +1072,8 @@ function Snapshots() {
                                 {backup.zone}
                               </Typography>
                               <Tooltip title={backup.type === 'auto' ? 'Automatic snapshot' : 'Manual snapshot'}>
-                                {backup.type === 'auto' ? 
-                                  <AutoModeIcon fontSize="small" color="action" /> : 
+                                {backup.type === 'auto' ?
+                                  <AutoModeIcon fontSize="small" color="action" /> :
                                   <BackupIcon fontSize="small" color="action" />
                                 }
                               </Tooltip>
@@ -1223,21 +1174,21 @@ function Snapshots() {
                 {new Date(selectedBackup.timestamp).toLocaleString()}
                 {' '}for zone <strong>{selectedBackup?.zone}</strong>
               </DialogContentText>
-              
+
               <TableContainer sx={{ mt: 2 }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
                       <TableCell padding="checkbox">
                         <Checkbox
-                          checked={recordsToRestore.length === selectedBackup?.records?.filter(r => r.type !== 'TSIG').length}
+                          checked={recordsToRestore.length === selectedBackup?.records?.filter((r: DNSRecord) => r.type !== 'TSIG').length}
                           indeterminate={
                             recordsToRestore.length > 0 &&
-                            recordsToRestore.length < selectedBackup?.records?.filter(r => r.type !== 'TSIG').length
+                            recordsToRestore.length < selectedBackup?.records?.filter((r: DNSRecord) => r.type !== 'TSIG').length
                           }
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setRecordsToRestore(selectedBackup?.records?.filter(r => r.type !== 'TSIG') || []);
+                              setRecordsToRestore(selectedBackup?.records?.filter((r: DNSRecord) => r.type !== 'TSIG') || []);
                             } else {
                               setRecordsToRestore([]);
                             }
@@ -1251,7 +1202,7 @@ function Snapshots() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {selectedBackup?.records?.filter(r => r.type !== 'TSIG').map((record, index) => (
+                    {selectedBackup?.records?.filter((r: DNSRecord) => r.type !== 'TSIG').map((record: DNSRecord, index: number) => (
                       <TableRow
                         key={index}
                         hover
@@ -1264,7 +1215,7 @@ function Snapshots() {
                               if (e.target.checked) {
                                 setRecordsToRestore(prev => [...prev, record]);
                               } else {
-                                setRecordsToRestore(prev => 
+                                setRecordsToRestore(prev =>
                                   prev.filter(r => r !== record)
                                 );
                               }
@@ -1274,8 +1225,8 @@ function Snapshots() {
                         <TableCell>{record.name}</TableCell>
                         <TableCell>{record.type}</TableCell>
                         <TableCell>
-                          {typeof record.value === 'object' ? 
-                            JSON.stringify(record.value) : 
+                          {typeof record.value === 'object' ?
+                            JSON.stringify(record.value) :
                             record.value
                           }
                         </TableCell>
@@ -1290,9 +1241,9 @@ function Snapshots() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRestoreDialogOpen(false)}>Cancel</Button>
-          <Button 
-            onClick={() => confirmRestore(recordsToRestore)} 
-            color="warning" 
+          <Button
+            onClick={() => confirmRestore(recordsToRestore)}
+            color="warning"
             variant="contained"
             disabled={recordsToRestore.length === 0}
           >
@@ -1329,7 +1280,7 @@ function Snapshots() {
                   ({getRelativeTimeString(selectedBackup?.timestamp)})
                 </Typography>
               </Typography>
-              
+
               <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
                 <Badge badgeContent={comparisonData.added.length} color="success">
                   <Chip label="New Records" icon={<AddedIcon />} />
@@ -1369,7 +1320,7 @@ function Snapshots() {
                                     [`modified-${index}`]: !prev[`modified-${index}`]
                                   }))}
                                 >
-                                  {expandedRecords[`modified-${index}`] ? 
+                                  {expandedRecords[`modified-${index}`] ?
                                     <ExpandLessIcon /> : <ExpandMoreIcon />}
                                 </IconButton>
                               </TableCell>
@@ -1427,19 +1378,19 @@ function Snapshots() {
                           <TableRow key={index}>
                             <TableCell>{record.name}</TableCell>
                             <TableCell>
-                              <Chip 
-                                label={record.type} 
-                                size="small" 
+                              <Chip
+                                label={record.type}
+                                size="small"
                                 color="success"
                                 component="span"
                               />
                             </TableCell>
                             <TableCell>
-                              <Typography 
-                                component="pre" 
-                                sx={{ 
-                                  m: 0, 
-                                  p: 1, 
+                              <Typography
+                                component="pre"
+                                sx={{
+                                  m: 0,
+                                  p: 1,
                                   backgroundColor: 'success.light',
                                   borderRadius: 1,
                                   fontSize: '0.875rem',
@@ -1447,8 +1398,8 @@ function Snapshots() {
                                   wordBreak: 'break-all'
                                 }}
                               >
-                                {typeof record.value === 'object' ? 
-                                  JSON.stringify(record.value, null, 2) : 
+                                {typeof record.value === 'object' ?
+                                  JSON.stringify(record.value, null, 2) :
                                   record.value
                                 }
                               </Typography>
@@ -1482,19 +1433,19 @@ function Snapshots() {
                           <TableRow key={index}>
                             <TableCell>{record.name}</TableCell>
                             <TableCell>
-                              <Chip 
-                                label={record.type} 
-                                size="small" 
+                              <Chip
+                                label={record.type}
+                                size="small"
                                 color="error"
                                 component="span"
                               />
                             </TableCell>
                             <TableCell>
-                              <Typography 
-                                component="pre" 
-                                sx={{ 
-                                  m: 0, 
-                                  p: 1, 
+                              <Typography
+                                component="pre"
+                                sx={{
+                                  m: 0,
+                                  p: 1,
                                   backgroundColor: 'error.light',
                                   borderRadius: 1,
                                   fontSize: '0.875rem',
@@ -1502,8 +1453,8 @@ function Snapshots() {
                                   wordBreak: 'break-all'
                                 }}
                               >
-                                {typeof record.value === 'object' ? 
-                                  JSON.stringify(record.value, null, 2) : 
+                                {typeof record.value === 'object' ?
+                                  JSON.stringify(record.value, null, 2) :
                                   record.value
                                 }
                               </Typography>
@@ -1517,8 +1468,8 @@ function Snapshots() {
                 </>
               )}
 
-              {comparisonData.added.length === 0 && 
-               comparisonData.modified.length === 0 && 
+              {comparisonData.added.length === 0 &&
+               comparisonData.modified.length === 0 &&
                comparisonData.removed.length === 0 && (
                 <Alert severity="info" sx={{ mt: 2 }}>
                   No changes detected between the snapshot and current zone.
@@ -1533,7 +1484,6 @@ function Snapshots() {
           <Button onClick={() => setCompareDialogOpen(false)}>Close</Button>
           <Button
             onClick={() => {
-              // Close compare dialog and open restore dialog
               setCompareDialogOpen(false);
               handleRestoreBackup(selectedBackup);
             }}
@@ -1544,7 +1494,6 @@ function Snapshots() {
           </Button>
           <Button
             onClick={async () => {
-              // Restore ALL records from snapshot (full restore)
               setCompareDialogOpen(false);
               setRecordsToRestore(selectedBackup.records);
               await confirmRestore(selectedBackup.records);
@@ -1637,4 +1586,4 @@ function Snapshots() {
   );
 }
 
-export default Snapshots; 
+export default Snapshots;

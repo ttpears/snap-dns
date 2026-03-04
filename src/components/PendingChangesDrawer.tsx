@@ -30,15 +30,23 @@ import { notificationService } from '../services/notificationService';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { backupService } from '../services/backupService';
 import { useConfig } from '../context/ConfigContext';
-import { tsigKeyService } from '../services/tsigKeyService';
+import { tsigKeyService, TSIGKey } from '../services/tsigKeyService';
 import { useNotification } from '../context/NotificationContext';
+import { PendingChange } from '../types/dns';
+
+interface PendingChangesDrawerProps {
+  open: boolean;
+  onClose: () => void;
+  removePendingChange: (changeId: string) => void;
+  clearPendingChanges: () => void;
+}
 
 function PendingChangesDrawer({
   open,
   onClose,
   removePendingChange,
   clearPendingChanges
-}) {
+}: PendingChangesDrawerProps) {
   const {
     pendingChanges,
     setPendingChanges,
@@ -47,10 +55,10 @@ function PendingChangesDrawer({
   const { config } = useConfig();
   const { showSuccess, showError } = useNotification();
   const [applying, setApplying] = useState(false);
-  const [error, setError] = useState(null);
-  const [draggingIndex, setDraggingIndex] = useState(null);
-  const [expandedItems, setExpandedItems] = useState({});
-  const [backendKeys, setBackendKeys] = useState([]);
+  const [error, setError] = useState<string | null>(null);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [backendKeys, setBackendKeys] = useState<TSIGKey[]>([]);
 
   // Load keys from backend API
   useEffect(() => {
@@ -61,7 +69,7 @@ function PendingChangesDrawer({
       } catch (error) {
         console.error('Failed to load keys:', error);
         // Fall back to config keys if backend fails
-        setBackendKeys(config.keys || []);
+        setBackendKeys((config.keys || []) as unknown as TSIGKey[]);
       }
     };
 
@@ -78,12 +86,12 @@ function PendingChangesDrawer({
     }
   }, [pendingChanges.length, setShowPendingDrawer]);
 
-  const handleDragStart = (e, index) => {
+  const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggingIndex(index);
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e, index) => {
+  const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     if (draggingIndex === null) return;
 
@@ -106,7 +114,7 @@ function PendingChangesDrawer({
 
     try {
       // Group changes by zone
-      const changesByZone = pendingChanges.reduce((acc, change) => {
+      const changesByZone = pendingChanges.reduce((acc: Record<string, PendingChange[]>, change) => {
         if (!acc[change.zone]) {
           acc[change.zone] = [];
         }
@@ -115,11 +123,11 @@ function PendingChangesDrawer({
       }, {});
 
       // Track all successful changes for notification
-      const allSuccessfulChanges = [];
-      const affectedZones = [];
+      const allSuccessfulChanges: PendingChange[] = [];
+      const affectedZones: string[] = [];
 
       // Apply changes zone by zone
-      for (const [zone, changes] of Object.entries(changesByZone)) {
+      for (const [zone, changes] of Object.entries(changesByZone) as [string, PendingChange[]][]) {
         try {
           // Get the first change to determine the key being used
           const firstChange = changes[0];
@@ -138,7 +146,7 @@ function PendingChangesDrawer({
               type: 'auto',
               description: `Automatic snapshot before applying ${changes.length} change${changes.length !== 1 ? 's' : ''}`,
               server: keyConfig.server,
-              config: config
+              config: config as any
             });
             console.log(`Auto-snapshot created for zone ${zone}`);
           } catch (backupError) {
@@ -149,9 +157,9 @@ function PendingChangesDrawer({
           // Apply changes in order
           for (const change of changes) {
             try {
-              switch (change.type) {
+              switch ((change as any).type) {
                 case 'ADD':
-                  await dnsService.addRecord(zone, change.record);
+                  await dnsService.addRecord(zone, change.record! as any);
                   allSuccessfulChanges.push({
                     ...change,
                     type: 'ADD'
@@ -160,26 +168,26 @@ function PendingChangesDrawer({
                 case 'RESTORE':
                   // For restore, we need to ensure the record is properly formatted
                   const recordToRestore = {
-                    ...change.record,
-                    name: change.record.name,
-                    type: change.record.type,
-                    value: change.record.value,
-                    ttl: change.record.ttl || 3600  // Ensure TTL exists
+                    ...change.record!,
+                    name: change.record!.name,
+                    type: change.record!.type,
+                    value: change.record!.value,
+                    ttl: change.record!.ttl || 3600  // Ensure TTL exists
                   };
-                  await dnsService.addRecord(zone, recordToRestore);
+                  await dnsService.addRecord(zone, recordToRestore as any);
                   allSuccessfulChanges.push({
                     ...change,
-                    type: 'RESTORE',
-                    record: recordToRestore
+                    type: 'ADD',
+                    record: recordToRestore as any
                   });
                   break;
                 case 'DELETE':
-                  await dnsService.deleteRecord(zone, change.record);
+                  await dnsService.deleteRecord(zone, change.record! as any);
                   allSuccessfulChanges.push(change);
                   break;
                 case 'MODIFY':
                   // Use atomic update for modifications (especially important for SOA)
-                  await dnsService.updateRecord(zone, change.originalRecord, change.newRecord);
+                  await dnsService.updateRecord(zone, change.originalRecord! as any, change.newRecord! as any);
                   allSuccessfulChanges.push(change);
                   break;
                 default:
@@ -187,7 +195,7 @@ function PendingChangesDrawer({
               }
             } catch (changeError) {
               console.error(`Failed to apply change:`, changeError);
-              throw new Error(`Failed to apply change: ${changeError.message}`);
+              throw new Error(`Failed to apply change: ${(changeError as Error).message}`);
             }
           }
 
@@ -225,7 +233,7 @@ function PendingChangesDrawer({
       onClose();
     } catch (error) {
       console.error('Failed to apply changes:', error);
-      const errorMessage = `Failed to apply changes: ${error.message}`;
+      const errorMessage = `Failed to apply changes: ${(error as Error).message}`;
       setError(errorMessage);
       showError(errorMessage);
     } finally {
@@ -233,20 +241,20 @@ function PendingChangesDrawer({
     }
   };
 
-  const getChangeDescription = (change) => {
+  const getChangeDescription = (change: PendingChange): string => {
     if (!change || !change.type) {
       console.warn('Invalid change object:', change);
       return 'Unknown change';
     }
 
     try {
-      switch (change.type) {
+      switch ((change as any).type) {
         case 'ADD':
-          return change.record ? 
+          return change.record ?
             `Add ${change.record.type} record "${change.record.name}" with value "${change.record.value}"` :
             'Add record';
         case 'DELETE':
-          return change.record ? 
+          return change.record ?
             `Delete ${change.record.type} record "${change.record.name}" with value "${change.record.value}"` :
             'Delete record';
         case 'MODIFY':
@@ -262,19 +270,19 @@ function PendingChangesDrawer({
           }
           return `Modify ${change.originalRecord.type} record "${change.originalRecord.name}": change ${changes.join(' and ')}`;
         case 'RESTORE':
-          return change.record ? 
+          return change.record ?
             `Restore ${change.record.type} record "${change.record.name}" with value "${change.record.value}" from backup` :
             'Restore record from backup';
         default:
-          return `Unknown change type: ${change.type}`;
+          return `Unknown change type: ${(change as any).type}`;
       }
-    } catch (error) {
-      console.error('Error generating change description:', error, change);
+    } catch (err) {
+      console.error('Error generating change description:', err, change);
       return 'Invalid change';
     }
   };
 
-  const getChangeIcon = (type) => {
+  const getChangeIcon = (type: string): React.ReactNode => {
     if (!type) return null;
 
     switch (type) {
@@ -291,7 +299,7 @@ function PendingChangesDrawer({
     }
   };
 
-  const toggleExpanded = (changeId) => {
+  const toggleExpanded = (changeId: string) => {
     setExpandedItems(prev => ({
       ...prev,
       [changeId]: !prev[changeId]
@@ -325,7 +333,7 @@ function PendingChangesDrawer({
 
         <List>
           {pendingChanges.map((change, index) => (
-            <React.Fragment key={change.id || `change-${index}`}>
+            <React.Fragment key={(change as any).id || `change-${index}`}>
               <ListItem
                 draggable
                 onDragStart={(e) => handleDragStart(e, index)}
@@ -339,7 +347,7 @@ function PendingChangesDrawer({
                   },
                   pr: 6
                 }}
-                onClick={() => toggleExpanded(change.id || `temp-${index}`)}
+                onClick={() => toggleExpanded((change as any).id || `temp-${index}`)}
               >
                 <DragIndicator sx={{ mr: 1, cursor: 'grab', flexShrink: 0 }} />
                 <ListItemText
@@ -362,14 +370,14 @@ function PendingChangesDrawer({
                     <Stack direction="row" spacing={1} alignItems="center" component="span">
                       {getChangeIcon(change.type)}
                       <Typography component="span" noWrap>{getChangeDescription(change)}</Typography>
-                      <IconButton 
-                        size="small" 
+                      <IconButton
+                        size="small"
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleExpanded(change.id || `temp-${index}`);
+                          toggleExpanded((change as any).id || `temp-${index}`);
                         }}
                       >
-                        {expandedItems[change.id || `temp-${index}`] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        {expandedItems[(change as any).id || `temp-${index}`] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                       </IconButton>
                     </Stack>
                   }
@@ -383,14 +391,14 @@ function PendingChangesDrawer({
                       >
                         Zone: {change.zone}
                       </Typography>
-                      {change.source && (
+                      {(change as any).source && (
                         <Typography 
                           variant="body2" 
                           color="text.secondary" 
                           component="span"
                           noWrap
                         >
-                          Source: {change.source.type} ({new Date(change.source.timestamp).toLocaleString()})
+                          Source: {(change as any).source.type} ({new Date((change as any).source.timestamp).toLocaleString()})
                         </Typography>
                       )}
                     </Stack>
@@ -400,7 +408,7 @@ function PendingChangesDrawer({
                   edge="end"
                   onClick={(e) => {
                     e.stopPropagation();
-                    removePendingChange(change.id);
+                    removePendingChange((change as any).id);
                   }}
                   disabled={applying}
                   sx={{ 
@@ -411,8 +419,8 @@ function PendingChangesDrawer({
                   <DeleteIcon />
                 </IconButton>
               </ListItem>
-              <Collapse 
-                in={Boolean(expandedItems[change.id || `temp-${index}`])} 
+              <Collapse
+                in={Boolean(expandedItems[(change as any).id || `temp-${index}`])}
                 timeout="auto" 
                 unmountOnExit
               >

@@ -1,7 +1,6 @@
+// src/components/RecordEditor.tsx
 import React, { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
@@ -9,17 +8,31 @@ import {
   Grid,
   Typography,
   Alert,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem
 } from '@mui/material';
 import { DNSValidationService } from '../services/dnsValidationService';
+import { DNSRecord } from '../types/dns';
 
-function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
-  const [editedRecord, setEditedRecord] = useState({ ...record });
-  const [error, setError] = useState(null);
-  const [soaFields, setSOAFields] = useState({
+interface SOAFields {
+  mname: string;
+  rname: string;
+  serial: number;
+  refresh: number;
+  retry: number;
+  expire: number;
+  minimum: number;
+}
+
+interface RecordEditorProps {
+  record: DNSRecord;
+  onSave: (record: any) => void;
+  onCancel: () => void;
+  isCopy?: boolean;
+}
+
+function RecordEditor({ record, onSave, onCancel, isCopy = false }: RecordEditorProps) {
+  const [editedRecord, setEditedRecord] = useState<DNSRecord>({ ...record });
+  const [error, setError] = useState<string | null>(null);
+  const [soaFields, setSOAFields] = useState<SOAFields>({
     mname: '',
     rname: '',
     serial: 0,
@@ -32,17 +45,16 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
   useEffect(() => {
     if (record.type === 'SOA') {
       if (typeof record.value === 'object') {
-        setSOAFields(record.value);
+        setSOAFields(record.value as SOAFields);
       } else {
-        // Parse the SOA string value into fields
-        const parsed = DNSValidationService.parseSOAValue(record.value);
+        const parsed = DNSValidationService.parseSOAValue(record.value as string);
         setSOAFields(parsed);
       }
     }
     setEditedRecord({ ...record });
   }, [record]);
 
-  const handleChange = (field, value) => {
+  const handleChange = (field: string, value: any) => {
     setEditedRecord(prev => ({
       ...prev,
       [field]: value
@@ -50,13 +62,12 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
     setError(null);
   };
 
-  const handleSOAChange = (field, value) => {
+  const handleSOAChange = (field: string, value: string | number) => {
     setSOAFields(prev => {
       const updated = {
         ...prev,
         [field]: value
       };
-      // Update the main record value
       setEditedRecord(prev => ({
         ...prev,
         value: updated
@@ -152,9 +163,9 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
 
   const renderMXFields = () => {
     if (record.type !== 'MX') return null;
-    
-    const [priority = '', target = ''] = editedRecord.value.split(/\s+/);
-    
+
+    const [priority = '', target = ''] = (editedRecord.value as string).split(/\s+/);
+
     return (
       <>
         <Grid item xs={12} md={4}>
@@ -189,7 +200,7 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
   const renderSRVFields = () => {
     if (record.type !== 'SRV') return null;
 
-    const [priority = '0', weight = '0', port = '', target = ''] = editedRecord.value.split(/\s+/);
+    const [priority = '0', weight = '0', port = '', target = ''] = (editedRecord.value as string).split(/\s+/);
 
     return (
       <>
@@ -236,9 +247,9 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
     );
   };
 
-  const updateSRVField = (field, value) => {
-    const parts = editedRecord.value.split(/\s+/);
-    const indexes = { priority: 0, weight: 1, port: 2, target: 3 };
+  const updateSRVField = (field: string, value: string) => {
+    const parts = (editedRecord.value as string).split(/\s+/);
+    const indexes: Record<string, number> = { priority: 0, weight: 1, port: 2, target: 3 };
     parts[indexes[field]] = value;
     handleChange('value', parts.join(' '));
   };
@@ -251,7 +262,7 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
         <TextField
           fullWidth
           label="Text Value"
-          value={record.value}
+          value={record.value as string}
           onChange={(e) => {
             handleChange('value', e.target.value);
           }}
@@ -265,15 +276,14 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
 
   const handleSave = () => {
     try {
-      let processedRecord = { 
+      const processedRecord = {
         ...editedRecord,
-        id: isCopy ? undefined : editedRecord.id
+        id: isCopy ? undefined : (editedRecord as any).id
       };
 
-      // No special handling for TXT records - use value exactly as entered
       onSave(processedRecord);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -297,7 +307,7 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
             onChange={(e) => handleChange('ttl', parseInt(e.target.value))}
           />
         </Grid>
-        
+
         {record.type === 'SOA' ? (
           renderSOAFields()
         ) : record.type === 'MX' ? (
@@ -311,7 +321,7 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
             <TextField
               fullWidth
               label="Value"
-              value={editedRecord.value}
+              value={editedRecord.value as string}
               onChange={(e) => handleChange('value', e.target.value)}
               helperText={
                 record.type === 'CNAME' ? 'Fully qualified domain name ending with a dot' :
@@ -340,4 +350,4 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }) {
   );
 }
 
-export default RecordEditor; 
+export default RecordEditor;

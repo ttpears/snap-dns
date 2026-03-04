@@ -9,7 +9,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondary,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -30,14 +29,24 @@ import { useKey } from '../context/KeyContext';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import { useConfig } from '../context/ConfigContext';
+import { Key } from '../types/keys';
+
+interface NewKeyForm {
+  name: string;
+  algorithm: string;
+  secret: string;
+  server: string;
+  zones: string[];
+  created: number | null;
+}
 
 function KeyManagement() {
   const { config, updateConfig } = useConfig();
   const { availableZones } = useKey();
   const { keys = [] } = config;
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingKey, setEditingKey] = useState(null);
-  const [newKey, setNewKey] = useState({
+  const [editingKey, setEditingKey] = useState<Key | null>(null);
+  const [newKey, setNewKey] = useState<NewKeyForm>({
     name: '',
     algorithm: 'hmac-sha256',
     secret: '',
@@ -46,10 +55,10 @@ function KeyManagement() {
     created: null
   });
   const [zoneInput, setZoneInput] = useState('');
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [zoneSearchText, setZoneSearchText] = useState('');
 
-  const handleOpenDialog = (key = null) => {
+  const handleOpenDialog = (key: Key | null = null) => {
     if (key) {
       setEditingKey(key);
       setNewKey({
@@ -76,10 +85,10 @@ function KeyManagement() {
     setError(null);
   };
 
-  const handleAddZone = (zone) => {
+  const handleAddZone = (zone?: string) => {
     const trimmedZone = (typeof zone === 'string' ? zone : zoneInput).trim();
     if (!trimmedZone) return;
-    
+
     setNewKey(prev => ({
       ...prev,
       zones: [...new Set([...prev.zones, trimmedZone])]
@@ -87,7 +96,7 @@ function KeyManagement() {
     setZoneInput('');
   };
 
-  const handleRemoveZone = (zoneToRemove) => {
+  const handleRemoveZone = (zoneToRemove: string) => {
     setNewKey(prev => ({
       ...prev,
       zones: prev.zones.filter(zone => zone !== zoneToRemove)
@@ -99,23 +108,23 @@ function KeyManagement() {
       if (!newKey.name || !newKey.algorithm || !newKey.server) {
         throw new Error('Name, algorithm, and server are required');
       }
-      
+
       if (!editingKey && !newKey.secret) {
         throw new Error('Secret is required for new keys');
       }
-      
+
       const keyWithTimestamp = {
         ...newKey,
         secret: editingKey && !newKey.secret ? editingKey.secret : newKey.secret,
         created: editingKey?.created || Date.now()
       };
-      
+
       if (editingKey) {
         updateKey(editingKey.id, keyWithTimestamp);
       } else {
         addKey(keyWithTimestamp);
       }
-      
+
       setDialogOpen(false);
       setEditingKey(null);
       setNewKey({
@@ -141,19 +150,19 @@ function KeyManagement() {
       }, 100);
 
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
-  const getFilteredZones = (zones) => {
+  const getFilteredZones = (zones: string[]): string[] => {
     if (!zoneSearchText) return zones;
     const searchLower = zoneSearchText.toLowerCase();
     return zones.filter(zone => zone.toLowerCase().includes(searchLower));
   };
 
-  const renderZonesList = (zones) => {
+  const renderZonesList = (zones: string[]) => {
     const filteredZones = getFilteredZones(zones);
-    
+
     return (
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle2" gutterBottom>
@@ -166,7 +175,7 @@ function KeyManagement() {
             label="Add Zone"
             value={zoneInput}
             onChange={(e) => setZoneInput(e.target.value)}
-            onKeyPress={(e) => {
+            onKeyPress={(e: React.KeyboardEvent) => {
               if (e.key === 'Enter' && zoneInput.trim()) {
                 e.preventDefault();
                 handleAddZone();
@@ -189,8 +198,8 @@ function KeyManagement() {
         </Box>
 
         {zoneInput && (
-          <Box 
-            sx={{ 
+          <Box
+            sx={{
               mt: 1,
               mb: 2,
               maxHeight: '200px',
@@ -223,7 +232,7 @@ function KeyManagement() {
                   label={zone}
                   onClick={() => handleAddZone(zone)}
                   size="small"
-                  sx={{ 
+                  sx={{
                     m: 0.5,
                     cursor: 'pointer',
                     '&:hover': {
@@ -236,8 +245,8 @@ function KeyManagement() {
           </Box>
         )}
 
-        <Box 
-          sx={{ 
+        <Box
+          sx={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
             gap: 1,
@@ -257,7 +266,7 @@ function KeyManagement() {
                 label={zone}
                 onDelete={() => handleRemoveZone(zone)}
                 size="small"
-                sx={{ 
+                sx={{
                   width: 'fit-content',
                   maxWidth: '100%',
                   '.MuiChip-label': {
@@ -269,22 +278,22 @@ function KeyManagement() {
               />
             ))
           ) : (
-            <Typography 
-              color="text.secondary" 
-              sx={{ 
+            <Typography
+              color="text.secondary"
+              sx={{
                 gridColumn: '1 / -1',
                 textAlign: 'center',
-                py: 2 
+                py: 2
               }}
             >
               No zones added yet
             </Typography>
           )}
         </Box>
-        
+
         {newKey.zones.length > 0 && (
-          <Typography 
-            variant="caption" 
+          <Typography
+            variant="caption"
             color="text.secondary"
             sx={{ display: 'block', mt: 1 }}
           >
@@ -295,20 +304,20 @@ function KeyManagement() {
     );
   };
 
-  const renderKeyZones = (zones) => {
+  const renderKeyZones = (zones: string[]) => {
     if (!zones?.length) return null;
 
     return (
       <Box sx={{ width: '100%' }}>
-        <Typography 
-          variant="body2" 
-          color="text.secondary" 
+        <Typography
+          variant="body2"
+          color="text.secondary"
           sx={{ mb: 0.5 }}
         >
           Managed Zones ({zones.length}):
         </Typography>
-        <Box 
-          sx={{ 
+        <Box
+          sx={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
             gap: 1,
@@ -327,7 +336,7 @@ function KeyManagement() {
               label={zone}
               size="small"
               variant="outlined"
-              sx={{ 
+              sx={{
                 width: 'fit-content',
                 maxWidth: '100%',
                 '.MuiChip-label': {
@@ -343,28 +352,28 @@ function KeyManagement() {
     );
   };
 
-  const addKey = (newKey) => {
+  const addKey = (newKey: any) => {
     try {
       const currentConfig = { ...config };
       const keyWithId = {
         ...newKey,
         id: `key-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       };
-      
+
       currentConfig.keys = [...(currentConfig.keys || []), keyWithId];
       updateConfig(currentConfig);
       return keyWithId;
     } catch (error) {
-      setError(`Failed to add key: ${error.message}`);
+      setError(`Failed to add key: ${(error as Error).message}`);
       throw error;
     }
   };
 
-  const updateKey = (keyId, updatedKey) => {
+  const updateKey = (keyId: string, updatedKey: any) => {
     try {
       const currentConfig = { ...config };
       const keyIndex = currentConfig.keys?.findIndex(k => k.id === keyId);
-      
+
       if (keyIndex === -1 || keyIndex === undefined) {
         throw new Error('Key not found');
       }
@@ -377,18 +386,18 @@ function KeyManagement() {
 
       updateConfig(currentConfig);
     } catch (error) {
-      setError(`Failed to update key: ${error.message}`);
+      setError(`Failed to update key: ${(error as Error).message}`);
       throw error;
     }
   };
 
-  const removeKey = (keyId) => {
+  const removeKey = (keyId: string) => {
     try {
       const currentConfig = { ...config };
       currentConfig.keys = currentConfig.keys?.filter(k => k.id !== keyId) || [];
       updateConfig(currentConfig);
     } catch (error) {
-      setError(`Failed to remove key: ${error.message}`);
+      setError(`Failed to remove key: ${(error as Error).message}`);
     }
   };
 
@@ -398,8 +407,8 @@ function KeyManagement() {
         <Typography variant="h5" component="h2">
           TSIG Keys
         </Typography>
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
         >
@@ -425,8 +434,8 @@ function KeyManagement() {
                 </Tooltip>
               </Box>
             }
-            sx={{ 
-              flexDirection: 'column', 
+            sx={{
+              flexDirection: 'column',
               alignItems: 'flex-start',
               borderBottom: '1px solid',
               borderColor: 'divider'
@@ -436,8 +445,8 @@ function KeyManagement() {
               <Typography variant="subtitle1" component="div">
                 {key.name}
               </Typography>
-              <Typography 
-                variant="body2" 
+              <Typography
+                variant="body2"
                 color="text.secondary"
                 sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
               >
@@ -452,7 +461,7 @@ function KeyManagement() {
                 )}
               </Typography>
             </Box>
-            
+
             {renderKeyZones(key.zones)}
           </ListItem>
         ))}
@@ -464,8 +473,8 @@ function KeyManagement() {
         </Typography>
       )}
 
-      <Dialog 
-        open={dialogOpen} 
+      <Dialog
+        open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         maxWidth="sm"
         fullWidth
@@ -516,7 +525,7 @@ function KeyManagement() {
             onChange={(e) => setNewKey(prev => ({ ...prev, secret: e.target.value }))}
             helperText="Base64 encoded key"
           />
-          
+
           {renderZonesList(newKey.zones)}
         </DialogContent>
         <DialogActions>
@@ -530,4 +539,4 @@ function KeyManagement() {
   );
 }
 
-export default KeyManagement; 
+export default KeyManagement;

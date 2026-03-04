@@ -1,26 +1,40 @@
+// src/context/KeyContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useConfig } from './ConfigContext';
-import { tsigKeyService } from '../services/tsigKeyService';
+import { tsigKeyService, TSIGKey } from '../services/tsigKeyService';
 import { useAuth } from './AuthContext';
 
-const KeyContext = createContext({
-  selectedKey: null,
-  selectedZone: null,
-  selectKey: () => {},
-  selectZone: () => {},
-  availableZones: [],
-  availableKeys: []
-});
+export interface AvailableKey {
+  id: string;
+  name: string;
+  server: string;
+  keyName: string;
+  secret: string;
+  algorithm: string;
+  zones: string[];
+  type: string;
+}
+
+interface KeyContextType {
+  selectedKey: AvailableKey | null;
+  selectedZone: string | null;
+  selectKey: (key: AvailableKey | null) => void;
+  selectZone: (zone: string | null) => void;
+  availableZones: string[];
+  availableKeys: AvailableKey[];
+}
+
+const KeyContext = createContext<KeyContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'dns_manager_selections';
 
-export function KeyProvider({ children }) {
+export function KeyProvider({ children }: { children: React.ReactNode }) {
   const { config } = useConfig();
-  const { isAuthenticated, user } = useAuth();
-  const [selectedKey, setSelectedKey] = useState(null);
-  const [selectedZone, setSelectedZone] = useState(null);
+  const { isAuthenticated } = useAuth();
+  const [selectedKey, setSelectedKey] = useState<AvailableKey | null>(null);
+  const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
-  const [backendKeys, setBackendKeys] = useState([]);
+  const [backendKeys, setBackendKeys] = useState<TSIGKey[]>([]);
 
   // Fetch keys from backend when authenticated
   useEffect(() => {
@@ -32,7 +46,6 @@ export function KeyProvider({ children }) {
           setBackendKeys(keys);
         } catch (error) {
           console.error('Failed to fetch keys from backend:', error);
-          // Fall back to config keys if backend fetch fails
           setBackendKeys([]);
         }
       } else {
@@ -45,24 +58,21 @@ export function KeyProvider({ children }) {
 
   // Calculate available keys and zones
   const availableZones = React.useMemo(() => {
-    const zones = new Set();
-    // Use backend keys first, fall back to config keys
-    const keysToUse = backendKeys.length > 0 ? backendKeys : (config.keys || []);
-    keysToUse.forEach(key => {
-      key.zones?.forEach(zone => zones.add(zone));
+    const zones = new Set<string>();
+    const keysToUse: any[] = backendKeys.length > 0 ? backendKeys : (config.keys || []);
+    keysToUse.forEach((key: any) => {
+      key.zones?.forEach((zone: string) => zones.add(zone));
     });
     return Array.from(zones);
   }, [backendKeys, config.keys]);
 
-  const availableKeys = React.useMemo(() => {
-    // Use backend keys first, fall back to config keys
-    const keysToUse = backendKeys.length > 0 ? backendKeys : (config.keys || []);
-    return keysToUse.map(key => ({
+  const availableKeys: AvailableKey[] = React.useMemo(() => {
+    const keysToUse: any[] = backendKeys.length > 0 ? backendKeys : (config.keys || []);
+    return keysToUse.map((key: any) => ({
       id: key.id,
       name: key.name,
       server: key.server,
       keyName: key.keyName || key.name,
-      // keyValue/secret is no longer needed on frontend - keys are stored server-side
       secret: key.keyValue || key.secret || 'server-side',
       algorithm: key.algorithm,
       zones: key.zones || [],
@@ -104,7 +114,7 @@ export function KeyProvider({ children }) {
   useEffect(() => {
     if (initialized && selectedKey) {
       const keyStillExists = availableKeys.find(k => k.id === selectedKey.id);
-      const zoneStillValid = keyStillExists?.zones?.includes(selectedZone);
+      const zoneStillValid = keyStillExists?.zones?.includes(selectedZone!);
 
       if (!keyStillExists || (selectedZone && !zoneStillValid)) {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -123,7 +133,7 @@ export function KeyProvider({ children }) {
   }, [availableKeys, selectedKey, selectedZone, initialized]);
 
   // Save selections to localStorage
-  const saveSelections = (key, zone) => {
+  const saveSelections = (key: AvailableKey | null, zone: string | null) => {
     if (key) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         keyId: key.id,
@@ -134,9 +144,8 @@ export function KeyProvider({ children }) {
     }
   };
 
-  const selectKey = (key) => {
+  const selectKey = (key: AvailableKey | null) => {
     setSelectedKey(key);
-    // If key changes and current zone isn't valid for new key, reset zone
     if (key && selectedZone && !key.zones?.includes(selectedZone)) {
       setSelectedZone(null);
       saveSelections(key, null);
@@ -145,9 +154,8 @@ export function KeyProvider({ children }) {
     }
   };
 
-  const selectZone = (zone) => {
+  const selectZone = (zone: string | null) => {
     setSelectedZone(zone);
-    // If zone changes and current key isn't valid for new zone, reset key
     if (zone && selectedKey && !selectedKey.zones?.includes(zone)) {
       setSelectedKey(null);
       saveSelections(null, zone);
@@ -170,10 +178,10 @@ export function KeyProvider({ children }) {
   );
 }
 
-export function useKey() {
+export function useKey(): KeyContextType {
   const context = useContext(KeyContext);
   if (!context) {
     throw new Error('useKey must be used within a KeyProvider');
   }
   return context;
-} 
+}
