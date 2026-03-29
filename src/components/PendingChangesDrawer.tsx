@@ -80,11 +80,6 @@ function PendingChangesDrawer({
     setExpandedItems({});
   }, [pendingChanges.length]);
 
-  useEffect(() => {
-    if (pendingChanges.length > 0) {
-      setShowPendingDrawer(true);
-    }
-  }, [pendingChanges.length, setShowPendingDrawer]);
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggingIndex(index);
@@ -129,28 +124,21 @@ function PendingChangesDrawer({
       // Apply changes zone by zone
       for (const [zone, changes] of Object.entries(changesByZone) as [string, PendingChange[]][]) {
         try {
-          // Get the first change to determine the key being used
-          const firstChange = changes[0];
-          const keyConfig = backendKeys.find(k => k.id === firstChange.keyId);
-
-          if (!keyConfig) {
-            throw new Error(`No key configuration found for zone ${zone}`);
-          }
-
           // Create automatic snapshot before applying changes
-          // Backend will look up key server-side based on user permissions
-          const currentRecords = await dnsService.fetchZoneRecords(zone);
-
           try {
+            const currentRecords = await dnsService.fetchZoneRecords(zone);
+            const firstChange = changes[0];
+            const keyConfig = backendKeys.find(k => k.id === firstChange.keyId);
+
             await backupService.createBackup(zone, currentRecords, {
               type: 'auto',
               description: `Automatic snapshot before applying ${changes.length} change${changes.length !== 1 ? 's' : ''}`,
-              server: keyConfig.server,
+              server: keyConfig?.server || 'unknown',
               config: config as any
             });
             console.log(`Auto-snapshot created for zone ${zone}`);
           } catch (backupError) {
-            console.warn('Failed to create auto-snapshot:', backupError);
+            console.warn(`Failed to create auto-snapshot for zone ${zone}:`, backupError);
             // Don't fail the entire operation if snapshot creation fails
           }
 
@@ -320,7 +308,7 @@ function PendingChangesDrawer({
           <Typography variant="h6">
             Pending Changes ({pendingChanges.length})
           </Typography>
-          <IconButton onClick={onClose} size="small">
+          <IconButton onClick={onClose} size="small" aria-label="Close">
             <CloseIcon />
           </IconButton>
         </Box>
@@ -406,12 +394,13 @@ function PendingChangesDrawer({
                 />
                 <IconButton
                   edge="end"
+                  aria-label="delete"
                   onClick={(e) => {
                     e.stopPropagation();
                     removePendingChange((change as any).id);
                   }}
                   disabled={applying}
-                  sx={{ 
+                  sx={{
                     position: 'absolute',
                     right: 8
                   }}

@@ -70,6 +70,7 @@ function KeySelector() {
             selectKey(key || null);
           }}
           label="Select Key"
+          SelectDisplayProps={{ id: 'key-select' } as React.HTMLAttributes<HTMLDivElement>}
         >
           <MenuItem value="">
             <em>None</em>
@@ -136,6 +137,7 @@ function KeySelector() {
           onChange={(e) => selectZone(e.target.value || null)}
           label="Select Zone"
           disabled={!selectedKey}
+          SelectDisplayProps={{ id: 'zone-select' } as React.HTMLAttributes<HTMLDivElement>}
         >
           <MenuItem value="">
             <em>None</em>

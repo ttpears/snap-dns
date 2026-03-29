@@ -63,6 +63,7 @@ function UserManagement() {
     role: 'viewer',
     email: '',
     allowedKeyIds: [],
+    allowedZones: [],
   });
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -128,8 +129,15 @@ function UserManagement() {
         await userService.updateUserRole(selectedUser.id, formData.role);
       }
 
-      // Update keys
-      await userService.updateUserKeys(selectedUser.id, formData.allowedKeyIds || []);
+      // Update keys if changed
+      if (JSON.stringify(selectedUser.allowedKeyIds) !== JSON.stringify(formData.allowedKeyIds)) {
+        await userService.updateUserKeys(selectedUser.id, formData.allowedKeyIds || []);
+      }
+
+      // Update zones if changed
+      if (JSON.stringify(selectedUser.allowedZones) !== JSON.stringify(formData.allowedZones)) {
+        await userService.updateUserZones(selectedUser.id, formData.allowedZones || []);
+      }
 
       setSuccess('User updated successfully');
       setEditDialogOpen(false);
@@ -193,6 +201,7 @@ function UserManagement() {
       role: user.role,
       email: user.email || '',
       allowedKeyIds: user.allowedKeyIds || [],
+      allowedZones: user.allowedZones || [],
     });
     setEditDialogOpen(true);
   };
@@ -216,6 +225,7 @@ function UserManagement() {
       role: 'viewer',
       email: '',
       allowedKeyIds: [],
+      allowedZones: [],
     });
   };
 
@@ -225,6 +235,23 @@ function UserManagement() {
       ? currentKeys.filter(id => id !== keyId)
       : [...currentKeys, keyId];
     setFormData({ ...formData, allowedKeyIds: newKeys });
+  };
+
+  const handleZoneToggle = (zone: string) => {
+    const currentZones = formData.allowedZones || [];
+    const newZones = currentZones.includes(zone)
+      ? currentZones.filter(z => z !== zone)
+      : [...currentZones, zone];
+    setFormData({ ...formData, allowedZones: newZones });
+  };
+
+  // Collect all zones from keys the user has access to
+  const getAvailableZones = (): string[] => {
+    const selectedKeyIds = formData.allowedKeyIds || [];
+    const relevantKeys = formData.role === 'admin' ? keys : keys.filter(k => selectedKeyIds.includes(k.id));
+    const zoneSet = new Set<string>();
+    relevantKeys.forEach(k => k.zones?.forEach((z: string) => zoneSet.add(z)));
+    return Array.from(zoneSet).sort();
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -277,6 +304,7 @@ function UserManagement() {
               <TableCell>Email</TableCell>
               <TableCell>Role</TableCell>
               <TableCell>Allowed Keys</TableCell>
+              <TableCell>Zone Restrictions</TableCell>
               <TableCell>Last Login</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -300,6 +328,19 @@ function UserManagement() {
                     <Chip label="No Keys" size="small" />
                   ) : (
                     <Chip label={`${user.allowedKeyIds.length} keys`} size="small" />
+                  )}
+                </TableCell>
+                <TableCell>
+                  {user.role === 'admin' ? (
+                    <Chip label="All Zones" size="small" color="success" />
+                  ) : !user.allowedZones || user.allowedZones.length === 0 ? (
+                    <Chip label="All Zones" size="small" color="default" />
+                  ) : (
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                      {user.allowedZones.map(z => (
+                        <Chip key={z} label={z} size="small" color="warning" />
+                      ))}
+                    </Box>
                   )}
                 </TableCell>
                 <TableCell>
@@ -403,6 +444,37 @@ function UserManagement() {
               <FormHelperText>Admin users have access to all keys</FormHelperText>
             </Box>
           )}
+
+          {formData.role !== 'admin' && (
+            <Box mt={2}>
+              <Typography variant="subtitle2" gutterBottom>
+                Zone Restrictions
+              </Typography>
+              {getAvailableZones().length > 0 ? (
+                <FormGroup>
+                  {getAvailableZones().map((zone) => (
+                    <FormControlLabel
+                      key={zone}
+                      control={
+                        <Checkbox
+                          checked={(formData.allowedZones || []).includes(zone)}
+                          onChange={() => handleZoneToggle(zone)}
+                        />
+                      }
+                      label={zone}
+                    />
+                  ))}
+                </FormGroup>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Assign keys above to see available zones
+                </Typography>
+              )}
+              <FormHelperText>
+                Leave all unchecked to allow access to all zones covered by the assigned keys
+              </FormHelperText>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
@@ -459,6 +531,37 @@ function UserManagement() {
                 ))}
               </FormGroup>
               <FormHelperText>Admin users have access to all keys</FormHelperText>
+            </Box>
+          )}
+
+          {formData.role !== 'admin' && (
+            <Box mt={2}>
+              <Typography variant="subtitle2" gutterBottom>
+                Zone Restrictions
+              </Typography>
+              {getAvailableZones().length > 0 ? (
+                <FormGroup>
+                  {getAvailableZones().map((zone) => (
+                    <FormControlLabel
+                      key={zone}
+                      control={
+                        <Checkbox
+                          checked={(formData.allowedZones || []).includes(zone)}
+                          onChange={() => handleZoneToggle(zone)}
+                        />
+                      }
+                      label={zone}
+                    />
+                  ))}
+                </FormGroup>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Assign keys above to see available zones
+                </Typography>
+              )}
+              <FormHelperText>
+                Leave all unchecked to allow access to all zones covered by the assigned keys
+              </FormHelperText>
             </Box>
           )}
         </DialogContent>

@@ -44,6 +44,10 @@ class UserService {
           if (user.lastLogin) {
             user.lastLogin = new Date(user.lastLogin);
           }
+          // Migrate: ensure allowedZones exists for older user records
+          if (!user.allowedZones) {
+            user.allowedZones = [];
+          }
           this.users.set(user.id, user);
         });
 
@@ -85,7 +89,8 @@ class UserService {
         role: UserRole.ADMIN,
         email: 'admin@localhost',
         createdAt: new Date(),
-        allowedKeyIds: [] // Admin has access to all keys
+        allowedKeyIds: [],
+        allowedZones: [],
       };
 
       this.users.set(user.id, user);
@@ -138,7 +143,8 @@ class UserService {
       role: userData.role,
       email: userData.email,
       createdAt: new Date(),
-      allowedKeyIds: userData.allowedKeyIds || []
+      allowedKeyIds: userData.allowedKeyIds || [],
+      allowedZones: userData.allowedZones || [],
     };
 
     this.users.set(user.id, user);
@@ -219,6 +225,21 @@ class UserService {
     }
 
     user.role = role;
+    await this.saveUsers();
+  }
+
+  /**
+   * Update user's allowed zone names
+   */
+  async updateAllowedZones(userId: string, zones: string[]): Promise<void> {
+    if (!this.initialized) await this.initialize();
+
+    const user = this.users.get(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    user.allowedZones = zones;
     await this.saveUsers();
   }
 
@@ -306,7 +327,8 @@ class UserService {
       role: user.role,
       email: user.email,
       lastLogin: user.lastLogin,
-      allowedKeyIds: user.allowedKeyIds
+      allowedKeyIds: user.allowedKeyIds,
+      allowedZones: user.allowedZones || [],
     };
   }
 

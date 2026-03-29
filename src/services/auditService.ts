@@ -3,7 +3,8 @@
 
 import { AuditEntry, AuditQueryFilters, EventTypesResponse } from '../types/audit';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
+import { getApiUrl } from '../utils/apiUrl';
+const API_URL = getApiUrl();
 
 class AuditService {
   /**

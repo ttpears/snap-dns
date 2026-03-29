@@ -91,16 +91,14 @@ function Layout({ children }: { children: React.ReactNode }) {
             {getPageTitle()}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {pendingChanges.length > 0 && (
-              <Button
-                variant="outlined"
-                onClick={() => setShowPendingDrawer(true)}
-                color="primary"
-                size="small"
-              >
-                Pending Changes ({pendingChanges.length})
-              </Button>
-            )}
+            <Button
+              variant="outlined"
+              onClick={() => setShowPendingDrawer(true)}
+              color="primary"
+              size="small"
+            >
+              Pending Changes ({pendingChanges.length})
+            </Button>
             <IconButton onClick={toggleDarkMode} color="inherit">
               {darkMode ? <Brightness7 /> : <Brightness4 />}
             </IconButton>

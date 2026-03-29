@@ -357,11 +357,13 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
       };
       const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
       if (!validation.isValid) {
-        setValidationErrors(validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
+        const errMap = validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           const field = mapErrorToField(error);
           acc[field] = error;
           return acc;
-        }, {}));
+        }, {});
+        setValidationErrors(errMap);
+        setFieldErrors(errMap);
         return false;
       }
     } else if (record.type === 'MX') {
@@ -375,21 +377,25 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
       };
       const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
       if (!validation.isValid) {
-        setValidationErrors(validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
+        const errMap = validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           const field = mapErrorToField(error);
           acc[field] = error;
           return acc;
-        }, {}));
+        }, {});
+        setValidationErrors(errMap);
+        setFieldErrors(errMap);
         return false;
       }
     } else {
       const validation = DNSValidationService.validateRecord(record, selectedZone);
       if (!validation.isValid) {
-        setValidationErrors(validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
+        const errMap = validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           const field = mapErrorToField(error);
           acc[field] = error;
           return acc;
-        }, {}));
+        }, {});
+        setValidationErrors(errMap);
+        setFieldErrors(errMap);
         return false;
       }
     }
@@ -477,7 +483,6 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
       };
 
       addPendingChange(change);
-      setShowPendingDrawer(true);
 
       setRecord({
         name: '',
@@ -530,6 +535,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
             error={!!validationErrors.name}
             helperText={validationErrors.name || 'Record name relative to zone (@ for zone apex)'}
             required
+            inputProps={{ name: 'name' }}
           />
         </Grid>
 
@@ -543,6 +549,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
             error={!!validationErrors.ttl}
             helperText={validationErrors.ttl || 'Time to live in seconds'}
             required
+            inputProps={{ name: 'ttl' }}
           />
         </Grid>
 
@@ -553,6 +560,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
               value={record.type}
               onChange={(e) => handleFieldChange('type', e.target.value)}
               label="Record Type"
+              SelectDisplayProps={{ id: 'record-type-select' } as React.HTMLAttributes<HTMLDivElement>}
             >
               {Object.keys(RECORD_TYPES).map((type) => (
                 <MenuItem key={type} value={type}>{type}</MenuItem>
@@ -594,6 +602,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
                 required={field.required}
                 multiline={field.multiline}
                 rows={field.rows}
+                inputProps={{ name: field.name }}
               />
             )}
           </Grid>

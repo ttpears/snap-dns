@@ -1,22 +1,20 @@
 // src/components/AppContent.tsx
 import React, { useEffect, useRef } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Layout from './Layout';
 import AddDNSRecord from './AddDNSRecord';
 import ZoneEditor from './ZoneEditor';
 import Settings from './Settings';
 import Snapshots from './Snapshots';
 import { useKey } from '../context/KeyContext';
-import { useConfig } from '../context/ConfigContext';
 
 function AppContent() {
   const { selectedKey, selectedZone } = useKey();
-  const { config } = useConfig();
   const navigate = useNavigate();
   const location = useLocation();
   const isManualNavigation = useRef(false);
 
-  // Add effect to handle navigation when zone is selected
+  // Auto-navigate to zone editor when a zone is selected from settings
   useEffect(() => {
     if (selectedZone && selectedKey && location.pathname === '/settings' && !isManualNavigation.current) {
       navigate('/zones');
@@ -24,7 +22,7 @@ function AppContent() {
     isManualNavigation.current = false;
   }, [selectedZone, selectedKey, navigate, location.pathname]);
 
-  // Listen for navigation events
+  // Track manual navigations to prevent auto-redirect from overriding them
   useEffect(() => {
     const handleBeforeNavigate = () => {
       isManualNavigation.current = true;
@@ -39,43 +37,12 @@ function AppContent() {
     };
   }, []);
 
-  // Protected route component that requires key selection
-  const ProtectedZoneRoute = ({ children }: { children: React.ReactNode }) => {
-    if (!selectedKey && (!config.keys || config.keys.length === 0)) {
-      return (
-        <Navigate
-          to="/settings"
-          replace
-          state={{ message: 'Please configure a TSIG key first' }}
-        />
-      );
-    }
-    return <>{children}</>;
-  };
-
   return (
     <Layout>
       <Routes>
-        <Route
-          path="/"
-          element={
-            <ProtectedZoneRoute>
-              <AddDNSRecord />
-            </ProtectedZoneRoute>
-          }
-        />
-        <Route
-          path="/zones"
-          element={
-            <ProtectedZoneRoute>
-              <ZoneEditor />
-            </ProtectedZoneRoute>
-          }
-        />
-        <Route
-          path="/snapshots"
-          element={<Snapshots />}
-        />
+        <Route path="/" element={<AddDNSRecord />} />
+        <Route path="/zones" element={<ZoneEditor />} />
+        <Route path="/snapshots" element={<Snapshots />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
     </Layout>

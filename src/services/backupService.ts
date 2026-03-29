@@ -2,7 +2,8 @@ import { notificationService } from './notificationService';
 import { dnsService, type DNSRecord } from './dnsService';
 import type { Config, KeyConfig } from '../config';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
+import { getApiUrl } from '../utils/apiUrl';
+const API_URL = getApiUrl();
 
 interface DNSBackup {
   id: string;

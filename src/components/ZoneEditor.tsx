@@ -500,6 +500,7 @@ function ZoneEditor() {
             onChange={(e) => setFilterType(e.target.value as string)}
             size="small"
             displayEmpty
+            SelectDisplayProps={{ id: 'record-type-filter' } as React.HTMLAttributes<HTMLDivElement>}
           >
             <MenuItem value="ALL">All Record Types</MenuItem>
             {recordTypes.map(type => (

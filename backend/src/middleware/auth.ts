@@ -22,7 +22,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     userId: req.session.userId!,
     username: req.session.username!,
     role: req.session.role!,
-    allowedKeyIds: req.session.allowedKeyIds!
+    allowedKeyIds: req.session.allowedKeyIds!,
+    allowedZones: req.session.allowedZones || [],
   };
 
   next();
@@ -154,7 +155,8 @@ export function optionalAuth(req: Request, res: Response, next: NextFunction): v
       userId: req.session.userId!,
       username: req.session.username!,
       role: req.session.role!,
-      allowedKeyIds: req.session.allowedKeyIds!
+      allowedKeyIds: req.session.allowedKeyIds!,
+      allowedZones: req.session.allowedZones || [],
     };
   }
 

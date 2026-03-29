@@ -1,43 +1,58 @@
-FROM node:20-slim
+# Dockerfile.backend
+# Multi-stage build: base (dev/test) → build (compile) → prod (runtime)
+
+# ── Stage 1: base ──────────────────────────────────────────────────
+# Used by dev/test compose via "target: base" with volume-mounted source
+FROM node:20-slim AS base
 
 WORKDIR /app
 
-# Install dig and other required tools
 RUN apt-get update && \
     apt-get install -y dnsutils iputils-ping net-tools && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy package files first to leverage Docker cache
-COPY backend/package.json ./
+RUN npm install -g typescript ts-node ts-node-dev
 
-# Install dependencies
+COPY backend/package*.json ./
 RUN npm install
 
-# Create temp directory with proper permissions
-RUN mkdir -p /tmp/snap-dns && \
-    chmod 700 /tmp/snap-dns
+RUN mkdir -p /tmp/snap-dns && chmod 700 /tmp/snap-dns
 
-# Copy source code and config files
-COPY backend/tsconfig.json ./
-COPY backend/src ./src
-COPY backend/.env .env
-COPY backend/.env.* ./
-
-# Environment variables
 ENV BACKEND_HOST=0.0.0.0
 ENV BACKEND_PORT=3002
-ENV NODE_ENV=development
 
-# Build TypeScript code
-RUN npm run clean && npm run build
+EXPOSE 3002
 
-# Expose the port
-EXPOSE ${BACKEND_PORT}
+CMD ["npm", "run", "dev"]
 
-# Start command based on environment
-CMD if [ "$NODE_ENV" = "production" ] ; \
-    then \
-    npm run start ; \
-    else \
-    npm run docker:dev ; \
-    fi
+# ── Stage 2: build ─────────────────────────────────────────────────
+FROM base AS build
+
+COPY backend/tsconfig.json ./
+COPY backend/src ./src
+
+RUN npm run build
+
+# ── Stage 3: prod ──────────────────────────────────────────────────
+# Clean image — only compiled JS, production deps, and DNS tools
+FROM node:20-slim AS prod
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends dnsutils && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /tmp/snap-dns && chmod 700 /tmp/snap-dns
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
+
+ENV NODE_ENV=production
+ENV BACKEND_HOST=0.0.0.0
+ENV BACKEND_PORT=3002
+
+EXPOSE 3002
+
+CMD ["node", "dist/server.js"]

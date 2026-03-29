@@ -20,7 +20,6 @@ export function PendingChangesProvider({ children }: { children: React.ReactNode
 
   const addPendingChange = (change: PendingChange) => {
     setPendingChanges(prev => [...prev, change]);
-    setShowPendingDrawer(true);
   };
 
   const removePendingChange = (changeId: string) => {

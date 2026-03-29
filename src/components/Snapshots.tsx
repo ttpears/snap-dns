@@ -924,6 +924,7 @@ function Snapshots() {
               value={selectedZone}
               onChange={(e) => setSelectedZone(e.target.value)}
               label="Select Zone"
+              SelectDisplayProps={{ id: 'snapshot-zone-select' } as React.HTMLAttributes<HTMLDivElement>}
             >
               {availableZones.map((zone) => (
                 <MenuItem key={zone} value={zone}>
@@ -940,6 +941,7 @@ function Snapshots() {
               onChange={(e) => setSelectedKeyId(e.target.value)}
               label="DNS Key"
               disabled={!selectedZone}
+              SelectDisplayProps={{ id: 'snapshot-key-select' } as React.HTMLAttributes<HTMLDivElement>}
             >
               {availableKeys.map((key) => (
                 <MenuItem key={key.id} value={key.id}>
@@ -1117,6 +1119,7 @@ function Snapshots() {
                             <Tooltip title="Restore this snapshot">
                               <IconButton
                                 size="small"
+                                aria-label="restore this snapshot"
                                 onClick={() => handleRestoreBackup(backup)}
                               >
                                 <RestoreIcon />

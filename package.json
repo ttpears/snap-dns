@@ -10,20 +10,21 @@
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.11.16",
     "@mui/material": "^5.13.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
     "env-cmd": "^10.1.0",
     "http-proxy-middleware": "^3.0.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.11.1",
     "typescript": "^5.7.2",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
     "wait-on": "^7.0.1"
   },
   "scripts": {
     "start": "node scripts/start.js",
     "build": "tsc --noEmit && react-scripts build",
-    "serve:prod": "serve -s build -l $PORT --single"
+    "serve:prod": "serve -s build -l $PORT --single",
+    "test:e2e": "playwright test"
   },
   "browserslist": {
     "production": [
@@ -51,6 +52,7 @@
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@babel/preset-typescript": "^7.x.x",
+    "@playwright/test": "^1.58.2",
     "@types/react-dom": "^18.3.1",
     "eslint-config-react-app": "^7.0.1",
     "react-scripts": "^5.0.1"

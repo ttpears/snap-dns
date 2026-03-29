@@ -1,15 +1,13 @@
 # docker-compose.prod.yml
 # Production environment with optional Traefik proxy support
 #
-# Direct access usage:
-#   docker-compose -f docker-compose.prod.yml up -d
+# Direct access:
+#   docker compose -f docker-compose.prod.yml up -d
 #
 # With Traefik proxy:
 #   Set FQDN and FQDN_API environment variables
 #   Ensure 'proxy' network exists: docker network create proxy
-#   docker-compose -f docker-compose.prod.yml up -d
-
-version: '3.8'
+#   Uncomment Traefik labels and proxy network below
 
 services:
   frontend:
@@ -17,26 +15,16 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        NODE_ENV: production
         PUBLIC_URL: ${PUBLIC_URL:-/}
         REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:3002}
     container_name: snap-dns-frontend-prod
-    expose:
-      - "3001"
     ports:
       - "${FRONTEND_PORT:-3001}:3001"
-    volumes:
-      - frontend_build:/app/build
     networks:
       - snap-dns-network
-      # Uncomment below for Traefik proxy support
       # - proxy
     environment:
       - NODE_ENV=production
-      - PORT=3001
-      - PUBLIC_URL=${PUBLIC_URL:-/}
-      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:3002}
-    # Uncomment below for Traefik proxy support
     # labels:
     #   - "traefik.enable=true"
     #   - "traefik.docker.network=proxy"
@@ -44,11 +32,6 @@ services:
     #   - "traefik.http.routers.snap-dns.entrypoints=websecure"
     #   - "traefik.http.routers.snap-dns.tls=true"
     #   - "traefik.http.services.snap-dns.loadBalancer.server.port=3001"
-    #   - "traefik.http.middlewares.spa.errors.status=404"
-    #   - "traefik.http.middlewares.spa.errors.service=snap-dns"
-    #   - "traefik.http.middlewares.spa.errors.query=/"
-    #   - "traefik.http.routers.snap-dns.middlewares=spa@docker"
-    command: serve -s build -l 3001 --single
     restart: unless-stopped
 
   backend:
@@ -56,8 +39,6 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     container_name: snap-dns-backend-prod
-    expose:
-      - "3002"
     ports:
       - "${BACKEND_PORT:-3002}:3002"
     volumes:
@@ -66,14 +47,12 @@ services:
       - temp-keys:/tmp/snap-dns
     networks:
       - snap-dns-network
-      # Uncomment below for Traefik proxy support
       # - proxy
     environment:
       - NODE_ENV=production
       - BACKEND_HOST=0.0.0.0
       - BACKEND_PORT=3002
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001}
-    # Uncomment below for Traefik proxy support
     # labels:
     #   - "traefik.enable=true"
     #   - "traefik.docker.network=proxy"
@@ -81,7 +60,6 @@ services:
     #   - "traefik.http.routers.snap-dns-api.entrypoints=websecure"
     #   - "traefik.http.routers.snap-dns-api.tls=true"
     #   - "traefik.http.services.snap-dns-api.loadBalancer.server.port=3002"
-    command: npm start
     cap_add:
       - NET_RAW
     restart: unless-stopped
@@ -89,12 +67,10 @@ services:
 volumes:
   backend_data:
   temp-keys:
-  frontend_build:
 
 networks:
   snap-dns-network:
     driver: bridge
-  # Uncomment below for Traefik proxy support
   # proxy:
   #   external: true
   #   name: proxy

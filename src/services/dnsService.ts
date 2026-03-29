@@ -2,6 +2,7 @@
 // Frontend DNS service - keys are now stored server-side!
 
 import { ZoneConfig, ZoneOperationResult } from '../types/dns';
+import { getApiUrl } from '../utils/apiUrl';
 
 export type { ZoneConfig, ZoneOperationResult };
 
@@ -43,7 +44,9 @@ export class DNSError extends Error {
 }
 
 class DNSService {
-  private baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3002';
+  private get baseUrl(): string {
+    return getApiUrl();
+  }
 
   private createHeaders(): Headers {
     // Keys are now stored server-side - no longer sent in headers!

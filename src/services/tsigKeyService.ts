@@ -1,7 +1,8 @@
 // src/services/tsigKeyService.ts
 // Frontend service for managing TSIG keys stored server-side
+import { getApiUrl } from '../utils/apiUrl';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
+const API_URL = getApiUrl();
 
 export interface TSIGKey {
   id: string;

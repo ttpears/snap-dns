@@ -1,8 +1,8 @@
 // src/services/authService.ts
 // Authentication service for frontend
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
-console.log('AuthService initialized with API_URL:', API_URL);
+import { getApiUrl } from '../utils/apiUrl';
+const API_URL = getApiUrl();
 
 export interface User {
   id: string;
