@@ -19,6 +19,10 @@ import { dnsService } from '../services/dnsService';
 import { useConfig } from '../context/ConfigContext';
 import { DNSValidationService } from '../services/dnsValidationService';
 import { DNSRecordFormatter } from '../services/dnsRecordFormatter';
+import { detectTxtSubtype, TxtSubtype } from '../services/validators/detectTxtSubtype';
+import SpfEditor from './editors/SpfEditor';
+import DkimEditor from './editors/DkimEditor';
+import DmarcEditor from './editors/DmarcEditor';
 
 interface FieldDefinition {
   name: string;
@@ -250,6 +254,8 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [ptrPreview, setPtrPreview] = useState('');
+  const [txtSubtype, setTxtSubtype] = useState<TxtSubtype | null>(null);
+  const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     if (record.type === 'PTR') {
@@ -303,11 +309,24 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
   }, [record.type]);
 
   const handleFieldChange = (fieldName: string, value: any) => {
+    // Detect TXT subtype on relevant field changes
     setRecord(prev => {
       const newRecord = {
         ...prev,
         [fieldName]: value
       };
+
+      // Run TXT subtype detection
+      if (newRecord.type === 'TXT' && (fieldName === 'value' || fieldName === 'name')) {
+        const name = fieldName === 'name' ? value as string : newRecord.name;
+        const val = fieldName === 'value' ? value as string : (newRecord.value as string || '');
+        setTxtSubtype(detectTxtSubtype(val, name));
+      }
+      if (fieldName === 'type' && value === 'TXT') {
+        setTxtSubtype(detectTxtSubtype(newRecord.value as string || '', newRecord.name));
+      } else if (fieldName === 'type' && value !== 'TXT') {
+        setTxtSubtype(null);
+      }
 
       if (selectedZone && (fieldName === 'name' || fieldName === 'ttl')) {
         let validationRecord = { ...newRecord };
@@ -356,6 +375,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
         value: `${record.priority} ${record.weight} ${record.port} ${record.target}`
       };
       const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
+      setValidationWarnings(validation.warnings || []);
       if (!validation.isValid) {
         const errMap = validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           const field = mapErrorToField(error);
@@ -376,6 +396,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
         value: `${record.priority} ${record.value}`
       };
       const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
+      setValidationWarnings(validation.warnings || []);
       if (!validation.isValid) {
         const errMap = validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           const field = mapErrorToField(error);
@@ -388,6 +409,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
       }
     } else {
       const validation = DNSValidationService.validateRecord(record, selectedZone);
+      setValidationWarnings(validation.warnings || []);
       if (!validation.isValid) {
         const errMap = validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
           const field = mapErrorToField(error);
@@ -607,6 +629,37 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
             )}
           </Grid>
         ))}
+
+        {record.type === 'TXT' && txtSubtype && (
+          <Grid item xs={12}>
+            {txtSubtype === 'spf' && (
+              <SpfEditor
+                value={record.value as string}
+                onChange={(val) => handleFieldChange('value', val)}
+              />
+            )}
+            {txtSubtype === 'dkim' && (
+              <DkimEditor
+                value={record.value as string}
+                onChange={(val) => handleFieldChange('value', val)}
+              />
+            )}
+            {txtSubtype === 'dmarc' && (
+              <DmarcEditor
+                value={record.value as string}
+                onChange={(val) => handleFieldChange('value', val)}
+              />
+            )}
+          </Grid>
+        )}
+
+        {validationWarnings.length > 0 && (
+          <Grid item xs={12}>
+            {validationWarnings.map((warning, i) => (
+              <Alert key={i} severity="warning" sx={{ mb: 1 }}>{warning}</Alert>
+            ))}
+          </Grid>
+        )}
       </Grid>
 
       {record.type === 'PTR' && ptrPreview && (

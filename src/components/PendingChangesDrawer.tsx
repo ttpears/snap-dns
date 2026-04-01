@@ -13,6 +13,7 @@ import {
   CircularProgress,
   Stack,
   Collapse,
+  Snackbar,
   Tooltip
 } from '@mui/material';
 import {
@@ -57,6 +58,7 @@ function PendingChangesDrawer({
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [applyWarnings, setApplyWarnings] = useState<string[]>([]);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [backendKeys, setBackendKeys] = useState<TSIGKey[]>([]);
 
@@ -120,6 +122,7 @@ function PendingChangesDrawer({
       // Track all successful changes for notification
       const allSuccessfulChanges: PendingChange[] = [];
       const affectedZones: string[] = [];
+      const allWarnings: string[] = [];
 
       // Apply changes zone by zone
       for (const [zone, changes] of Object.entries(changesByZone) as [string, PendingChange[]][]) {
@@ -146,14 +149,16 @@ function PendingChangesDrawer({
           for (const change of changes) {
             try {
               switch ((change as any).type) {
-                case 'ADD':
-                  await dnsService.addRecord(zone, change.record! as any);
+                case 'ADD': {
+                  const addResult = await dnsService.addRecord(zone, change.record! as any);
+                  if (addResult?.warnings?.length) allWarnings.push(...addResult.warnings);
                   allSuccessfulChanges.push({
                     ...change,
                     type: 'ADD'
                   });
                   break;
-                case 'RESTORE':
+                }
+                case 'RESTORE': {
                   // For restore, we need to ensure the record is properly formatted
                   const recordToRestore = {
                     ...change.record!,
@@ -162,22 +167,28 @@ function PendingChangesDrawer({
                     value: change.record!.value,
                     ttl: change.record!.ttl || 3600  // Ensure TTL exists
                   };
-                  await dnsService.addRecord(zone, recordToRestore as any);
+                  const restoreResult = await dnsService.addRecord(zone, recordToRestore as any);
+                  if (restoreResult?.warnings?.length) allWarnings.push(...restoreResult.warnings);
                   allSuccessfulChanges.push({
                     ...change,
                     type: 'ADD',
                     record: recordToRestore as any
                   });
                   break;
-                case 'DELETE':
-                  await dnsService.deleteRecord(zone, change.record! as any);
+                }
+                case 'DELETE': {
+                  const deleteResult = await dnsService.deleteRecord(zone, change.record! as any);
+                  if (deleteResult?.warnings?.length) allWarnings.push(...deleteResult.warnings);
                   allSuccessfulChanges.push(change);
                   break;
-                case 'MODIFY':
+                }
+                case 'MODIFY': {
                   // Use atomic update for modifications (especially important for SOA)
-                  await dnsService.updateRecord(zone, change.originalRecord! as any, change.newRecord! as any);
+                  const updateResult = await dnsService.updateRecord(zone, change.originalRecord! as any, change.newRecord! as any);
+                  if (updateResult?.warnings?.length) allWarnings.push(...updateResult.warnings);
                   allSuccessfulChanges.push(change);
                   break;
+                }
                 default:
                   console.warn(`Unknown change type: ${change.type}`);
               }
@@ -218,6 +229,9 @@ function PendingChangesDrawer({
 
       clearPendingChanges();
       showSuccess(`Successfully applied ${allSuccessfulChanges.length} change${allSuccessfulChanges.length !== 1 ? 's' : ''} to ${affectedZones.length} zone${affectedZones.length !== 1 ? 's' : ''}`);
+      if (allWarnings.length > 0) {
+        setApplyWarnings(allWarnings);
+      }
       onClose();
     } catch (error) {
       console.error('Failed to apply changes:', error);
@@ -485,6 +499,15 @@ function PendingChangesDrawer({
           </Box>
         )}
       </Box>
+      <Snackbar
+        open={applyWarnings.length > 0}
+        autoHideDuration={10000}
+        onClose={() => setApplyWarnings([])}
+      >
+        <Alert severity="warning" onClose={() => setApplyWarnings([])}>
+          {applyWarnings.map((w, i) => <div key={i}>{w}</div>)}
+        </Alert>
+      </Snackbar>
     </Drawer>
   );
 }

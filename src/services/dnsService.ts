@@ -138,7 +138,7 @@ class DNSService {
     }
   }
 
-  async addRecord(zone: string, record: DNSRecord): Promise<void> {
+  async addRecord(zone: string, record: DNSRecord): Promise<{ warnings?: string[] }> {
     try {
       if (!zone || !record) {
         throw new Error('Zone and record are required');
@@ -171,6 +171,9 @@ class DNSService {
           errorData.details
         );
       }
+
+      const data = await response.json().catch(() => ({}));
+      return { warnings: data.warnings };
     } catch (error) {
       if (error instanceof DNSError) {
         throw error;
@@ -183,7 +186,7 @@ class DNSService {
     }
   }
 
-  async deleteRecord(zone: string, record: DNSRecord): Promise<void> {
+  async deleteRecord(zone: string, record: DNSRecord): Promise<{ warnings?: string[] }> {
     try {
       if (!zone || !record) {
         throw new Error('Zone and record are required');
@@ -216,6 +219,9 @@ class DNSService {
           errorData.details
         );
       }
+
+      const data = await response.json().catch(() => ({}));
+      return { warnings: data.warnings };
     } catch (error) {
       if (error instanceof DNSError) {
         throw error;
@@ -232,7 +238,7 @@ class DNSService {
     zone: string,
     oldRecord: DNSRecord,
     newRecord: DNSRecord
-  ): Promise<void> {
+  ): Promise<{ warnings?: string[] }> {
     try {
       if (!zone || !oldRecord || !newRecord) {
         throw new Error('Zone, old record, and new record are required');
@@ -269,6 +275,9 @@ class DNSService {
           errorData.details
         );
       }
+
+      const data = await response.json().catch(() => ({}));
+      return { warnings: data.warnings };
     } catch (error) {
       if (error instanceof DNSError) {
         throw error;

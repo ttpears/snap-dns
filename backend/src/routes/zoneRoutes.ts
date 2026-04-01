@@ -210,7 +210,7 @@ router.post(
     // Log successful DNS operation
     await auditService.logDNSOperation('add', zone, record, user.userId, user.username, true);
 
-    res.json(result);
+    res.json({ ...result, warnings: validation.warnings });
   } catch (err: unknown) {
     const error = err as DNSError;
     console.error('Failed to add record:', error);
@@ -318,7 +318,7 @@ router.delete(
     // Log successful DNS operation
     await auditService.logDNSOperation('delete', zone, record, user.userId, user.username, true);
 
-    res.json(result);
+    res.json({ ...result, warnings: validation.warnings });
   } catch (err: unknown) {
     const error = err as DNSError;
     console.error('Failed to delete record:', error);
@@ -454,7 +454,7 @@ router.patch(
       true
     );
 
-    res.json(result);
+    res.json({ ...result, warnings: newValidation.warnings });
   } catch (err: unknown) {
     const error = err as DNSError;
     console.error('Failed to update record:', error);

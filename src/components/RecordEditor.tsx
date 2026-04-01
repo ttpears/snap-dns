@@ -11,6 +11,10 @@ import {
 } from '@mui/material';
 import { DNSValidationService } from '../services/dnsValidationService';
 import { DNSRecord } from '../types/dns';
+import { detectTxtSubtype, TxtSubtype } from '../services/validators/detectTxtSubtype';
+import SpfEditor from './editors/SpfEditor';
+import DkimEditor from './editors/DkimEditor';
+import DmarcEditor from './editors/DmarcEditor';
 
 interface SOAFields {
   mname: string;
@@ -32,6 +36,11 @@ interface RecordEditorProps {
 function RecordEditor({ record, onSave, onCancel, isCopy = false }: RecordEditorProps) {
   const [editedRecord, setEditedRecord] = useState<DNSRecord>({ ...record });
   const [error, setError] = useState<string | null>(null);
+  const [txtSubtype, setTxtSubtype] = useState<TxtSubtype | null>(() =>
+    record.type === 'TXT' && typeof record.value === 'string'
+      ? detectTxtSubtype(record.value, record.name)
+      : null
+  );
   const [soaFields, setSOAFields] = useState<SOAFields>({
     mname: '',
     rname: '',
@@ -257,20 +266,49 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }: RecordEditor
   const renderTXTFields = () => {
     if (record.type !== 'TXT') return null;
 
+    const handleTxtChange = (val: string) => {
+      handleChange('value', val);
+      setTxtSubtype(detectTxtSubtype(val, editedRecord.name));
+    };
+
     return (
-      <Grid item xs={12}>
-        <TextField
-          fullWidth
-          label="Text Value"
-          value={record.value as string}
-          onChange={(e) => {
-            handleChange('value', e.target.value);
-          }}
-          multiline
-          rows={4}
-          helperText="Enter text content exactly as needed - no quotes will be added"
-        />
-      </Grid>
+      <>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            label="Text Value"
+            value={editedRecord.value as string}
+            onChange={(e) => handleTxtChange(e.target.value)}
+            multiline
+            rows={4}
+            helperText="Enter text content exactly as needed - no quotes will be added"
+          />
+        </Grid>
+        {txtSubtype === 'spf' && (
+          <Grid item xs={12}>
+            <SpfEditor
+              value={editedRecord.value as string}
+              onChange={handleTxtChange}
+            />
+          </Grid>
+        )}
+        {txtSubtype === 'dkim' && (
+          <Grid item xs={12}>
+            <DkimEditor
+              value={editedRecord.value as string}
+              onChange={handleTxtChange}
+            />
+          </Grid>
+        )}
+        {txtSubtype === 'dmarc' && (
+          <Grid item xs={12}>
+            <DmarcEditor
+              value={editedRecord.value as string}
+              onChange={handleTxtChange}
+            />
+          </Grid>
+        )}
+      </>
     );
   };
 
