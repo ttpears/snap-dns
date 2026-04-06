@@ -60,6 +60,32 @@ docker-compose -f docker-compose.prod.yml up -d
 # - docker-compose.prod.yml - Production with optional Traefik proxy support
 ```
 
+## Versioning & Releases
+
+The project uses semantic versioning. Both `package.json` (root) and `backend/package.json` must stay in sync.
+
+### Version Bump Workflow
+```bash
+# Bump and tag (updates both package.json files, commits, creates git tag)
+./scripts/bump-version.sh patch   # 2.1.0 → 2.1.1
+./scripts/bump-version.sh minor   # 2.1.0 → 2.2.0
+./scripts/bump-version.sh major   # 2.1.0 → 3.0.0
+./scripts/bump-version.sh 2.5.0   # explicit version
+
+# Push the commit and tag to trigger the Docker publish workflow
+git push origin HEAD && git push origin v<version>
+```
+
+### Docker Image Tags
+
+The GitHub Actions workflow (`.github/workflows/docker-publish.yml`) publishes to GHCR on:
+- **Push to `main`**: tags images with `main`, `latest`, and short SHA
+- **Push of `v*` tag**: tags images with the semver version (e.g., `2.1.0`)
+
+Images: `ghcr.io/ttpears/snap-dns-frontend` and `ghcr.io/ttpears/snap-dns-backend`
+
+Production compose (`docker-compose.prod.yml`) uses `${IMAGE_TAG:-latest}` — set `IMAGE_TAG=2.1.0` to pin a specific release.
+
 ## Architecture
 
 ### Frontend Structure

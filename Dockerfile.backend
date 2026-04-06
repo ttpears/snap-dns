@@ -35,6 +35,10 @@ RUN npm run build
 # Clean image — only compiled JS, production deps, and DNS tools
 FROM node:20-slim AS prod
 
+LABEL org.opencontainers.image.source="https://github.com/ttpears/snap-dns"
+LABEL org.opencontainers.image.description="Snap DNS - Backend API"
+LABEL org.opencontainers.image.licenses="MIT"
+
 WORKDIR /app
 
 RUN apt-get update && \
