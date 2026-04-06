@@ -1,5 +1,5 @@
 # docker-compose.prod.yml
-# Production environment with optional Traefik proxy support
+# Production environment with pre-built images from ghcr.io
 #
 # Direct access:
 #   docker compose -f docker-compose.prod.yml up -d
@@ -11,12 +11,7 @@
 
 services:
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-      args:
-        PUBLIC_URL: ${PUBLIC_URL:-/}
-        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:3002}
+    image: ghcr.io/ttpears/snap-dns-frontend:${IMAGE_TAG:-latest}
     container_name: snap-dns-frontend-prod
     ports:
       - "${FRONTEND_PORT:-3001}:3001"
@@ -28,6 +23,7 @@ services:
       # - proxy
     environment:
       - NODE_ENV=production
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:3002}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"]
       interval: 30s
@@ -44,9 +40,7 @@ services:
     restart: unless-stopped
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    image: ghcr.io/ttpears/snap-dns-backend:${IMAGE_TAG:-latest}
     container_name: snap-dns-backend-prod
     ports:
       - "${BACKEND_PORT:-3002}:3002"
