@@ -23,6 +23,24 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoChecked, setSsoChecked] = useState(false);
+
+  // Check if SSO is enabled
+  useEffect(() => {
+    const checkSSOStatus = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/sso-config/status`);
+        const data = await response.json();
+        setSsoEnabled(data.ssoEnabled === true);
+      } catch {
+        setSsoEnabled(false);
+      } finally {
+        setSsoChecked(true);
+      }
+    };
+    checkSSOStatus();
+  }, []);
 
   // Check for SSO errors in URL params
   useEffect(() => {
@@ -30,7 +48,6 @@ export default function Login() {
     const errorParam = params.get('error');
     if (errorParam) {
       const errorMessages: Record<string, string> = {
-        sso_disabled: 'SSO is not enabled on this server',
         sso_init_failed: 'Failed to initiate SSO login',
         invalid_state: 'Invalid authentication state (possible CSRF attack)',
         no_code: 'No authorization code received from identity provider',
@@ -91,19 +108,23 @@ export default function Login() {
             </Alert>
           )}
 
-          {/* SSO Login Button */}
-          <Button
-            fullWidth
-            variant="contained"
-            size="large"
-            startIcon={<MicrosoftIcon />}
-            onClick={handleSSOLogin}
-            sx={{ mb: 2 }}
-          >
-            Sign in with Microsoft
-          </Button>
+          {/* SSO Login Button - only shown when SSO is enabled */}
+          {ssoChecked && ssoEnabled && (
+            <>
+              <Button
+                fullWidth
+                variant="contained"
+                size="large"
+                startIcon={<MicrosoftIcon />}
+                onClick={handleSSOLogin}
+                sx={{ mb: 2 }}
+              >
+                Sign in with Microsoft
+              </Button>
 
-          <Divider sx={{ my: 2 }}>OR</Divider>
+              <Divider sx={{ my: 2 }}>OR</Divider>
+            </>
+          )}
 
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
@@ -142,9 +163,11 @@ export default function Login() {
               {isLoading ? <CircularProgress size={24} /> : 'Sign In'}
             </Button>
 
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>
-              Local authentication for fallback access
-            </Typography>
+            {ssoEnabled && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>
+                Local authentication for fallback access
+              </Typography>
+            )}
           </Box>
         </Paper>
       </Box>

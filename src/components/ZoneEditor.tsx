@@ -525,9 +525,17 @@ function ZoneEditor() {
         </Tooltip>
       </Box>
 
-      {!selectedZone || !selectedKey ? (
+      {!selectedZone && !selectedKey ? (
         <Alert severity="info" sx={{ mb: 2 }}>
-          No TSIG key found for this zone. Please configure a key first.
+          Select a zone and TSIG key from the sidebar to get started.
+        </Alert>
+      ) : !selectedZone ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Select a zone from the sidebar to view and manage records.
+        </Alert>
+      ) : !selectedKey ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          No TSIG key is associated with this zone. Configure a key in Settings to manage records.
         </Alert>
       ) : error ? (
         <Alert severity="error" sx={{ mb: 2 }}>

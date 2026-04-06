@@ -9,6 +9,20 @@ import { auditService, AuditEventType } from '../services/auditService';
 const router = Router();
 
 /**
+ * GET /api/sso-config/status
+ * Public endpoint - returns whether SSO is enabled (no auth required)
+ */
+router.get('/status', async (req: Request, res: Response) => {
+  try {
+    const enabled = await ssoConfigService.isEnabled();
+    res.json({ ssoEnabled: enabled });
+  } catch (error) {
+    console.error('Get SSO status error:', error);
+    res.json({ ssoEnabled: false });
+  }
+});
+
+/**
  * GET /api/sso-config
  * Get SSO configuration (admin only)
  */
