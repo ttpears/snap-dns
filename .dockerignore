@@ -1,0 +1,41 @@
+# Git
+.git
+.github
+
+# Dependencies (installed in container)
+node_modules
+backend/node_modules
+test/node_modules
+
+# Build output
+build
+dist
+backend/dist
+
+# Test and development
+test
+tests
+test-setup.sh
+run-tests.sh
+*.test.ts
+*.spec.ts
+
+# Documentation
+docs
+*.md
+!README.md
+
+# IDE and editor
+.claude
+.vscode
+.idea
+
+# Environment files (mounted at runtime, not baked in)
+.env
+.env.*
+!.env.example
+
+# Misc
+.gitignore
+.dockerignore
+docker-compose*.yml

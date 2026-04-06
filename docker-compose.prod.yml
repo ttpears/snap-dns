@@ -20,11 +20,20 @@ services:
     container_name: snap-dns-frontend-prod
     ports:
       - "${FRONTEND_PORT:-3001}:3001"
+    depends_on:
+      backend:
+        condition: service_healthy
     networks:
       - snap-dns-network
       # - proxy
     environment:
       - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     # labels:
     #   - "traefik.enable=true"
     #   - "traefik.docker.network=proxy"
@@ -60,6 +69,12 @@ services:
     #   - "traefik.http.routers.snap-dns-api.entrypoints=websecure"
     #   - "traefik.http.routers.snap-dns-api.tls=true"
     #   - "traefik.http.services.snap-dns-api.loadBalancer.server.port=3002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3002/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     cap_add:
       - NET_RAW
     restart: unless-stopped

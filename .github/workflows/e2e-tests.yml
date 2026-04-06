@@ -1,14 +1,14 @@
 # .github/workflows/e2e-tests.yml
-# GitHub Actions workflow for automated E2E testing
+# Verifies the Docker test stack builds and starts correctly
 
 name: Integration Tests
 
 on:
   push:
-    branches: [ main, feat/*, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # Allow manual triggering
+  workflow_dispatch:
 
 jobs:
   integration-tests:
@@ -20,50 +20,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
       - name: Start test environment
         run: |
-          echo "Starting Docker test environment (CI mode)..."
-          docker compose -f docker-compose.test.yml up -d
+          docker compose -f docker-compose.test.yml up -d --build
           echo "Waiting for services to be ready..."
           sleep 15
 
-      - name: Check container status
+      - name: Verify services are healthy
         run: |
           docker compose -f docker-compose.test.yml ps
           echo ""
           echo "Backend health check:"
-          curl -f http://localhost:3002/health || exit 1
+          curl -f http://localhost:3002/health
           echo ""
           echo "Frontend health check:"
-          curl -f http://localhost:3001 || exit 1
-
-      - name: Install test dependencies
-        run: |
-          npm install --no-save --legacy-peer-deps playwright
-          npx playwright install chromium
-
-      - name: Verify test setup
-        run: |
-          echo "✓ E2E test infrastructure ready"
-          echo "Note: Full E2E tests require configured TSIG keys"
-          echo "Run locally with: ./run-tests.sh"
-
-      - name: Upload test results on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: |
-            playwright-report/
-            test-results/
-            *.png
-          retention-days: 7
+          curl -f http://localhost:3001
 
       - name: Show logs on failure
         if: failure()
