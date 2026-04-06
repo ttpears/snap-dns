@@ -27,11 +27,10 @@ ENV TSC_COMPILE_ON_ERROR=false
 ENV DISABLE_ESLINT_PLUGIN=true
 
 ARG PUBLIC_URL
-ARG REACT_APP_API_URL
 ARG REACT_APP_WS_URL
 
 RUN PUBLIC_URL=$PUBLIC_URL \
-    REACT_APP_API_URL=$REACT_APP_API_URL \
+    REACT_APP_API_URL=__REACT_APP_API_URL_PLACEHOLDER__ \
     REACT_APP_WS_URL=$REACT_APP_WS_URL \
     npm run build
 
@@ -47,6 +46,10 @@ COPY --from=build /app/build ./build
 
 RUN echo '{ "rewrites": [{ "source": "**", "destination": "/index.html" }] }' > serve.json
 
+COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 EXPOSE 3001
 
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["serve", "-s", "build", "-l", "3001", "--config", "/app/serve.json"]
