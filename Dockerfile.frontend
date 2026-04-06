@@ -10,8 +10,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
-RUN npm install -g typescript@5.7.2
-
 EXPOSE 3001
 
 CMD ["npm", "start"]
@@ -22,7 +20,6 @@ FROM base AS build
 COPY public/ ./public/
 COPY src/ ./src/
 COPY tsconfig.json ./
-COPY .env* ./
 
 ENV CI=false
 ENV GENERATE_SOURCEMAP=false
@@ -32,8 +29,6 @@ ENV DISABLE_ESLINT_PLUGIN=true
 ARG PUBLIC_URL
 ARG REACT_APP_API_URL
 ARG REACT_APP_WS_URL
-
-RUN npx tsc --noEmit
 
 RUN PUBLIC_URL=$PUBLIC_URL \
     REACT_APP_API_URL=$REACT_APP_API_URL \

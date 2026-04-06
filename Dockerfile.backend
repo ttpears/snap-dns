@@ -8,10 +8,8 @@ FROM node:20-slim AS base
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y dnsutils iputils-ping net-tools && \
+    apt-get install -y dnsutils && \
     rm -rf /var/lib/apt/lists/*
-
-RUN npm install -g typescript ts-node ts-node-dev
 
 COPY backend/package*.json ./
 RUN npm install
@@ -46,8 +44,8 @@ RUN apt-get update && \
 RUN mkdir -p /tmp/snap-dns && chmod 700 /tmp/snap-dns
 
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./
+COPY --from=build /app/package.json /app/package-lock.json ./
+RUN npm ci --omit=dev
 
 ENV NODE_ENV=production
 ENV BACKEND_HOST=0.0.0.0
