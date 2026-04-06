@@ -75,6 +75,7 @@ debug.log
 # DNS specific
 *.tsig
 *.key.conf
+*.jnl
 
 # Runtime data directories (generated at runtime, should not be committed)
 backend/data/
