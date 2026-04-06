@@ -15,10 +15,14 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Check if docker-compose is installed
-if ! command -v docker-compose &> /dev/null; then
-    echo -e "${RED}Error: docker-compose is not installed${NC}"
-    echo "Please install docker-compose first:"
+# Prefer modern "docker compose" plugin, fall back to docker-compose
+if docker compose version &> /dev/null; then
+    DC="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    DC="docker-compose"
+else
+    echo -e "${RED}Error: Neither 'docker compose' nor 'docker-compose' found${NC}"
+    echo "Please install Docker Compose:"
     echo "  https://docs.docker.com/compose/install/"
     exit 1
 fi
@@ -45,11 +49,11 @@ cp test/bind9/zones/*.zone test/data/zones/
 
 echo ""
 echo -e "${GREEN}[3/5] Building Docker images...${NC}"
-docker-compose -f docker-compose.test.yml build
+$DC -f docker-compose.test.yml build
 
 echo ""
 echo -e "${GREEN}[4/5] Starting test environment...${NC}"
-docker-compose -f docker-compose.test.yml up -d
+$DC -f docker-compose.test.yml up -d
 
 echo ""
 echo -e "${GREEN}[5/5] Waiting for services to be ready...${NC}"
@@ -64,7 +68,7 @@ for i in {1..30}; do
     fi
     if [ $i -eq 30 ]; then
         echo -e "  ${RED}✗ DNS server failed to start${NC}"
-        docker-compose -f docker-compose.test.yml logs dns-server
+        $DC -f docker-compose.test.yml logs dns-server
         exit 1
     fi
     sleep 2
@@ -131,9 +135,10 @@ echo "  • example.test    (TSIG: snap-dns-example-key)"
 echo "  • demo.local      (TSIG: snap-dns-demo-key)"
 echo ""
 echo "Useful Commands:"
-echo "  View logs:        docker-compose -f docker-compose.test.yml logs -f"
-echo "  Stop environment: docker-compose -f docker-compose.test.yml down"
-echo "  Restart:          docker-compose -f docker-compose.test.yml restart"
+echo "  View logs:        $DC -f docker-compose.test.yml logs -f"
+echo "  Stop environment: $DC -f docker-compose.test.yml down"
+echo "  Restart:          $DC -f docker-compose.test.yml restart"
+echo "  Run E2E tests:    npx playwright test"
 echo "  Test DNS:         dig -p 5353 @localhost test.local SOA"
 echo ""
 echo "Documentation: docs/TESTING.md"

@@ -1,7 +1,7 @@
 $ORIGIN .
 $TTL 3600	; 1 hour
 test.local		IN SOA	ns1.test.local. admin.test.local. (
-				2025011504 ; serial
+				2025011506 ; serial
 				3600       ; refresh (1 hour)
 				1800       ; retry (30 minutes)
 				604800     ; expire (1 week)
@@ -23,9 +23,15 @@ _ldap			SRV	0 5 389 ldap.test.local.
 _xmpp-client		SRV	5 0 5222 xmpp.test.local.
 $ORIGIN test.local.
 api			A	192.168.1.106
+$TTL 300	; 5 minutes
+apply-test		A	10.20.30.40
+$TTL 3600	; 1 hour
 backup-mail		A	192.168.1.103
 blog			CNAME	www
 cdn			A	192.168.1.107
+$ORIGIN foo.test.local.
+*			A	192.168.1.201
+$ORIGIN test.local.
 ftp			A	192.168.1.102
 ipv6only		AAAA	2001:db8:abcd::100
 ldap			A	192.168.1.104

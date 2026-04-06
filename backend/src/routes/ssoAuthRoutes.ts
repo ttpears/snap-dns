@@ -142,6 +142,7 @@ const handleCallback = async (req: Request, res: Response) => {
         createdAt: new Date(),
         lastLogin: new Date(),
         allowedKeyIds: [], // Start with no keys, admin assigns later
+        allowedZones: [],
       };
 
       user = await userService.createOrUpdateSSOUser(newUser);
@@ -165,6 +166,7 @@ const handleCallback = async (req: Request, res: Response) => {
     req.session.username = user.username;
     req.session.role = user.role;
     req.session.allowedKeyIds = user.allowedKeyIds;
+    req.session.allowedZones = user.allowedZones || [];
 
     // Log successful login
     await auditService.log(AuditEventType.LOGIN_SUCCESS, {

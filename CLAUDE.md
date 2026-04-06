@@ -170,7 +170,7 @@ The following design issues should be addressed before production use:
 - **Authentication**: No user authentication or authorization system
 - **Data Integrity**: Non-atomic DNS updates risk data loss
 - **Validation**: Backend trusts frontend validation completely
-- **Code Organization**: Duplicate type definitions and context files
+- **Code Organization**: Duplicate type definitions between frontend and backend (shared-types package exists but is not wired up)
 
 ### 🔴 Critical Security Issues
 
@@ -182,7 +182,7 @@ The following design issues should be addressed before production use:
 
 2. **TSIG Keys Transmitted in HTTP Headers** (src/services/dnsService.ts:58-69, backend/src/routes/zoneRoutes.ts:44-48)
    - Full TSIG keys (keyValue) sent in plaintext HTTP headers on every request
-   - Keys logged in multiple places (backend/src/helpers/fileHelpers.js)
+   - Keys may be logged in various places
    - **Impact**: Keys can be intercepted via network sniffing, proxy logs, or server logs
    - **Fix**: Use session-based authentication, encrypt keys at rest, never log key values
 
@@ -207,11 +207,7 @@ The following design issues should be addressed before production use:
    - **Impact**: Type drift, maintenance burden, bugs from inconsistencies
    - **Fix**: Create shared types package or use monorepo with shared types
 
-6. **Duplicate Context Files** (src/context/ and src/contexts/)
-   - Both directories exist with duplicate files (PendingChangesContext.jsx in both)
-   - ConfigContext exists as both .js and .tsx
-   - **Impact**: Confusion about which is canonical, potential runtime errors
-   - **Fix**: Consolidate to single context/ directory, migrate all to TypeScript
+6. ~~**Duplicate Context Files**~~ — **RESOLVED**: Single `src/context/` directory, all files migrated to TypeScript.
 
 7. **Non-Atomic Update Operations** (src/services/dnsService.ts:272-287)
    - `updateRecord()` performs DELETE then ADD
@@ -260,14 +256,10 @@ The following design issues should be addressed before production use:
     - **Impact**: No forensics capability, compliance issues
     - **Fix**: Implement structured logging to persistent storage
 
-15. **Mixed JavaScript/TypeScript** (src/context/ directory)
-    - ConfigContext.js and ConfigContext.tsx both exist
-    - Some contexts are .jsx, some .tsx
-    - **Impact**: Type safety inconsistencies, confusion
-    - **Fix**: Migrate all to TypeScript
+15. ~~**Mixed JavaScript/TypeScript**~~ — **RESOLVED**: All frontend files migrated to TypeScript. Only `setupProxy.js` remains as JS (CRA requirement).
 
-16. **Sensitive Data in Logs** (backend/src/helpers/fileHelpers.js)
-    - While some places redact keys, helpers log keyName and algorithm
+16. **Sensitive Data in Logs**
+    - Some places may log keyName and algorithm
     - Could aid in credential guessing
     - **Impact**: Information leakage
     - **Fix**: Audit all logging, redact all sensitive data

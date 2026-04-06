@@ -1,5 +1,6 @@
 // src/services/userService.ts
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
+import { getApiUrl } from '../utils/apiUrl';
+const API_URL = getApiUrl();
 
 export interface UserResponse {
   id: string;
@@ -8,6 +9,7 @@ export interface UserResponse {
   email?: string;
   lastLogin?: Date;
   allowedKeyIds: string[];
+  allowedZones: string[];
 }
 
 export interface UserCreateData {
@@ -16,6 +18,7 @@ export interface UserCreateData {
   role: 'admin' | 'editor' | 'viewer';
   email?: string;
   allowedKeyIds?: string[];
+  allowedZones?: string[];
 }
 
 class UserService {
@@ -105,6 +108,24 @@ class UserService {
 
     if (!data.success) {
       throw new Error(data.error || 'Failed to update user keys');
+    }
+  }
+
+  /**
+   * Update user's allowed zones (admin only)
+   */
+  async updateUserZones(userId: string, zones: string[]): Promise<void> {
+    const response = await fetch(`${API_URL}/api/auth/users/${userId}/zones`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ zones }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to update user zones');
     }
   }
 

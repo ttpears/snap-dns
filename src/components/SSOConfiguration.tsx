@@ -22,7 +22,8 @@ import {
 import SaveIcon from '@mui/icons-material/Save';
 import TestIcon from '@mui/icons-material/BugReport';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
+import { getApiUrl } from '../utils/apiUrl';
+const API_URL = getApiUrl();
 
 interface SSOConfig {
   enabled: boolean;

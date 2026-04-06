@@ -1,66 +1,57 @@
-# Build stage
-FROM node:20-slim
+# Dockerfile.frontend
+# Multi-stage build: base (dev/test) → build (compile) → prod (serve)
+
+# ── Stage 1: base ──────────────────────────────────────────────────
+# Used by dev/test compose via "target: base" with volume-mounted source
+FROM node:20-slim AS base
 
 WORKDIR /app
 
-# Install dependencies first
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
-# Install TypeScript and react-scripts globally
-RUN npm install -g typescript@5.7.2 react-scripts@5.0.1
+RUN npm install -g typescript@5.7.2
 
-# Create build directory with proper permissions
-RUN mkdir -p /app/build && chmod 755 /app/build
+EXPOSE 3001
 
-# Copy source files
+CMD ["npm", "start"]
+
+# ── Stage 2: build ─────────────────────────────────────────────────
+FROM base AS build
+
 COPY public/ ./public/
 COPY src/ ./src/
 COPY tsconfig.json ./
 COPY .env* ./
 
-# Set build environment
-ENV NODE_ENV=production
 ENV CI=false
 ENV GENERATE_SOURCEMAP=false
-ENV TSC_COMPILE_ON_ERROR=true
+ENV TSC_COMPILE_ON_ERROR=false
 ENV DISABLE_ESLINT_PLUGIN=true
 
-# Build the app
 ARG PUBLIC_URL
 ARG REACT_APP_API_URL
 ARG REACT_APP_WS_URL
 
-# Clean any existing build
-RUN rm -rf build/*
-
-# Compile TypeScript first
 RUN npx tsc --noEmit
 
-# Then build the app
 RUN PUBLIC_URL=$PUBLIC_URL \
     REACT_APP_API_URL=$REACT_APP_API_URL \
     REACT_APP_WS_URL=$REACT_APP_WS_URL \
     npm run build
 
-# Verify build directory contents
-RUN ls -la build/
+# ── Stage 3: prod ──────────────────────────────────────────────────
+# Clean image — no source, no node_modules
+FROM node:20-slim AS prod
 
-# Install serve
+WORKDIR /app
+
 RUN npm install -g serve@latest
 
-# Add serve configuration for SPA routing
-RUN echo '{ \
-  "rewrites": [ \
-    { "source": "**", "destination": "/index.html" } \
-  ] \
-}' > serve.json
+COPY --from=build /app/build ./build
 
-EXPOSE ${PORT}
+RUN echo '{ "rewrites": [{ "source": "**", "destination": "/index.html" }] }' > serve.json
 
-# Ensure build directory exists and has content before serving
-CMD if [ ! -d "build" ] || [ -z "$(ls -A build)" ]; then \
-      echo "Error: Build directory is missing or empty" && exit 1; \
-    else \
-      serve -s build -l ${PORT:-3001} --config /app/serve.json; \
-    fi
+EXPOSE 3001
+
+CMD ["serve", "-s", "build", "-l", "3001", "--config", "/app/serve.json"]

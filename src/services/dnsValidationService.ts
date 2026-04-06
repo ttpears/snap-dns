@@ -1,13 +1,19 @@
 import { DNSRecord } from '../types/dns';
+import { detectTxtSubtype } from './validators/detectTxtSubtype';
+import { validateSpf } from './validators/spfValidator';
+import { validateDkim } from './validators/dkimValidator';
+import { validateDmarc } from './validators/dmarcValidator';
 
 interface ValidationResult {
   isValid: boolean;
   errors: string[];
+  warnings: string[];
 }
 
 class DNSValidationService {
   static validateRecord(record: any, zone: string): ValidationResult {
     const errors: string[] = [];
+    const warnings: string[] = [];
 
     // Validate name
     if (!record.name) {
@@ -46,9 +52,18 @@ class DNSValidationService {
         }
         break;
       case 'TXT':
-        // TXT records are fairly permissive
         if (typeof record.value !== 'string' && !Array.isArray(record.value)) {
           errors.push('Invalid TXT record format');
+        } else if (typeof record.value === 'string') {
+          const subtype = detectTxtSubtype(record.value, record.name);
+          if (subtype) {
+            const validator = subtype === 'spf' ? validateSpf
+              : subtype === 'dkim' ? validateDkim
+              : validateDmarc;
+            const result = validator(record.value);
+            errors.push(...result.errors);
+            warnings.push(...result.warnings);
+          }
         }
         break;
       case 'SRV':
@@ -60,7 +75,8 @@ class DNSValidationService {
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
+      warnings
     };
   }
 

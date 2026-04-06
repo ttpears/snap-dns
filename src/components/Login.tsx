@@ -14,7 +14,8 @@ import {
 import MicrosoftIcon from '@mui/icons-material/Microsoft';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
+import { getApiUrl } from '../utils/apiUrl';
+const API_URL = getApiUrl();
 
 export default function Login() {
   const { login } = useAuth();

@@ -2,10 +2,15 @@
 // Server-side validation for DNS records
 
 import { DNSRecord } from '../types/dns';
+import { detectTxtSubtype } from './validators/detectTxtSubtype';
+import { validateSpf } from './validators/spfValidator';
+import { validateDkim } from './validators/dkimValidator';
+import { validateDmarc } from './validators/dmarcValidator';
 
 interface ValidationResult {
   isValid: boolean;
   errors: string[];
+  warnings: string[];
 }
 
 class ValidationService {
@@ -14,11 +19,12 @@ class ValidationService {
    */
   validateRecord(record: any, zone: string): ValidationResult {
     const errors: string[] = [];
+    const warnings: string[] = [];
 
     // Validate required fields
     if (!record) {
       errors.push('Record data is required');
-      return { isValid: false, errors };
+      return { isValid: false, errors, warnings };
     }
 
     if (!record.name) {
@@ -41,19 +47,20 @@ class ValidationService {
 
     // Type-specific validation
     if (record.type) {
-      this.validateRecordType(record, errors);
+      this.validateRecordType(record, errors, warnings);
     }
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
+      warnings
     };
   }
 
   /**
    * Validate record based on type
    */
-  private validateRecordType(record: any, errors: string[]): void {
+  private validateRecordType(record: any, errors: string[], warnings: string[]): void {
     switch (record.type) {
       case 'A':
         if (!this.isValidIPv4(record.value)) {
@@ -84,6 +91,16 @@ class ValidationService {
       case 'TXT':
         if (typeof record.value !== 'string' && !Array.isArray(record.value)) {
           errors.push('Invalid TXT record format');
+        } else if (typeof record.value === 'string') {
+          const subtype = detectTxtSubtype(record.value, record.name);
+          if (subtype) {
+            const validator = subtype === 'spf' ? validateSpf
+              : subtype === 'dkim' ? validateDkim
+              : validateDmarc;
+            const result = validator(record.value);
+            errors.push(...result.errors);
+            warnings.push(...result.warnings);
+          }
         }
         break;
 

@@ -4,12 +4,23 @@ import { dnsService } from '../services';
 import { requireAuth, requireWriteAccess } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/auth';
 import { tsigKeyService } from '../services/tsigKeyService';
+import { userService } from '../services/userService';
 import { validationService } from '../services/validationService';
 import { auditService } from '../services/auditService';
 import { dnsQueryLimiter, dnsModifyLimiter } from '../middleware/rateLimiter';
 import { validateAddRecord, validateDeleteRecord, validateUpdateRecord } from '../middleware/validation';
 
 const router = Router();
+
+// Fetch allowedZones from DB on each request so changes take effect without re-login
+async function checkZoneAccess(user: { role: string; userId: string }, zone: string): Promise<boolean> {
+  if (user.role === 'admin') return true;
+  const dbUser = await userService.getUserById(user.userId);
+  if (!dbUser) return false;
+  const allowedZones = dbUser.allowedZones;
+  if (allowedZones.length === 0) return true;
+  return allowedZones.some(z => z.toLowerCase() === zone.toLowerCase());
+}
 
 interface ZoneRequestBody {
   record?: DNSRecord;
@@ -50,6 +61,15 @@ router.get('/:zone', dnsQueryLimiter, requireAuth, async (req: Request, res: Res
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;
     const { zone } = req.params;
+
+    if (!await checkZoneAccess(user, zone)) {
+      return res.status(403).json({
+        success: false,
+        code: ErrorCodes.PERMISSION_DENIED,
+        error: 'Access denied to this zone',
+        details: { zone }
+      });
+    }
 
     // For admins, get all key IDs; otherwise use the user's allowed keys
     let allowedKeyIds = user.allowedKeyIds;
@@ -129,6 +149,15 @@ router.post(
     const { zone } = req.params;
     const { record } = req.body;
 
+    if (!await checkZoneAccess(user, zone)) {
+      return res.status(403).json({
+        success: false,
+        code: ErrorCodes.PERMISSION_DENIED,
+        error: 'Access denied to this zone',
+        details: { zone }
+      });
+    }
+
     if (!record) {
       return res.status(400).json({
         success: false,
@@ -181,7 +210,7 @@ router.post(
     // Log successful DNS operation
     await auditService.logDNSOperation('add', zone, record, user.userId, user.username, true);
 
-    res.json(result);
+    res.json({ ...result, warnings: validation.warnings });
   } catch (err: unknown) {
     const error = err as DNSError;
     console.error('Failed to add record:', error);
@@ -227,6 +256,15 @@ router.delete(
     const user = authReq.user!;
     const { zone } = req.params;
     const { record } = req.body;
+
+    if (!await checkZoneAccess(user, zone)) {
+      return res.status(403).json({
+        success: false,
+        code: ErrorCodes.PERMISSION_DENIED,
+        error: 'Access denied to this zone',
+        details: { zone }
+      });
+    }
 
     if (!record) {
       return res.status(400).json({
@@ -280,7 +318,7 @@ router.delete(
     // Log successful DNS operation
     await auditService.logDNSOperation('delete', zone, record, user.userId, user.username, true);
 
-    res.json(result);
+    res.json({ ...result, warnings: validation.warnings });
   } catch (err: unknown) {
     const error = err as DNSError;
     console.error('Failed to delete record:', error);
@@ -336,6 +374,15 @@ router.patch(
     const user = authReq.user!;
     const { zone } = req.params;
     const { oldRecord, newRecord } = req.body;
+
+    if (!await checkZoneAccess(user, zone)) {
+      return res.status(403).json({
+        success: false,
+        code: ErrorCodes.PERMISSION_DENIED,
+        error: 'Access denied to this zone',
+        details: { zone }
+      });
+    }
 
     if (!oldRecord || !newRecord) {
       return res.status(400).json({
@@ -407,7 +454,7 @@ router.patch(
       true
     );
 
-    res.json(result);
+    res.json({ ...result, warnings: newValidation.warnings });
   } catch (err: unknown) {
     const error = err as DNSError;
     console.error('Failed to update record:', error);

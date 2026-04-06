@@ -94,6 +94,7 @@ dist/
 .playwright-mcp/
 playwright-report/
 test-results/
+tests/e2e/.auth/
 *.png
 *.jpg
 *.jpeg

@@ -69,6 +69,7 @@ router.post('/login', loginLimiter, validateLogin, async (req: Request, res: Res
     req.session.username = user.username;
     req.session.role = user.role;
     req.session.allowedKeyIds = user.allowedKeyIds;
+    req.session.allowedZones = user.allowedZones || [];
 
     // Log successful login
     await auditService.logAuth(
@@ -88,7 +89,8 @@ router.post('/login', loginLimiter, validateLogin, async (req: Request, res: Res
         username: user.username,
         role: user.role,
         email: user.email,
-        allowedKeyIds: user.allowedKeyIds
+        allowedKeyIds: user.allowedKeyIds,
+        allowedZones: user.allowedZones || [],
       }
     });
   } catch (error) {
@@ -153,7 +155,8 @@ router.get('/session', (req: Request, res: Response) => {
       id: req.session.userId,
       username: req.session.username,
       role: req.session.role,
-      allowedKeyIds: req.session.allowedKeyIds
+      allowedKeyIds: req.session.allowedKeyIds,
+      allowedZones: req.session.allowedZones || [],
     }
   });
 });
@@ -510,6 +513,82 @@ router.patch('/users/:userId/keys', requireAuth, requireRole(UserRole.ADMIN), as
     res.status(500).json({
       success: false,
       error: 'Failed to update user keys',
+      code: 'SERVER_ERROR'
+    });
+  }
+});
+
+/**
+ * PATCH /api/auth/users/:userId/zones
+ * Update user's allowed zone names (admin only)
+ */
+router.patch('/users/:userId/zones', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { zones } = req.body;
+
+    if (!Array.isArray(zones)) {
+      return res.status(400).json({
+        success: false,
+        error: 'zones must be an array',
+        code: 'INVALID_ZONES'
+      });
+    }
+
+    if (!zones.every((z: unknown) => typeof z === 'string' && z.length > 0 && z.length <= 255)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Each zone must be a non-empty string of at most 255 characters',
+        code: 'INVALID_ZONES'
+      });
+    }
+
+    // Normalize zone names to lowercase (DNS is case-insensitive)
+    const normalizedZones = zones.map((z: string) => z.toLowerCase());
+
+    const user = await userService.getUserById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    await userService.updateAllowedZones(userId, normalizedZones);
+
+    await auditService.log(AuditEventType.USER_UPDATED, {
+      userId: req.session.userId,
+      username: req.session.username,
+      success: true,
+      details: {
+        updatedUserId: userId,
+        updatedUsername: user.username,
+        oldZones: user.allowedZones,
+        newZones: normalizedZones,
+      },
+    });
+
+    console.log(`User allowed zones updated: ${user.username} by ${req.session.username}`);
+
+    res.json({
+      success: true,
+      message: 'User allowed zones updated successfully'
+    });
+  } catch (error: any) {
+    console.error('Update user zones error:', error);
+
+    if (error.message === 'User not found') {
+      return res.status(404).json({
+        success: false,
+        error: error.message,
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update user zones',
       code: 'SERVER_ERROR'
     });
   }

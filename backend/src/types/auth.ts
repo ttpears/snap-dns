@@ -19,6 +19,8 @@ export interface User {
   lastLogin?: Date;
   // Array of key IDs this user has access to
   allowedKeyIds: string[];
+  // Array of zone names this user is restricted to (empty = no restriction)
+  allowedZones: string[];
 }
 
 // User creation data (without hash)
@@ -28,6 +30,7 @@ export interface UserCreateData {
   role: UserRole;
   email?: string;
   allowedKeyIds?: string[];
+  allowedZones?: string[];
 }
 
 // User response (without sensitive data)
@@ -38,6 +41,7 @@ export interface UserResponse {
   email?: string;
   lastLogin?: Date;
   allowedKeyIds: string[];
+  allowedZones: string[];
 }
 
 // Session data stored in express-session
@@ -46,6 +50,7 @@ export interface SessionData {
   username: string;
   role: UserRole;
   allowedKeyIds: string[];
+  allowedZones: string[];
 }
 
 // Extend Express Request to include session data
@@ -55,6 +60,7 @@ declare module 'express-session' {
     username: string;
     role: UserRole;
     allowedKeyIds: string[];
+    allowedZones: string[];
   }
 }
 

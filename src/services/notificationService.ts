@@ -1,4 +1,5 @@
 import { WebhookProvider, WebhookPayload } from '../types/webhook';
+import { getApiUrl } from '../utils/apiUrl';
 
 interface BackupNotification {
   zone: string;
@@ -10,13 +11,12 @@ interface BackupNotification {
 class NotificationService {
   private webhookUrl: string | null = null;
   private webhookProvider: WebhookProvider = 'mattermost';
-  private readonly apiUrl: string;
+
+  private get apiUrl(): string {
+    return getApiUrl().replace(/\/api$/, '');
+  }
 
   constructor() {
-    this.apiUrl = (process.env.REACT_APP_API_URL || '').replace(/\/api$/, '');
-    if (!this.apiUrl) {
-      console.error('REACT_APP_API_URL is not configured!');
-    }
     this.loadConfig();
   }
 
