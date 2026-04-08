@@ -30,6 +30,7 @@ dotenv.config({ path: path.resolve(__dirname, `../.env.${NODE_ENV}`) }); // Load
 
 // Create express app
 const app: Express = express();
+app.set('trust proxy', 1);
 
 // Session store configuration
 const SessionFileStore = FileStore(session);
