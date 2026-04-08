@@ -23,17 +23,15 @@ function PlainTxtEditor({ value, onChange }: PlainTxtEditorProps) {
   // Re-sync if the parent passes in a different value (e.g., loading a different record).
   useEffect(() => {
     const cleaned = cleanTxtValue(value);
+    if (cleaned === text) return;
     setText(cleaned);
     setWasHealed(isTxtValueDirty(value));
     setHealedDismissed(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    // Strip quotes, backslashes, and newlines as the user types.
-    const cleaned = e.target.value
-      .replace(/\\"/g, '"')
-      .replace(/["\\]/g, '')
-      .replace(/[\r\n]/g, '');
+    const cleaned = cleanTxtValue(e.target.value);
     setText(cleaned);
     onChange(chunkTxtValue(cleaned));
   };
