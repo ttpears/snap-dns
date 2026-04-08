@@ -88,21 +88,48 @@ class ValidationService {
         }
         break;
 
-      case 'TXT':
+      case 'TXT': {
         if (typeof record.value !== 'string' && !Array.isArray(record.value)) {
           errors.push('Invalid TXT record format');
-        } else if (typeof record.value === 'string') {
-          const subtype = detectTxtSubtype(record.value, record.name);
-          if (subtype) {
-            const validator = subtype === 'spf' ? validateSpf
-              : subtype === 'dkim' ? validateDkim
-              : validateDmarc;
-            const result = validator(record.value);
-            errors.push(...result.errors);
-            warnings.push(...result.warnings);
+          break;
+        }
+
+        const segments: string[] = Array.isArray(record.value)
+          ? (record.value as string[])
+          : [record.value as string];
+        const joined = segments.join('');
+        const subtype = detectTxtSubtype(joined, record.name);
+
+        if (subtype) {
+          const validator = subtype === 'spf' ? validateSpf
+            : subtype === 'dkim' ? validateDkim
+            : validateDmarc;
+          const result = validator(joined);
+          errors.push(...result.errors);
+          warnings.push(...result.warnings);
+        } else {
+          // Plain TXT — reject quote/escape artifacts and oversized segments
+          for (const seg of segments) {
+            if (typeof seg !== 'string') {
+              errors.push('TXT record segments must be strings');
+              continue;
+            }
+            if (Buffer.byteLength(seg, 'utf8') > 255) {
+              errors.push(
+                `TXT record segment exceeds 255 bytes (${Buffer.byteLength(seg, 'utf8')} bytes)`
+              );
+            }
+            if (/["\\]/.test(seg)) {
+              errors.push('TXT record segments must not contain quotes or backslashes');
+            }
+            // eslint-disable-next-line no-control-regex
+            if (/[\x00-\x1F\x7F]/.test(seg)) {
+              errors.push('TXT record segments must not contain control characters');
+            }
           }
         }
         break;
+      }
 
       case 'SRV':
         if (!this.isValidSRV(record.value)) {
