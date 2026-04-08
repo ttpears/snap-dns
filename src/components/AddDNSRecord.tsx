@@ -23,6 +23,7 @@ import { detectTxtSubtype, TxtSubtype } from '../services/validators/detectTxtSu
 import SpfEditor from './editors/SpfEditor';
 import DkimEditor from './editors/DkimEditor';
 import DmarcEditor from './editors/DmarcEditor';
+import PlainTxtEditor from './editors/PlainTxtEditor';
 
 interface FieldDefinition {
   name: string;
@@ -319,11 +320,14 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
       // Run TXT subtype detection
       if (newRecord.type === 'TXT' && (fieldName === 'value' || fieldName === 'name')) {
         const name = fieldName === 'name' ? value as string : newRecord.name;
-        const val = fieldName === 'value' ? value as string : (newRecord.value as string || '');
+        const rawVal = fieldName === 'value' ? value : (newRecord.value || '');
+        const val = Array.isArray(rawVal) ? (rawVal as string[]).join('') : (rawVal as string);
         setTxtSubtype(detectTxtSubtype(val, name));
       }
       if (fieldName === 'type' && value === 'TXT') {
-        setTxtSubtype(detectTxtSubtype(newRecord.value as string || '', newRecord.name));
+        const rawVal = newRecord.value || '';
+        const joined = Array.isArray(rawVal) ? (rawVal as string[]).join('') : (rawVal as string);
+        setTxtSubtype(detectTxtSubtype(joined, newRecord.name));
       } else if (fieldName === 'type' && value !== 'TXT') {
         setTxtSubtype(null);
       }
@@ -591,46 +595,51 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
           </FormControl>
         </Grid>
 
-        {currentTypeFields.map((field) => (
-          <Grid item xs={12} sm={field.type === 'number' ? 6 : 12} key={field.name}>
-            {field.select ? (
-              <FormControl fullWidth error={!!fieldErrors[field.name]}>
-                <InputLabel>{field.label}</InputLabel>
-                <Select
+        {currentTypeFields.map((field) => {
+          if (record.type === 'TXT' && field.name === 'value') {
+            return null;
+          }
+          return (
+            <Grid item xs={12} sm={field.type === 'number' ? 6 : 12} key={field.name}>
+              {field.select ? (
+                <FormControl fullWidth error={!!fieldErrors[field.name]}>
+                  <InputLabel>{field.label}</InputLabel>
+                  <Select
+                    value={(record as any)[field.name] || ''}
+                    onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                    label={field.label}
+                  >
+                    {(field.options || []).map((option) => (
+                      <MenuItem
+                        key={typeof option === 'object' ? option.value : option}
+                        value={typeof option === 'object' ? option.value : option}
+                      >
+                        {typeof option === 'object' ? option.label : option}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {field.helperText && <FormHelperText>{fieldErrors[field.name] || field.helperText}</FormHelperText>}
+                </FormControl>
+              ) : (
+                <TextField
+                  fullWidth
+                  label={field.label}
+                  type={field.type || 'text'}
                   value={(record as any)[field.name] || ''}
                   onChange={(e) => handleFieldChange(field.name, e.target.value)}
-                  label={field.label}
-                >
-                  {(field.options || []).map((option) => (
-                    <MenuItem
-                      key={typeof option === 'object' ? option.value : option}
-                      value={typeof option === 'object' ? option.value : option}
-                    >
-                      {typeof option === 'object' ? option.label : option}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {field.helperText && <FormHelperText>{fieldErrors[field.name] || field.helperText}</FormHelperText>}
-              </FormControl>
-            ) : (
-              <TextField
-                fullWidth
-                label={field.label}
-                type={field.type || 'text'}
-                value={(record as any)[field.name] || ''}
-                onChange={(e) => handleFieldChange(field.name, e.target.value)}
-                error={!!fieldErrors[field.name]}
-                helperText={fieldErrors[field.name] || field.helperText}
-                required={field.required}
-                multiline={field.multiline}
-                rows={field.rows}
-                inputProps={{ name: field.name }}
-              />
-            )}
-          </Grid>
-        ))}
+                  error={!!fieldErrors[field.name]}
+                  helperText={fieldErrors[field.name] || field.helperText}
+                  required={field.required}
+                  multiline={field.multiline}
+                  rows={field.rows}
+                  inputProps={{ name: field.name }}
+                />
+              )}
+            </Grid>
+          );
+        })}
 
-        {record.type === 'TXT' && txtSubtype && (
+        {record.type === 'TXT' && (
           <Grid item xs={12}>
             {txtSubtype === 'spf' && (
               <SpfEditor
@@ -647,6 +656,12 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
             {txtSubtype === 'dmarc' && (
               <DmarcEditor
                 value={record.value as string}
+                onChange={(val) => handleFieldChange('value', val)}
+              />
+            )}
+            {!txtSubtype && (
+              <PlainTxtEditor
+                value={record.value as string | string[]}
                 onChange={(val) => handleFieldChange('value', val)}
               />
             )}
