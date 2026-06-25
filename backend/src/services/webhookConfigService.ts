@@ -78,7 +78,7 @@ class WebhookConfigService {
     userId: string,
     webhookUrl: string | null,
     webhookProvider: WebhookConfig['webhookProvider'],
-    enabled: boolean = true
+    enabled = true
   ): Promise<WebhookConfig> {
     if (!this.initialized) await this.initialize();
 

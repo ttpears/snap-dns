@@ -1,7 +1,7 @@
 // backend/src/routes/backupRoutes.ts
 import { Router, Request, Response } from 'express';
-import { requireAuth, requireRole } from '../middleware/auth';
-import { AuthenticatedRequest, UserRole } from '../types/auth';
+import { requireAuth } from '../middleware/auth';
+import { AuthenticatedRequest } from '../types/auth';
 import { backupService } from '../services/backupService';
 
 const router = Router();

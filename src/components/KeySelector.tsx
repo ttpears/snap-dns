@@ -58,7 +58,6 @@ function KeySelector() {
           value={selectedKey?.id || ''}
           onChange={(e) => {
             const key = availableKeys.find(k => k.id === e.target.value);
-            console.log('Selected key:', key); // Debug the selected key
             if (key) {
               // Verify all required fields are present (secret not required - keys stored server-side)
               const requiredFields = ['id', 'name', 'algorithm', 'server'] as const;
@@ -76,7 +75,6 @@ function KeySelector() {
             <em>None</em>
           </MenuItem>
           {availableKeys.map((key) => {
-            console.log('Key in dropdown:', key); // Debug each key in the dropdown
             return (
               <MenuItem key={key.id} value={key.id}>
                 {key.name} ({key.server})

@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 import path from 'path';
 import session from 'express-session';
 import FileStore from 'session-file-store';
-import { config } from './config';
 import { requestLogger } from './middleware/logging';
 import { generalApiLimiter } from './middleware/rateLimiter';
 import { userService } from './services/userService';
@@ -22,6 +21,17 @@ import backupRoutes from './routes/backupRoutes';
 import webhookConfigRoutes from './routes/webhookConfigRoutes';
 import ssoConfigRoutes from './routes/ssoConfigRoutes';
 import auditRoutes from './routes/auditRoutes';
+import { config } from './config';
+import { readFileSync } from 'fs';
+
+// Application version, read from package.json (present next to dist/ at runtime).
+const APP_VERSION: string = (() => {
+  try {
+    return JSON.parse(readFileSync(path.join(__dirname, '../package.json'), 'utf8')).version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+})();
 
 // Load environment variables first
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -40,32 +50,17 @@ const sessionStore = new SessionFileStore({
   retries: 0
 });
 
-// Debug middleware to log ALL requests
-app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log('Incoming request:', {
-    method: req.method,
-    url: req.url,
-    path: req.path,
-    origin: req.headers.origin,
-    env: NODE_ENV,
-    allowedOrigins: process.env.ALLOWED_ORIGINS
-  });
-  next();
-});
-
 // CORS configuration
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     // In test/development, allow all origins
     if (NODE_ENV === 'test' || NODE_ENV === 'development') {
-      console.log('CORS Check (permissive):', { origin, env: NODE_ENV });
       callback(null, true);
       return;
     }
 
     // Production: strict CORS
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
-    console.log('CORS Check (strict):', { origin, allowedOrigins, env: NODE_ENV });
 
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -134,7 +129,7 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'healthy',
     service: 'snap-dns-backend',
-    version: '1.0.0',
+    version: APP_VERSION,
     timestamp: new Date().toISOString()
   });
 });
@@ -143,7 +138,7 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({
     status: 'healthy',
     service: 'snap-dns-backend',
-    version: '1.0.0',
+    version: APP_VERSION,
     timestamp: new Date().toISOString()
   });
 });
@@ -166,7 +161,7 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Error handling
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   console.error('Error:', err);
   res.status(500).json({ 
     error: 'Internal Server Error',
@@ -193,8 +188,9 @@ const startServer = async () => {
     console.log('Initializing SSO config service...');
     await ssoConfigService.initialize();
 
-    const port = parseInt(process.env.BACKEND_PORT || '3002', 10);
-    const host = process.env.BACKEND_HOST || 'localhost';
+    // Single source of truth (config defaults host to 0.0.0.0 so the server
+    // is reachable inside containers, per the documented default).
+    const { host, port } = config;
 
     app.listen(port, host, () => {
       console.log(`Server running at http://${host}:${port}`);

@@ -1,7 +1,7 @@
 import { DNSKey, KeyOperationResult } from '../types/keys';
 
 class KeyService {
-  async validateKey(key: DNSKey): Promise<KeyOperationResult> {
+  async validateKey(_key: DNSKey): Promise<KeyOperationResult> {
     // Implementation here
     return { success: true };
   }
@@ -11,7 +11,7 @@ class KeyService {
     return [];
   }
 
-  async saveKey(key: DNSKey): Promise<KeyOperationResult> {
+  async saveKey(_key: DNSKey): Promise<KeyOperationResult> {
     // Implementation here
     return { success: true };
   }

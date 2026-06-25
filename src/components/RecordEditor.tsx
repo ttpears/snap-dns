@@ -15,6 +15,7 @@ import { detectTxtSubtype, TxtSubtype } from '../services/validators/detectTxtSu
 import SpfEditor from './editors/SpfEditor';
 import DkimEditor from './editors/DkimEditor';
 import DmarcEditor from './editors/DmarcEditor';
+import PlainTxtEditor from './editors/PlainTxtEditor';
 
 interface SOAFields {
   mname: string;
@@ -36,11 +37,11 @@ interface RecordEditorProps {
 function RecordEditor({ record, onSave, onCancel, isCopy = false }: RecordEditorProps) {
   const [editedRecord, setEditedRecord] = useState<DNSRecord>({ ...record });
   const [error, setError] = useState<string | null>(null);
-  const [txtSubtype, setTxtSubtype] = useState<TxtSubtype | null>(() =>
-    record.type === 'TXT' && typeof record.value === 'string'
-      ? detectTxtSubtype(record.value, record.name)
-      : null
-  );
+  const [txtSubtype, setTxtSubtype] = useState<TxtSubtype | null>(() => {
+    if (record.type !== 'TXT') return null;
+    const joined = Array.isArray(record.value) ? record.value.join('') : record.value as string;
+    return detectTxtSubtype(joined, record.name);
+  });
   const [soaFields, setSOAFields] = useState<SOAFields>({
     mname: '',
     rname: '',
@@ -266,29 +267,19 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }: RecordEditor
   const renderTXTFields = () => {
     if (record.type !== 'TXT') return null;
 
-    const handleTxtChange = (val: string) => {
+    const handleTxtChange = (val: string | string[]) => {
       handleChange('value', val);
-      setTxtSubtype(detectTxtSubtype(val, editedRecord.name));
+      const joined = Array.isArray(val) ? val.join('') : val;
+      setTxtSubtype(detectTxtSubtype(joined, editedRecord.name));
     };
 
     return (
       <>
-        <Grid item xs={12}>
-          <TextField
-            fullWidth
-            label="Text Value"
-            value={editedRecord.value as string}
-            onChange={(e) => handleTxtChange(e.target.value)}
-            multiline
-            rows={4}
-            helperText="Enter text content exactly as needed - no quotes will be added"
-          />
-        </Grid>
         {txtSubtype === 'spf' && (
           <Grid item xs={12}>
             <SpfEditor
               value={editedRecord.value as string}
-              onChange={handleTxtChange}
+              onChange={(val: string) => handleTxtChange(val)}
             />
           </Grid>
         )}
@@ -296,7 +287,7 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }: RecordEditor
           <Grid item xs={12}>
             <DkimEditor
               value={editedRecord.value as string}
-              onChange={handleTxtChange}
+              onChange={(val: string) => handleTxtChange(val)}
             />
           </Grid>
         )}
@@ -304,6 +295,14 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }: RecordEditor
           <Grid item xs={12}>
             <DmarcEditor
               value={editedRecord.value as string}
+              onChange={(val: string) => handleTxtChange(val)}
+            />
+          </Grid>
+        )}
+        {!txtSubtype && (
+          <Grid item xs={12}>
+            <PlainTxtEditor
+              value={editedRecord.value as string | string[]}
               onChange={handleTxtChange}
             />
           </Grid>

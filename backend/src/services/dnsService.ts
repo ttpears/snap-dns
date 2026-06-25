@@ -3,7 +3,6 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import { join } from 'path';
-import * as dnsPacket from 'dns-packet';
 import { config } from '../config';
 
 const execAsync = promisify(exec);
@@ -25,7 +24,8 @@ class DNSService {
    * Get temp directory from config
    */
   private getTempDir(): string {
-    return process.env.TEMP_DIR || config.tempDir || '/tmp/snap-dns';
+    // config.tempDir already resolves TEMP_DIR || '/tmp/snap-dns'.
+    return config.tempDir;
   }
 
   /**
@@ -54,6 +54,13 @@ class DNSService {
       if (!rec.value || rec.value === '') {
         console.error('EMPTY VALUE for record:', rec);
         throw new Error(`Record value is empty for ${rec.name} ${rec.type}`);
+      }
+
+      // Multi-segment TXT values arrive as an array; quote each chunk
+      // independently for nsupdate ("seg1" "seg2"). Must precede the object
+      // check below since arrays are also typeof 'object'.
+      if (Array.isArray(rec.value)) {
+        return rec.value.map((seg) => `"${String(seg).replace(/"/g, '\\"')}"`).join(' ');
       }
 
       if (typeof rec.value === 'object') {
@@ -86,7 +93,6 @@ class DNSService {
     ];
 
     const fileContent = commands.join('\n');
-    console.log('Generated nsupdate file:', { zone, isDelete, record: { name: record.name, type: record.type, value: record.value }, fileContent });
 
     await writeFile(updateFile, fileContent);
     return updateFile;
@@ -154,8 +160,6 @@ class DNSService {
 
   async fetchZoneRecords(zone: string, keyConfig: ZoneConfig): Promise<DNSRecord[]> {
     try {
-      console.log('Fetching records for zone:', zone);
-
       // Set a reasonable buffer size limit for child_process
       const maxBuffer = ZONE_TRANSFER_CONFIG.maxOutputSize;
 
@@ -306,7 +310,7 @@ class DNSService {
       const updateFile = await this.createNSUpdateFile(zone, record, keyConfig);
       
       try {
-        const { stdout, stderr } = await execAsync(
+        const { stderr } = await execAsync(
           `nsupdate -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue} ${updateFile}`
         );
 
@@ -341,7 +345,7 @@ class DNSService {
       const updateFile = await this.createNSUpdateFile(zone, record, keyConfig, true);
 
       try {
-        const { stdout, stderr } = await execAsync(
+        const { stderr } = await execAsync(
           `nsupdate -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue} ${updateFile}`
         );
 
@@ -399,7 +403,6 @@ class DNSService {
         ];
 
         const fileContent = commands.join('\n');
-        console.log('Generated SOA update file:', { zone, fileContent });
 
         await writeFile(updateFile, fileContent);
       } else {
@@ -435,7 +438,7 @@ class DNSService {
       }
 
       try {
-        const { stdout, stderr } = await execAsync(
+        const { stderr } = await execAsync(
           `nsupdate -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue} ${updateFile}`
         );
 

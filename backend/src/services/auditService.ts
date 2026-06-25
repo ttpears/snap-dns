@@ -193,7 +193,7 @@ class AuditService {
     username: string,
     userId?: string,
     ipAddress?: string,
-    success: boolean = true,
+    success = true,
     error?: string
   ): Promise<void> {
     await this.log(eventType, {

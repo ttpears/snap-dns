@@ -25,7 +25,7 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // Add new key
-router.post('/', async (req: Request<{}, any, KeyRequestBody>, res: Response) => {
+router.post('/', async (req: Request<Record<string, never>, any, KeyRequestBody>, res: Response) => {
   try {
     const { key } = req.body;
 

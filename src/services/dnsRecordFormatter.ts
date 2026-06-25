@@ -53,7 +53,7 @@ export class DNSRecordFormatter {
     return formatted;
   }
 
-  private static formatValue(type: string, value: any): string {
+  private static formatValue(type: string, value: any): string | string[] {
     switch (type) {
       case 'A':
         return this.formatARecord(value);
@@ -121,10 +121,10 @@ export class DNSRecordFormatter {
     return `${num} ${formattedTarget}`;
   }
 
-  private static formatTXTRecord(value: string | string[]): string {
-    if (Array.isArray(value)) {
-      return value.join(' ');
-    }
+  private static formatTXTRecord(value: string | string[]): string | string[] {
+    // Preserve multi-segment TXT values (chunked >255-byte strings) as an array
+    // so each segment is quoted independently downstream ("seg1" "seg2").
+    // Flattening here would collapse them into one oversized, mis-quoted string.
     return value;
   }
 

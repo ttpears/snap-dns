@@ -42,7 +42,6 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
       if (isAuthenticated) {
         try {
           const keys = await tsigKeyService.listKeys();
-          console.log('Fetched keys from backend:', keys);
           setBackendKeys(keys);
         } catch (error) {
           console.error('Failed to fetch keys from backend:', error);
@@ -94,10 +93,8 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
         if (saved.keyId) {
           const savedKey = availableKeys.find(k => k.id === saved.keyId);
           if (savedKey) {
-            console.log('Restoring saved key selection:', savedKey.name);
             setSelectedKey(savedKey);
             if (saved.zone && savedKey.zones?.includes(saved.zone)) {
-              console.log('Restoring saved zone selection:', saved.zone);
               setSelectedZone(saved.zone);
             }
           }

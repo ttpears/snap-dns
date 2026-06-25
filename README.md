@@ -54,7 +54,7 @@ git clone https://github.com/ttpears/snap-dns.git
 cd snap-dns
 
 # Start test environment (includes BIND9 DNS server)
-docker-compose -f docker-compose.test.yml up -d
+docker compose -f docker-compose.test.yml up -d
 
 # Access application
 # Frontend: http://localhost:3001
@@ -64,19 +64,40 @@ docker-compose -f docker-compose.test.yml up -d
 
 ### Production Deployment
 
+The production stack is two containers (frontend + backend). Configure once, then start.
+
+**1. Create your config** from the template and set a session secret:
+
 ```bash
-# Direct access (HTTP)
-docker-compose -f docker-compose.prod.yml up -d
-
-# With reverse proxy (HTTPS - recommended)
-# 1. Configure reverse proxy (Traefik, Nginx, etc.)
-# 2. Set environment variables:
-export FRONTEND_URL=https://snap-dns.yourdomain.com
-export ALLOWED_ORIGINS=https://snap-dns.yourdomain.com
-
-# 3. Start containers
-docker-compose -f docker-compose.prod.yml up -d
+cp .env.production.example .env
+# Edit .env and set at least:
+#   SESSION_SECRET   — generate with:  openssl rand -base64 32
+#   REACT_APP_API_URL / ALLOWED_ORIGINS — how the app is reached (see comments in the file)
 ```
+
+**2. Start it** — pull pre-built images (fastest) or build from source:
+
+```bash
+# Option A — pre-built images from ghcr.io
+docker compose -f docker-compose.prod.yml up -d
+
+# Option B — build the images from source
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+**3. Access** the UI at <http://localhost:3001> (or your `FRONTEND_PORT`).
+First login is `admin` / `changeme123` — **change it immediately** in Settings.
+
+> The stack refuses to start if `SESSION_SECRET` is unset and tells you exactly what to do.
+> Pin a released version by setting `IMAGE_TAG` in `.env` (e.g. `IMAGE_TAG=2.1.0`); defaults to `latest`.
+
+**Behind a reverse proxy (HTTPS, recommended):** set `REACT_APP_API_URL` and `ALLOWED_ORIGINS`
+to your HTTPS domains in `.env`, then either front the published ports with your proxy, or use the
+built-in Traefik labels — create the network (`docker network create proxy`), set `FQDN` and
+`FQDN_API` in `.env`, and uncomment the `proxy` network + labels in `docker-compose.prod.yml`.
+
+**Updating:** `docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`
+(or re-run with `--build` for Option B).
 
 ## Testing
 
@@ -242,7 +263,7 @@ All operations logged with timestamp, user, client IP, event type, and status.
 curl http://localhost:3002/api/auth/status
 
 # Check containers
-docker-compose -f docker-compose.test.yml ps
+docker compose -f docker-compose.test.yml ps
 docker logs snap-dns-test-backend
 ```
 
@@ -269,11 +290,14 @@ npm start              # Run production
 ### Docker Development
 
 ```bash
-# Hot reload mode (DEFAULT - fastest)
-docker-compose -f docker-compose.test.yml up -d
+# Hot reload dev stack (local source, no DNS server)
+docker compose up -d
 
-# Production build mode
-docker-compose -f docker-compose.test.prod.yml up -d --build
+# Full test stack incl. BIND9 DNS server
+docker compose -f docker-compose.test.yml up -d
+
+# Production images built from source
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ## Troubleshooting

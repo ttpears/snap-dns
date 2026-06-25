@@ -84,7 +84,7 @@ Complete documentation for Snap DNS v2.0 - Enterprise DNS Management Interface
 
 **Key Topics:**
 - `docker-compose.test.yml` - Hot reload (recommended)
-- `docker-compose.test.prod.yml` - Production builds
+- `docker-compose.prod.yml` - Production builds
 - 95% faster development workflow
 - Source code volume mounting
 - WebSocket configuration

@@ -7,7 +7,7 @@ For **active development** with instant hot reload (no rebuilds needed):
 ```bash
 # Start test environment with HOT RELOAD (this is now the DEFAULT)
 REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.yml up
+docker compose -f docker-compose.test.yml up
 
 # Access the application
 http://yourhostname.example.com:3001
@@ -37,12 +37,12 @@ For **testing production builds** or final validation:
 
 ```bash
 # Full production build (takes ~2 minutes)
-REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.prod.yml up -d --build frontend
+SESSION_SECRET=dev-secret REACT_APP_API_URL=http://yourhostname.example.com:3002 \
+docker compose -f docker-compose.prod.yml up -d --build frontend
 
 # Or rebuild everything
-REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.prod.yml up -d --build
+SESSION_SECRET=dev-secret REACT_APP_API_URL=http://yourhostname.example.com:3002 \
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ### What You Get:
@@ -63,7 +63,7 @@ docker-compose -f docker-compose.test.prod.yml up -d --build
 
 | Feature | Development Mode (DEFAULT) | Production Mode |
 |---------|-----------------|-----------------|
-| **File** | `docker-compose.test.yml` | `docker-compose.test.prod.yml` |
+| **File** | `docker-compose.test.yml` | `docker-compose.prod.yml` |
 | **Startup Time** | ~30 seconds | ~2-3 minutes |
 | **Code Changes** | Instant reload (<2s) | Full rebuild (~2 min) |
 | **Build Type** | Development server | Production bundle |
@@ -81,25 +81,25 @@ docker-compose -f docker-compose.test.prod.yml up -d --build
 ```bash
 # 1. Start development mode (DEFAULT - with hot reload)
 REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.yml up
+docker compose -f docker-compose.test.yml up
 
 # 2. Edit files in src/
 # 3. Browser auto-reloads with changes
 # 4. Iterate quickly
 
 # 5. When done, stop dev mode
-docker-compose -f docker-compose.test.yml down
+docker compose -f docker-compose.test.yml down
 
 # 6. Test production build once (optional)
-REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.prod.yml up -d --build
+SESSION_SECRET=dev-secret REACT_APP_API_URL=http://yourhostname.example.com:3002 \
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ### For Bug Fixing:
 ```bash
 # Development mode is fastest (and now the DEFAULT)
 REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.yml up
+docker compose -f docker-compose.test.yml up
 
 # Make changes, test immediately, iterate rapidly
 ```
@@ -107,8 +107,8 @@ docker-compose -f docker-compose.test.yml up
 ### For Final Testing:
 ```bash
 # Production build to catch any build-time issues
-REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.prod.yml up -d --build
+SESSION_SECRET=dev-secret REACT_APP_API_URL=http://yourhostname.example.com:3002 \
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ---
@@ -119,7 +119,7 @@ docker-compose -f docker-compose.test.prod.yml up -d --build
 
 **1. Check if volumes are mounted:**
 ```bash
-docker-compose -f docker-compose.test.dev.yml ps
+docker compose -f docker-compose.test.dev.yml ps
 docker inspect snap-dns-test-frontend | grep -A 10 Mounts
 ```
 
@@ -147,12 +147,12 @@ npm run build  # This runs tsc --noEmit first
 
 ```bash
 # Stop all Docker containers first
-docker-compose -f docker-compose.test.yml down
-docker-compose -f docker-compose.test.dev.yml down
+docker compose -f docker-compose.test.yml down
+docker compose -f docker-compose.test.dev.yml down
 
 # Then start dev mode
 REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.dev.yml up
+docker compose -f docker-compose.test.dev.yml up
 ```
 
 ---
@@ -197,26 +197,26 @@ docker-compose -f docker-compose.test.dev.yml up
 ### Start Development Mode:
 ```bash
 REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.dev.yml up
+docker compose -f docker-compose.test.dev.yml up
 ```
 
 ### Start Development Mode (Background):
 ```bash
 REACT_APP_API_URL=http://yourhostname.example.com:3002 \
-docker-compose -f docker-compose.test.dev.yml up -d
+docker compose -f docker-compose.test.dev.yml up -d
 
 # View logs
-docker-compose -f docker-compose.test.dev.yml logs -f frontend
+docker compose -f docker-compose.test.dev.yml logs -f frontend
 ```
 
 ### Stop Development Mode:
 ```bash
-docker-compose -f docker-compose.test.dev.yml down
+docker compose -f docker-compose.test.dev.yml down
 ```
 
 ### Restart Just Frontend (if needed):
 ```bash
-docker-compose -f docker-compose.test.dev.yml restart frontend
+docker compose -f docker-compose.test.dev.yml restart frontend
 ```
 
 ---
