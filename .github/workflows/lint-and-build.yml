@@ -81,6 +81,11 @@ jobs:
           cd backend
           npx tsc --noEmit
 
+      - name: Run backend tests
+        run: |
+          cd backend
+          npm test
+
       - name: Build backend
         run: |
           cd backend

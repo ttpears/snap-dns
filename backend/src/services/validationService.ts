@@ -279,8 +279,10 @@ class ValidationService {
    * Sanitize record name to prevent injection
    */
   sanitizeRecordName(name: string): string {
-    // Remove any characters that could be dangerous in DNS
-    return name.replace(/[^\w\d.-_@*]/g, '');
+    // Keep only DNS-name-safe characters: word chars (a-z, 0-9, _), dot, dash,
+    // @ and wildcard. The dash is escaped so it is a literal, not a range — the
+    // previous `.-_` was an accidental range that let ;, <, =, >, ? through.
+    return name.replace(/[^\w.\-@*]/g, '');
   }
 
   /**
