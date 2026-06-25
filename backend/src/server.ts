@@ -21,6 +21,7 @@ import backupRoutes from './routes/backupRoutes';
 import webhookConfigRoutes from './routes/webhookConfigRoutes';
 import ssoConfigRoutes from './routes/ssoConfigRoutes';
 import auditRoutes from './routes/auditRoutes';
+import { config } from './config';
 
 // Load environment variables first
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -177,8 +178,9 @@ const startServer = async () => {
     console.log('Initializing SSO config service...');
     await ssoConfigService.initialize();
 
-    const port = parseInt(process.env.BACKEND_PORT || '3002', 10);
-    const host = process.env.BACKEND_HOST || 'localhost';
+    // Single source of truth (config defaults host to 0.0.0.0 so the server
+    // is reachable inside containers, per the documented default).
+    const { host, port } = config;
 
     app.listen(port, host, () => {
       console.log(`Server running at http://${host}:${port}`);

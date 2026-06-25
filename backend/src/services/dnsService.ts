@@ -24,7 +24,8 @@ class DNSService {
    * Get temp directory from config
    */
   private getTempDir(): string {
-    return process.env.TEMP_DIR || config.tempDir || '/tmp/snap-dns';
+    // config.tempDir already resolves TEMP_DIR || '/tmp/snap-dns'.
+    return config.tempDir;
   }
 
   /**

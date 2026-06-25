@@ -10,7 +10,7 @@ export interface Config {
   rateLimitMaxRequests: number;
   strictRateLimitWindowMs: number;
   strictRateLimitMaxRequests: number;
-  tempDir?: string;
+  tempDir: string;
   keys?: Key[];
   webhookProvider?: WebhookProvider;
 }

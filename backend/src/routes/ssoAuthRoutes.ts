@@ -10,6 +10,9 @@ import { getClientIp } from '../helpers/ipHelpers';
 
 const router = Router();
 
+// Frontend base URL for post-SSO redirects.
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
+
 // Store for CSRF state tokens (in production, use Redis)
 const stateStore = new Map<string, { timestamp: number; redirectUri: string }>();
 
@@ -34,7 +37,7 @@ router.get('/signin', async (req: Request, res: Response) => {
 
     if (!ssoConfig?.enabled) {
       console.log('SSO sign-in attempted but SSO is disabled');
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3001'}/login?error=sso_disabled`);
+      return res.redirect(`${FRONTEND_URL}/login?error=sso_disabled`);
     }
 
     const redirectUri = ssoConfig.redirectUri || `${req.protocol}://${req.get('host')}/api/auth/sso/callback`;
@@ -55,7 +58,7 @@ router.get('/signin', async (req: Request, res: Response) => {
     res.redirect(authUrl);
   } catch (error) {
     console.error('SSO sign-in error:', error);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = FRONTEND_URL;
     res.redirect(`${frontendUrl}/login?error=sso_init_failed`);
   }
 });
@@ -67,7 +70,7 @@ router.get('/signin', async (req: Request, res: Response) => {
 const handleCallback = async (req: Request, res: Response) => {
   try {
     const { code, state, error, error_description } = req.method === 'POST' ? req.body : req.query;
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = FRONTEND_URL;
 
     // Check for OAuth errors
     if (error) {
@@ -183,7 +186,7 @@ const handleCallback = async (req: Request, res: Response) => {
     res.redirect(frontendUrl);
   } catch (error) {
     console.error('SSO callback error:', error);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = FRONTEND_URL;
 
     await auditService.log(AuditEventType.LOGIN_FAILURE, {
       username: 'unknown',
@@ -229,7 +232,7 @@ router.get('/signout', async (req: Request, res: Response) => {
 
   try {
     // Get M365 logout URL
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = FRONTEND_URL;
     const logoutUrl = await msalService.getLogoutUrl(`${frontendUrl}/login`);
 
     // Redirect to Entra logout
@@ -237,7 +240,7 @@ router.get('/signout', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('SSO logout error:', error);
     // Fallback to frontend if logout URL fails
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = FRONTEND_URL;
     res.redirect(`${frontendUrl}/login`);
   }
 });
