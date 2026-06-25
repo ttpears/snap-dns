@@ -2,7 +2,7 @@
 export interface DNSRecord {
   name: string;
   type: string;
-  value: string | any;
+  value: string | string[] | Record<string, unknown>;
   ttl: number;
   class?: string;
 }
