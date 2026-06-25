@@ -488,11 +488,18 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
       const cleanRecord = getRecordForSubmission(record);
       const formattedRecord = DNSRecordFormatter.formatRecord(cleanRecord, selectedZone ?? '');
 
+      // Compare by value, handling multi-segment TXT arrays (strict === is
+      // always false for two distinct arrays).
+      const valuesEqual = (a: unknown, b: unknown): boolean =>
+        Array.isArray(a) || Array.isArray(b) || (typeof a === 'object' && a !== null)
+          ? JSON.stringify(a) === JSON.stringify(b)
+          : a === b;
+
       const isDuplicatePending = pendingChanges.some((change: any) =>
         change.type === 'ADD' &&
         change.record.name === formattedRecord.name &&
         change.record.type === formattedRecord.type &&
-        change.record.value === formattedRecord.value
+        valuesEqual(change.record.value, formattedRecord.value)
       );
 
       if (isDuplicatePending) {

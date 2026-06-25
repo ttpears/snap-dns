@@ -55,6 +55,13 @@ class DNSService {
         throw new Error(`Record value is empty for ${rec.name} ${rec.type}`);
       }
 
+      // Multi-segment TXT values arrive as an array; quote each chunk
+      // independently for nsupdate ("seg1" "seg2"). Must precede the object
+      // check below since arrays are also typeof 'object'.
+      if (Array.isArray(rec.value)) {
+        return rec.value.map((seg) => `"${String(seg).replace(/"/g, '\\"')}"`).join(' ');
+      }
+
       if (typeof rec.value === 'object') {
         return this.formatSOA(rec.value);
       }
