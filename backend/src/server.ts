@@ -22,6 +22,16 @@ import webhookConfigRoutes from './routes/webhookConfigRoutes';
 import ssoConfigRoutes from './routes/ssoConfigRoutes';
 import auditRoutes from './routes/auditRoutes';
 import { config } from './config';
+import { readFileSync } from 'fs';
+
+// Application version, read from package.json (present next to dist/ at runtime).
+const APP_VERSION: string = (() => {
+  try {
+    return JSON.parse(readFileSync(path.join(__dirname, '../package.json'), 'utf8')).version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+})();
 
 // Load environment variables first
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -119,7 +129,7 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'healthy',
     service: 'snap-dns-backend',
-    version: '1.0.0',
+    version: APP_VERSION,
     timestamp: new Date().toISOString()
   });
 });
@@ -128,7 +138,7 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({
     status: 'healthy',
     service: 'snap-dns-backend',
-    version: '1.0.0',
+    version: APP_VERSION,
     timestamp: new Date().toISOString()
   });
 });
