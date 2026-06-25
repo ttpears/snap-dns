@@ -6,6 +6,7 @@ import {
   chunkTxtValue,
   serializeTxtForPreview,
   isTxtValueDirty,
+  utf8ByteLength,
 } from '../../services/validators/txtRecordUtils';
 
 interface PlainTxtEditorProps {
@@ -20,7 +21,20 @@ function PlainTxtEditor({ value, onChange }: PlainTxtEditorProps) {
   const [wasHealed, setWasHealed] = useState<boolean>(() => isTxtValueDirty(value));
   const [healedDismissed, setHealedDismissed] = useState<boolean>(false);
 
-  // Re-sync if the parent passes in a different value (e.g., loading a different record).
+  // If the loaded value needed cleaning, propagate the cleaned/chunked form to
+  // the parent on mount so saving without editing never submits the dirty value.
+  useEffect(() => {
+    if (isTxtValueDirty(value)) {
+      onChange(chunkTxtValue(cleanTxtValue(value)));
+    }
+    // Mount-only: deliberately syncs the initial value once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-sync when the parent supplies a genuinely different value (e.g. loading
+  // another record). The cleaned===text guard ignores the echo of our own
+  // onChange during typing; `text` is intentionally not a dependency so the
+  // effect reacts only to external value changes.
   useEffect(() => {
     const cleaned = cleanTxtValue(value);
     if (cleaned === text) return;
@@ -38,7 +52,9 @@ function PlainTxtEditor({ value, onChange }: PlainTxtEditorProps) {
 
   const chunked = chunkTxtValue(text);
   const segments = Array.isArray(chunked) ? chunked : [chunked];
-  const charCount = text.length;
+  // DNS limits each TXT segment to 255 bytes, so byte count is the meaningful
+  // measure (a multi-byte char can exceed the limit before its char count does).
+  const byteCount = utf8ByteLength(text);
   const chunkCount = segments.length;
   const preview = serializeTxtForPreview(chunked);
 
@@ -71,7 +87,7 @@ function PlainTxtEditor({ value, onChange }: PlainTxtEditorProps) {
         sx={{ display: 'block', mt: 1 }}
         data-testid="plain-txt-counter"
       >
-        {charCount} character{charCount === 1 ? '' : 's'} · {chunkCount} chunk
+        {byteCount} byte{byteCount === 1 ? '' : 's'} · {chunkCount} chunk
         {chunkCount === 1 ? '' : 's'}
       </Typography>
 

@@ -47,14 +47,29 @@ describe('PlainTxtEditor', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows multi-chunk count for values exceeding 255 bytes', () => {
+  it('shows byte count and multi-chunk count for values exceeding 255 bytes', () => {
     const onChange = jest.fn();
     const long = 'a'.repeat(300);
     render(<PlainTxtEditor value={long} onChange={onChange} />);
 
     expect(screen.getByTestId('plain-txt-counter').textContent).toMatch(
-      /300 characters · 2 chunks/
+      /300 bytes · 2 chunks/
     );
+  });
+
+  it('propagates the cleaned value on mount when the loaded value was dirty', () => {
+    const onChange = jest.fn();
+    render(<PlainTxtEditor value={'\\"hello"'} onChange={onChange} />);
+
+    // Saving without editing must submit the cleaned value, not the dirty one.
+    expect(onChange).toHaveBeenCalledWith('hello');
+  });
+
+  it('does not call onChange on mount for already-clean values', () => {
+    const onChange = jest.fn();
+    render(<PlainTxtEditor value="hello" onChange={onChange} />);
+
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('calls onChange with chunked array for long values', () => {

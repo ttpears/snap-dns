@@ -93,7 +93,7 @@ const RECORD_TYPES: Record<string, RecordTypeDefinition> = {
     fields: [{
       name: 'value',
       label: 'Text Value',
-      helperText: 'Enter text content exactly as needed - no quotes will be added',
+      helperText: 'Plain text; quoting and 255-byte chunking are handled automatically',
       multiline: true,
       rows: 3,
       required: true

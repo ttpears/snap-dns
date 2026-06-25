@@ -31,7 +31,7 @@ function cleanSegment(segment: string): string {
  * Returns the UTF-8 byte length of a string without relying on TextEncoder.
  * Each code point uses 1–4 bytes depending on its value.
  */
-function utf8ByteLength(str: string): number {
+export function utf8ByteLength(str: string): number {
   let len = 0;
   for (let i = 0; i < str.length; i++) {
     const code = str.charCodeAt(i);
