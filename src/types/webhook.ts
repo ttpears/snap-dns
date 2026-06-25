@@ -1,3 +1,4 @@
+// src/types/webhook.ts
 export type WebhookProvider = 'mattermost' | 'slack' | 'discord' | 'teams' | 'generic' | null | undefined;
 
 export interface WebhookConfig {

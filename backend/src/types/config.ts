@@ -1,3 +1,4 @@
+// backend/src/types/config.ts
 import { Key } from './keys';
 import { WebhookProvider } from './webhook';
 

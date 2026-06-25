@@ -1,3 +1,4 @@
+// src/components/KeySelector.tsx
 import React, { useState, useMemo } from 'react';
 import {
   Box,

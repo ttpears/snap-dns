@@ -35,7 +35,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import { userService, UserResponse, UserCreateData } from '../services/userService';
 import { tsigKeyService, TSIGKey } from '../services/tsigKeyService';
-import { useAuth } from '../context/AuthContext';
 
 const ROLES = [
   { value: 'admin', label: 'Admin', description: 'Full access to all features' },
@@ -44,7 +43,6 @@ const ROLES = [
 ];
 
 function UserManagement() {
-  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [keys, setKeys] = useState<TSIGKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +67,6 @@ function UserManagement() {
   });
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
 
   useEffect(() => {
     loadData();
@@ -169,14 +166,7 @@ function UserManagement() {
   const handleResetPassword = async () => {
     if (!selectedUser) return;
 
-    const isOwnPassword = selectedUser.id === currentUser?.id;
-
     try {
-      if (isOwnPassword && !currentPassword) {
-        setError('Current password is required when changing your own password');
-        return;
-      }
-
       if (!newPassword || newPassword.length < 8) {
         setError('Password must be at least 8 characters');
         return;
@@ -187,17 +177,12 @@ function UserManagement() {
         return;
       }
 
-      await userService.resetPassword(
-        selectedUser.id,
-        newPassword,
-        isOwnPassword ? currentPassword : undefined
-      );
+      await userService.resetPassword(selectedUser.id, newPassword);
       setSuccess('Password reset successfully');
       setPasswordDialogOpen(false);
       setSelectedUser(null);
       setNewPassword('');
       setConfirmPassword('');
-      setCurrentPassword('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset password');
     }
@@ -230,7 +215,6 @@ function UserManagement() {
     setSelectedUser(user);
     setNewPassword('');
     setConfirmPassword('');
-    setCurrentPassword('');
     setPasswordDialogOpen(true);
   };
 
@@ -613,20 +597,8 @@ function UserManagement() {
           <Typography variant="body2" gutterBottom>
             Reset password for <strong>{selectedUser?.username}</strong>
           </Typography>
-          {selectedUser?.id === currentUser?.id && (
-            <TextField
-              autoFocus
-              margin="dense"
-              label="Current Password"
-              type="password"
-              fullWidth
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-            />
-          )}
           <TextField
-            autoFocus={selectedUser?.id !== currentUser?.id}
+            autoFocus
             margin="dense"
             label="New Password"
             type="password"

@@ -1,3 +1,4 @@
+// src/config/index.ts
 interface KeyConfig {
   id: string;
   name: string;

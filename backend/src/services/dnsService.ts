@@ -1,3 +1,4 @@
+// backend/src/services/dnsService.ts
 import { DNSRecord, ZoneConfig, ZoneOperationResult } from '../types/dns';
 import { exec } from 'child_process';
 import { promisify } from 'util';

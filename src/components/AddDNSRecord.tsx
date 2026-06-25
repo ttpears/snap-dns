@@ -1,3 +1,4 @@
+// src/components/AddDNSRecord.tsx
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,

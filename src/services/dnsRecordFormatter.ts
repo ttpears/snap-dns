@@ -1,3 +1,4 @@
+// src/services/dnsRecordFormatter.ts
 import { DNSRecord } from '../types/dns';
 
 // We can't directly use dns-packet in the frontend due to Node.js dependencies,

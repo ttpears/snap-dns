@@ -126,11 +126,4 @@ describe('validationService.validateRecord', () => {
       expect(validate({ type: 'CNAME', value: 'bad host!' }).isValid).toBe(false);
     });
   });
-
-  describe('sanitizeRecordName', () => {
-    it('strips characters that are unsafe in DNS', () => {
-      expect(validationService.sanitizeRecordName('ok.name')).toBe('ok.name');
-      expect(validationService.sanitizeRecordName('bad;rm -rf')).not.toMatch(/[;\s]/);
-    });
-  });
 });

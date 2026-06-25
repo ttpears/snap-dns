@@ -1,3 +1,4 @@
+// src/components/Footer.tsx
 import React from 'react';
 import { Box, Link, Typography } from '@mui/material';
 import GitHubIcon from '@mui/icons-material/GitHub';

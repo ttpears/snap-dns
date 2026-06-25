@@ -1,3 +1,4 @@
+// src/services/dnsValidationService.ts
 import { DNSRecord } from '../types/dns';
 import { detectTxtSubtype } from './validators/detectTxtSubtype';
 import { validateSpf } from './validators/spfValidator';
