@@ -21,10 +21,4 @@ if (!config.host || !config.port) {
   throw new Error('Missing required configuration');
 }
 
-// Log config on startup
-console.log('Loaded configuration:', {
-  ...config,
-  allowedOrigins: config.allowedOrigins
-});
-
-export { config }; 
+export { config };

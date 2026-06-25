@@ -28,10 +28,6 @@ class NotificationService {
         if (parsedConfig.webhookUrl) {
           this.webhookUrl = parsedConfig.webhookUrl;
           this.webhookProvider = parsedConfig.webhookProvider || 'mattermost';
-          console.log('Loaded webhook configuration:', {
-            url: this.webhookUrl,
-            provider: this.webhookProvider
-          });
         }
       }
     } catch (error) {
@@ -46,15 +42,10 @@ class NotificationService {
   setWebhookConfig(url: string, provider: WebhookProvider = 'mattermost') {
     this.webhookUrl = url;
     this.webhookProvider = provider;
-    console.log('Updated webhook configuration:', {
-      url: this.webhookUrl,
-      provider: this.webhookProvider
-    });
   }
 
   async notifyBackupCreated(backup: BackupNotification) {
     if (!this.webhookUrl) {
-      console.log('No webhook URL configured, skipping backup notification');
       return;
     }
 
@@ -77,16 +68,12 @@ class NotificationService {
 
   async sendNotification(zone: string, changes: any) {
     if (!this.webhookUrl) {
-      console.log('No webhook URL configured, skipping notification');
       return;
     }
 
     try {
-      console.log('Processing notification:', { zone, changes });
-
       // If no changes array is provided, return early
       if (!changes || (!Array.isArray(changes.changes) && !Array.isArray(changes))) {
-        console.log('No changes to notify about');
         return;
       }
 
@@ -97,19 +84,10 @@ class NotificationService {
 
       // Skip if no changes were formatted
       if (!changesSummary) {
-        console.log('No formatted changes to notify about');
         return;
       }
 
       const message = this.formatMessage(zone, changes, timestamp);
-
-      console.log('Sending notification:', {
-        zone,
-        changesCount: Array.isArray(changes.changes) ? changes.changes.length : changes.length,
-        webhookUrl: this.webhookUrl,
-        provider: this.webhookProvider,
-        message
-      });
 
       const payload: WebhookPayload = {
         text: message,
@@ -140,8 +118,6 @@ class NotificationService {
 
     try {
       const webhookEndpoint = `${this.apiUrl}/api/webhook/notify`;
-      
-      console.log('Sending webhook to:', webhookEndpoint);
 
       const response = await fetch(webhookEndpoint, {
         method: 'POST',

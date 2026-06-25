@@ -204,7 +204,6 @@ function ZoneEditor() {
         selectedKey &&
         availableZones.includes(selectedZone) &&
         !isInitializing) {
-      console.log('Loading records for zone:', selectedZone);
       loadZoneRecords();
     }
   }, [selectedZone, selectedKey, availableZones, isInitializing, loadZoneRecords]);

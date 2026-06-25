@@ -92,7 +92,6 @@ class DNSService {
     ];
 
     const fileContent = commands.join('\n');
-    console.log('Generated nsupdate file:', { zone, isDelete, record: { name: record.name, type: record.type, value: record.value }, fileContent });
 
     await writeFile(updateFile, fileContent);
     return updateFile;
@@ -160,8 +159,6 @@ class DNSService {
 
   async fetchZoneRecords(zone: string, keyConfig: ZoneConfig): Promise<DNSRecord[]> {
     try {
-      console.log('Fetching records for zone:', zone);
-
       // Set a reasonable buffer size limit for child_process
       const maxBuffer = ZONE_TRANSFER_CONFIG.maxOutputSize;
 
@@ -405,7 +402,6 @@ class DNSService {
         ];
 
         const fileContent = commands.join('\n');
-        console.log('Generated SOA update file:', { zone, fileContent });
 
         await writeFile(updateFile, fileContent);
       } else {

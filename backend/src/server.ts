@@ -39,32 +39,17 @@ const sessionStore = new SessionFileStore({
   retries: 0
 });
 
-// Debug middleware to log ALL requests
-app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log('Incoming request:', {
-    method: req.method,
-    url: req.url,
-    path: req.path,
-    origin: req.headers.origin,
-    env: NODE_ENV,
-    allowedOrigins: process.env.ALLOWED_ORIGINS
-  });
-  next();
-});
-
 // CORS configuration
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     // In test/development, allow all origins
     if (NODE_ENV === 'test' || NODE_ENV === 'development') {
-      console.log('CORS Check (permissive):', { origin, env: NODE_ENV });
       callback(null, true);
       return;
     }
 
     // Production: strict CORS
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
-    console.log('CORS Check (strict):', { origin, allowedOrigins, env: NODE_ENV });
 
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);

@@ -151,11 +151,6 @@ class DNSService {
         record: preparedRecord
       };
 
-      console.log('Adding record:', {
-        zone,
-        record: preparedRecord
-      });
-
       const response = await fetch(`${this.baseUrl}/api/zones/${encodeURIComponent(zone)}/records`, {
         method: 'POST',
         headers,
@@ -198,11 +193,6 @@ class DNSService {
       const requestBody = {
         record: preparedRecord
       };
-
-      console.log('Deleting record:', {
-        zone,
-        record: preparedRecord
-      });
 
       const response = await fetch(`${this.baseUrl}/api/zones/${encodeURIComponent(zone)}/records`, {
         method: 'DELETE',
@@ -252,12 +242,6 @@ class DNSService {
         oldRecord: preparedOldRecord,
         newRecord: preparedNewRecord
       };
-
-      console.log('Updating record:', {
-        zone,
-        oldRecord: preparedOldRecord,
-        newRecord: preparedNewRecord
-      });
 
       // Use atomic PATCH endpoint instead of separate DELETE and ADD
       const response = await fetch(`${this.baseUrl}/api/zones/${encodeURIComponent(zone)}/records`, {
