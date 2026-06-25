@@ -532,11 +532,7 @@ function Snapshots() {
       const fullBackup = await backupService.getBackup(backupListItem.zone, backupListItem.id);
       setSelectedBackup(fullBackup);
 
-      console.log('Fetching current records for zone:', backupListItem.zone);
-
       const currentRecords = await dnsService.fetchZoneRecords(backupListItem.zone);
-
-      console.log('Fetched current records:', currentRecords);
 
       if (!Array.isArray(currentRecords) || currentRecords.length === 0) {
         throw new Error('Failed to fetch current zone records or zone is empty');
@@ -735,14 +731,8 @@ function Snapshots() {
 
       const changes: any[] = [];
 
-      console.log('=== RESTORE DEBUG ===');
-      console.log('Records to restore:', recordsToRestore.length);
-      console.log('Current zone records:', currentRecords.length);
-
       const filteredRecordsToRestore = recordsToRestore.filter(r => r.type !== 'TSIG');
       const filteredCurrentRecords = currentRecords.filter(r => (r.type as string) !== 'TSIG');
-
-      console.log('After filtering TSIG - Snapshot:', filteredRecordsToRestore.length, 'Current:', filteredCurrentRecords.length);
 
       filteredRecordsToRestore.forEach(record => {
         const normalizedRecord: DNSRecord = {
@@ -760,24 +750,13 @@ function Snapshots() {
           isRecordEqual(r, normalizedRecord)
         );
 
-        if (exactMatch) {
-          if (record.type !== 'SOA') {
-            console.log(`Skipping ${normalizedRecord.name} (${normalizedRecord.type}) - exact match`);
-          }
-        } else {
+        if (!exactMatch) {
           const partialMatch = filteredCurrentRecords.find(r =>
             r.name === normalizedRecord.name &&
             r.type === normalizedRecord.type
           );
 
           if (partialMatch) {
-            if (record.type !== 'SOA') {
-              console.log(`MODIFY ${normalizedRecord.name} (${normalizedRecord.type}):`, {
-                from: partialMatch.value,
-                to: normalizedRecord.value
-              });
-            }
-
             changes.push({
               id: Date.now() + Math.random(),
               type: 'MODIFY',
@@ -792,8 +771,6 @@ function Snapshots() {
               }
             });
           } else {
-            console.log(`ADD ${normalizedRecord.name} (${normalizedRecord.type})`);
-
             changes.push({
               id: Date.now() + Math.random(),
               type: 'ADD',
@@ -820,8 +797,6 @@ function Snapshots() {
         );
 
         if (!inSnapshot) {
-          console.log(`DELETE ${currentRecord.name} (${currentRecord.type}) - value: ${currentRecord.value}`);
-
           changes.push({
             id: Date.now() + Math.random(),
             type: 'DELETE',
@@ -845,7 +820,6 @@ function Snapshots() {
       }
 
       changes.forEach(change => {
-        console.log('Adding pending change:', change);
         addPendingChange(change);
       });
 
