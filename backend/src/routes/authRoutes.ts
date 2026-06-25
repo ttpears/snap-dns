@@ -601,7 +601,7 @@ router.patch('/users/:userId/zones', requireAuth, requireRole(UserRole.ADMIN), a
 router.patch('/users/:userId/password', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const { newPassword } = req.body;
+    const { newPassword, currentPassword } = req.body;
 
     if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({
@@ -619,6 +619,26 @@ router.patch('/users/:userId/password', requireAuth, requireRole(UserRole.ADMIN)
         error: 'User not found',
         code: 'USER_NOT_FOUND'
       });
+    }
+
+    // Require current password when admin is changing their own password
+    if (userId === req.session.userId) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          success: false,
+          error: 'Current password is required when changing your own password',
+          code: 'CURRENT_PASSWORD_REQUIRED'
+        });
+      }
+
+      const authenticated = await userService.authenticate(user.username, currentPassword);
+      if (!authenticated) {
+        return res.status(401).json({
+          success: false,
+          error: 'Current password is incorrect',
+          code: 'INVALID_PASSWORD'
+        });
+      }
     }
 
     await userService.updatePassword(userId, newPassword);
