@@ -1,17 +1,24 @@
 # docker-compose.prod.yml
-# Production environment with pre-built images from ghcr.io
+# Production stack. Configure once, then run.
 #
-# Direct access:
+#   cp .env.production.example .env      # set SESSION_SECRET + public URLs
+#
+# Run with pre-built images from ghcr.io (fastest):
 #   docker compose -f docker-compose.prod.yml up -d
 #
-# With Traefik proxy:
-#   Set FQDN and FQDN_API environment variables
-#   Ensure 'proxy' network exists: docker network create proxy
-#   Uncomment Traefik labels and proxy network below
+# Or build the images from source locally:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Behind a Traefik proxy: create the network (docker network create proxy),
+# set FQDN and FQDN_API in .env, and uncomment the proxy network + labels.
 
 services:
   frontend:
     image: ghcr.io/ttpears/snap-dns-frontend:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: prod
     container_name: snap-dns-frontend-prod
     ports:
       - "${FRONTEND_PORT:-3001}:3001"
@@ -23,6 +30,7 @@ services:
       # - proxy
     environment:
       - NODE_ENV=production
+      # URL the browser uses to reach the backend (baked in at startup).
       - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:3002}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"]
@@ -41,11 +49,14 @@ services:
 
   backend:
     image: ghcr.io/ttpears/snap-dns-backend:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: prod
     container_name: snap-dns-backend-prod
     ports:
       - "${BACKEND_PORT:-3002}:3002"
     volumes:
-      - ./backend/.env:/app/.env:ro
       - backend_data:/app/data
       - temp-keys:/tmp/snap-dns
     networks:
@@ -55,7 +66,14 @@ services:
       - NODE_ENV=production
       - BACKEND_HOST=0.0.0.0
       - BACKEND_PORT=3002
+      # Required — the stack refuses to start without it.
+      # Generate with: openssl rand -base64 32
+      - "SESSION_SECRET=${SESSION_SECRET:?required - copy .env.production.example to .env and set it}"
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001}
+      - MAX_REQUEST_SIZE=${MAX_REQUEST_SIZE:-10mb}
+      - MAX_ZONE_RECORDS=${MAX_ZONE_RECORDS:-10000}
+      - ZONE_RECORDS_WARNING_THRESHOLD=${ZONE_RECORDS_WARNING_THRESHOLD:-5000}
+      - MAX_DIG_OUTPUT_SIZE=${MAX_DIG_OUTPUT_SIZE:-52428800}
     # labels:
     #   - "traefik.enable=true"
     #   - "traefik.docker.network=proxy"
