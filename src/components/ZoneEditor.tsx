@@ -1,3 +1,4 @@
+// src/components/ZoneEditor.tsx
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Box,

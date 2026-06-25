@@ -1,3 +1,4 @@
+// src/types/dns.ts
 import { KeyConfig } from '../config';
 
 // Record type enum

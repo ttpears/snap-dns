@@ -1,3 +1,4 @@
+// src/types/keys.ts
 export interface Key {
   id: string;
   name: string;

@@ -1,3 +1,4 @@
+// backend/src/types/dns.ts
 export interface DNSRecord {
   name: string;
   type: string;

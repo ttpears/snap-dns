@@ -1,3 +1,4 @@
+// src/components/Navigation.tsx
 import React from 'react';
 import { List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography } from '@mui/material';
 import { Link, useLocation } from 'react-router-dom';

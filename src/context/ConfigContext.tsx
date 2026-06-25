@@ -1,3 +1,4 @@
+// src/context/ConfigContext.tsx
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { Config, ensureValidConfig } from '../types/config';
 import { useAuth } from './AuthContext';

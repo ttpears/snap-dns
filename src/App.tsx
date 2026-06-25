@@ -1,3 +1,4 @@
+// src/App.tsx
 import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';

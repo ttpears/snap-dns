@@ -1,3 +1,4 @@
+// backend/src/types/webhook.ts
 export type WebhookProvider = 'slack' | 'discord' | 'teams' | 'mattermost';
 
 export interface WebhookConfig {

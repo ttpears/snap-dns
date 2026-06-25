@@ -1,3 +1,4 @@
+// src/types/config.ts
 import type { WebhookProvider } from './webhook';
 import { Key } from './keys';
 
