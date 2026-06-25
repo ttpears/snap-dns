@@ -22,7 +22,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting in test/dev environments
-  skip: (req) => {
+  skip: (_req) => {
     return process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
   }
 });

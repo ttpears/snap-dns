@@ -30,7 +30,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     }
 
     // Don't send userId back to client
-    const { userId, ...configWithoutUserId } = config;
+    const { userId: _userId, ...configWithoutUserId } = config;
 
     res.json({
       success: true,
@@ -86,7 +86,7 @@ router.put('/', requireAuth, async (req: Request, res: Response) => {
     );
 
     // Don't send userId back to client
-    const { userId, ...configWithoutUserId } = config;
+    const { userId: _userId, ...configWithoutUserId } = config;
 
     res.json({
       success: true,

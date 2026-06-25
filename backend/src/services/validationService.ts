@@ -1,7 +1,6 @@
 // backend/src/services/validationService.ts
 // Server-side validation for DNS records
 
-import { DNSRecord } from '../types/dns';
 import { detectTxtSubtype } from './validators/detectTxtSubtype';
 import { validateSpf } from './validators/spfValidator';
 import { validateDkim } from './validators/dkimValidator';
@@ -17,7 +16,7 @@ class ValidationService {
   /**
    * Validate a DNS record
    */
-  validateRecord(record: any, zone: string): ValidationResult {
+  validateRecord(record: any, _zone: string): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
 

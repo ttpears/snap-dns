@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 import path from 'path';
 import session from 'express-session';
 import FileStore from 'session-file-store';
-import { config } from './config';
 import { requestLogger } from './middleware/logging';
 import { generalApiLimiter } from './middleware/rateLimiter';
 import { userService } from './services/userService';
@@ -166,7 +165,7 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Error handling
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   console.error('Error:', err);
   res.status(500).json({ 
     error: 'Internal Server Error',

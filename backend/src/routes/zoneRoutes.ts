@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { DNSRecord, ZoneConfig } from '../types/dns';
+import { ZoneConfig } from '../types/dns';
 import { dnsService } from '../services';
 import { requireAuth, requireWriteAccess } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/auth';
@@ -20,16 +20,6 @@ async function checkZoneAccess(user: { role: string; userId: string }, zone: str
   const allowedZones = dbUser.allowedZones;
   if (allowedZones.length === 0) return true;
   return allowedZones.some(z => z.toLowerCase() === zone.toLowerCase());
-}
-
-interface ZoneRequestBody {
-  record?: DNSRecord;
-  keyConfig: ZoneConfig;
-}
-
-interface ZoneParams {
-  zone: string;
-  [key: string]: string;
 }
 
 // Add custom error types

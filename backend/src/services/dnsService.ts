@@ -3,7 +3,6 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import { join } from 'path';
-import * as dnsPacket from 'dns-packet';
 import { config } from '../config';
 
 const execAsync = promisify(exec);
@@ -306,7 +305,7 @@ class DNSService {
       const updateFile = await this.createNSUpdateFile(zone, record, keyConfig);
       
       try {
-        const { stdout, stderr } = await execAsync(
+        const { stderr } = await execAsync(
           `nsupdate -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue} ${updateFile}`
         );
 
@@ -341,7 +340,7 @@ class DNSService {
       const updateFile = await this.createNSUpdateFile(zone, record, keyConfig, true);
 
       try {
-        const { stdout, stderr } = await execAsync(
+        const { stderr } = await execAsync(
           `nsupdate -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue} ${updateFile}`
         );
 
@@ -435,7 +434,7 @@ class DNSService {
       }
 
       try {
-        const { stdout, stderr } = await execAsync(
+        const { stderr } = await execAsync(
           `nsupdate -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue} ${updateFile}`
         );
 

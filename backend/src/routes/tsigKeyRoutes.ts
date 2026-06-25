@@ -103,7 +103,7 @@ router.get('/:keyId', requireAuth, async (req: Request, res: Response) => {
     }
 
     // Remove the decrypted value before sending
-    const { keyValue, ...keyWithoutValue } = key;
+    const { keyValue: _keyValue, ...keyWithoutValue } = key;
 
     res.json({
       success: true,

@@ -13,7 +13,7 @@ interface WebhookRequestBody {
   payload: WebhookPayload;
 }
 
-router.post('/notify', async (req: Request<{}, any, WebhookRequestBody>, res: Response) => {
+router.post('/notify', async (req: Request<Record<string, never>, any, WebhookRequestBody>, res: Response) => {
   try {
     const { config, payload } = req.body;
 
