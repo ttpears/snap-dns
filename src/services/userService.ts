@@ -132,17 +132,12 @@ class UserService {
   /**
    * Reset user password (admin only)
    */
-  async resetPassword(userId: string, newPassword: string, currentPassword?: string): Promise<void> {
-    const body: Record<string, string> = { newPassword };
-    if (currentPassword) {
-      body.currentPassword = currentPassword;
-    }
-
+  async resetPassword(userId: string, newPassword: string): Promise<void> {
     const response = await fetch(`${API_URL}/api/auth/users/${userId}/password`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify(body),
+      body: JSON.stringify({ newPassword }),
     });
 
     const data = await response.json();

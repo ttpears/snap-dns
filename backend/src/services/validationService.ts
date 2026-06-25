@@ -275,28 +275,6 @@ class ValidationService {
     );
   }
 
-  /**
-   * Sanitize record name to prevent injection
-   */
-  sanitizeRecordName(name: string): string {
-    // Keep only DNS-name-safe characters: word chars (a-z, 0-9, _), dot, dash,
-    // @ and wildcard. The dash is escaped so it is a literal, not a range — the
-    // previous `.-_` was an accidental range that let ;, <, =, >, ? through.
-    return name.replace(/[^\w.\-@*]/g, '');
-  }
-
-  /**
-   * Sanitize record value
-   */
-  sanitizeRecordValue(value: string, type: string): string {
-    // For TXT records, allow more characters but escape quotes
-    if (type === 'TXT') {
-      return value; // Quotes are handled separately
-    }
-
-    // For other types, be more restrictive
-    return value.trim();
-  }
 }
 
 export const validationService = new ValidationService();
