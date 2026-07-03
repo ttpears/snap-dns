@@ -78,6 +78,18 @@ class DNSValidationService {
           errors.push('Invalid SRV record format (should be: priority weight port target)');
         }
         break;
+      case 'DS':
+      case 'CDS':
+        if (!this.isValidDS(record.value)) {
+          errors.push(`Invalid ${record.type} record format (should be: key-tag algorithm digest-type digest-hex)`);
+        }
+        break;
+      case 'TLSA':
+      case 'SMIMEA':
+        if (!this.isValidTLSA(record.value)) {
+          errors.push(`Invalid ${record.type} record format (should be: usage selector matching-type certificate-hex)`);
+        }
+        break;
     }
 
     return {
@@ -179,6 +191,36 @@ class DNSValidationService {
     if (!/^\d+$/.test(token)) return false;
     const num = parseInt(token, 10);
     return num >= 0 && num <= 65535;
+  }
+
+  private static isValidUint8(token: string): boolean {
+    if (!/^\d+$/.test(token)) return false;
+    const num = parseInt(token, 10);
+    return num >= 0 && num <= 255;
+  }
+
+  // DS/CDS: key-tag(uint16) algorithm(uint8) digest-type(uint8) digest(hex).
+  private static isValidDS(value: string): boolean {
+    if (typeof value !== 'string') return false;
+    const parts = value.trim().split(/\s+/);
+    if (parts.length < 4) return false;
+    const digest = parts.slice(3).join('');
+    return this.isValidUint16(parts[0]) &&
+      this.isValidUint8(parts[1]) &&
+      this.isValidUint8(parts[2]) &&
+      /^[0-9a-fA-F]+$/.test(digest);
+  }
+
+  // TLSA/SMIMEA: usage(uint8) selector(uint8) matching-type(uint8) cert(hex).
+  private static isValidTLSA(value: string): boolean {
+    if (typeof value !== 'string') return false;
+    const parts = value.trim().split(/\s+/);
+    if (parts.length < 4) return false;
+    const cert = parts.slice(3).join('');
+    return this.isValidUint8(parts[0]) &&
+      this.isValidUint8(parts[1]) &&
+      this.isValidUint8(parts[2]) &&
+      /^[0-9a-fA-F]+$/.test(cert);
   }
 
   private static isValidMX(value: string): boolean {

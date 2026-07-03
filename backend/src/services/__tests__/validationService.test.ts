@@ -164,6 +164,20 @@ describe('validationService.validateRecord', () => {
       expect(validate({ type: 'DNAME', value: 'target.example.net.' }).isValid).toBe(true);
       expect(validate({ type: 'DNAME', value: 'not a hostname' }).isValid).toBe(false);
     });
+
+    it('structurally validates DS/CDS (numeric fields + hex digest)', () => {
+      expect(validate({ type: 'DS', value: '12345 8 2 49FD46E6C4B4' }).isValid).toBe(true);
+      expect(validate({ type: 'DS', value: '12345 8 2 XYZnothex' }).isValid).toBe(false); // digest not hex
+      expect(validate({ type: 'DS', value: '99999999 8 2 ABCD' }).isValid).toBe(false); // key-tag > 65535
+      expect(validate({ type: 'CDS', value: '12345 8 2 ABCD' }).isValid).toBe(true);
+    });
+
+    it('structurally validates TLSA/SMIMEA (numeric fields + hex cert)', () => {
+      expect(validate({ type: 'TLSA', value: '3 0 1 ABCDEF0123' }).isValid).toBe(true);
+      expect(validate({ type: 'TLSA', value: '3 0 1 nothex!!' }).isValid).toBe(false);
+      expect(validate({ type: 'TLSA', value: '3 0' }).isValid).toBe(false); // too few fields
+      expect(validate({ type: 'SMIMEA', value: '3 0 1 ABCD' }).isValid).toBe(true);
+    });
   });
 
   describe('RFC edge cases (G5)', () => {
