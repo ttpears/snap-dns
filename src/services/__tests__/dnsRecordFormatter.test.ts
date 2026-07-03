@@ -95,6 +95,24 @@ describe('DNSRecordFormatter.qualifyName', () => {
   });
 });
 
+describe('DNSRecordFormatter generic/DNAME handling', () => {
+  const fmt = (type: string, value: string) =>
+    DNSRecordFormatter.formatRecord(
+      { name: 'x', type, value, ttl: 300 } as unknown as DNSRecord,
+      'example.com'
+    ).value;
+
+  it('adds a trailing dot to a DNAME target (name-valued)', () => {
+    expect(fmt('DNAME', 'sub.example.net')).toBe('sub.example.net.');
+  });
+
+  it('passes generic presentation-format types through unchanged', () => {
+    expect(fmt('TLSA', '3 0 1 ABCDEF0123')).toBe('3 0 1 ABCDEF0123');
+    expect(fmt('DS', '12345 8 2 49FD46E6')).toBe('12345 8 2 49FD46E6');
+    expect(fmt('SVCB', '1 . alpn=h2,h3')).toBe('1 . alpn=h2,h3');
+  });
+});
+
 describe('DNSRecordFormatter AAAA handling', () => {
   const aaaa = (value: string) =>
     DNSRecordFormatter.formatRecord(

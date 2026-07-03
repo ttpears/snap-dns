@@ -149,6 +149,23 @@ describe('validationService.validateRecord', () => {
     });
   });
 
+  describe('additional record types (generic presentation format)', () => {
+    it('accepts a non-empty presentation value for a generic type (TLSA/DS)', () => {
+      expect(validate({ type: 'TLSA', value: '3 0 1 abcdef0123456789' }).isValid).toBe(true);
+      expect(validate({ type: 'DS', value: '12345 8 2 49FD46E6C4B45C55D4AC' }).isValid).toBe(true);
+      expect(validate({ type: 'SVCB', value: '1 . alpn=h2,h3' }).isValid).toBe(true);
+    });
+
+    it('still requires a value for a generic type', () => {
+      expect(validate({ type: 'TLSA', value: '' }).isValid).toBe(false);
+    });
+
+    it('validates DNAME as a domain-name target', () => {
+      expect(validate({ type: 'DNAME', value: 'target.example.net.' }).isValid).toBe(true);
+      expect(validate({ type: 'DNAME', value: 'not a hostname' }).isValid).toBe(false);
+    });
+  });
+
   describe('RFC edge cases (G5)', () => {
     it('accepts TTL 0 (RFC 2181 §8)', () => {
       const res = validationService.validateRecord({ name: 'host', type: 'A', value: '1.2.3.4', ttl: 0 }, 'example.com');

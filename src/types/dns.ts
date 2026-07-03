@@ -13,7 +13,23 @@ export enum RecordType {
   PTR = 'PTR',
   CAA = 'CAA',
   SOA = 'SOA',
-  SSHFP = 'SSHFP'
+  SSHFP = 'SSHFP',
+  // Additional types managed as opaque presentation-format values (RFC 3597
+  // style): DNSSEC delegation/keys, DANE, service binding, redirect, etc.
+  DS = 'DS',
+  DNSKEY = 'DNSKEY',
+  CDS = 'CDS',
+  CDNSKEY = 'CDNSKEY',
+  TLSA = 'TLSA',
+  SMIMEA = 'SMIMEA',
+  NAPTR = 'NAPTR',
+  SVCB = 'SVCB',
+  HTTPS = 'HTTPS',
+  DNAME = 'DNAME',
+  LOC = 'LOC',
+  CERT = 'CERT',
+  URI = 'URI',
+  KX = 'KX'
 }
 
 // Base DNS record interface

@@ -84,6 +84,7 @@ class ValidationService {
       case 'CNAME':
       case 'NS':
       case 'PTR':
+      case 'DNAME':
         if (!this.isValidHostname(record.value)) {
           errors.push(`Invalid ${record.type} target format`);
         }

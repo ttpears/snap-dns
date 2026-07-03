@@ -45,11 +45,11 @@ import RecordEditor from './RecordEditor';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useKey } from '../context/KeyContext';
 import PendingChangesDrawer from './PendingChangesDrawer';
-import { DNSRecord } from '../types/dns';
+import { DNSRecord, RecordType } from '../types/dns';
 
-const recordTypes = [
-  'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP', 'SOA'
-];
+// Sourced from the RecordType enum so the type filter stays in sync with the
+// supported types (no separate hardcoded list to drift).
+const recordTypes = Object.values(RecordType);
 
 interface MultilineRecordDialogProps {
   record: DNSRecord | null;
