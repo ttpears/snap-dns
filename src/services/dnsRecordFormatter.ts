@@ -21,16 +21,9 @@ export class DNSRecordFormatter {
       // bare reversed dotted-quad that would land outside the zone.
       formatted.name = DNSRecordFormatter.toReversePtrName(formatted.name, zone);
     } else {
-      // For non-apex records, handle wildcards and append zone if needed
-      const name = formatted.name;
-      if (name.startsWith('*.')) {
-        // Preserve wildcard and append zone if not already present
-        const baseName = name.substring(2);
-        formatted.name = baseName ? `*.${baseName}.${zone}` : `*.${zone}`;
-      } else if (!formatted.name.endsWith(zone)) {
-        // For non-wildcard records, append zone if not already present
-        formatted.name = `${formatted.name}.${zone}`;
-      }
+      // Qualify the name against the zone (wildcard-, case-, and
+      // label-boundary-aware).
+      formatted.name = DNSRecordFormatter.qualifyName(formatted.name, zone);
     }
 
     // Ensure name ends with dot
@@ -164,6 +157,31 @@ export class DNSRecordFormatter {
    * host-relative label (qualified against the reverse zone). Returned without a
    * trailing dot; the caller appends it.
    */
+  /**
+   * Qualify a record name against its zone. Handles a leftmost wildcard label,
+   * a trailing dot, and a case-insensitive label-boundary check, so an
+   * already-qualified name (including an FQDN with a trailing dot) is not
+   * re-appended, and a name that merely shares a suffix (notexample.com vs
+   * example.com) is still qualified. Returned without a trailing dot.
+   */
+  static qualifyName(name: string, zone: string): string {
+    const bareZone = zone.replace(/\.$/, '');
+    let rest = name.replace(/\.$/, '');
+
+    let wildcard = '';
+    if (rest === '*') return `*.${bareZone}`;
+    if (rest.startsWith('*.')) {
+      wildcard = '*.';
+      rest = rest.slice(2);
+    }
+
+    const restLower = rest.toLowerCase();
+    const zoneLower = bareZone.toLowerCase();
+    const alreadyQualified = restLower === zoneLower || restLower.endsWith(`.${zoneLower}`);
+
+    return alreadyQualified ? `${wildcard}${rest}` : `${wildcard}${rest}.${bareZone}`;
+  }
+
   static toReversePtrName(input: string, zone: string): string {
     const name = input.replace(/\.$/, '');
     if (/\.(in-addr|ip6)\.arpa$/i.test(name)) {

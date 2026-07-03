@@ -147,28 +147,6 @@ class DNSService {
     await this.initialize();
     const updateFile = join(this.getTempDir(), `update-${Date.now()}-${Math.random()}.txt`);
 
-    // Format the record value properly for nsupdate
-    const formatValue = (rec: DNSRecord): string => {
-      if (!rec.value || rec.value === '') {
-        console.error('EMPTY VALUE for record:', rec);
-        throw new Error(`Record value is empty for ${rec.name} ${rec.type}`);
-      }
-
-      // TXT is the only type whose rdata is presentation-quoted. The value
-      // reaching here is the raw, unquoted logical value (single string) or an
-      // already-chunked array of ≤255-byte segments; quote each exactly once.
-      if (rec.type === 'TXT') {
-        return quoteTxtValue(rec.value as string | string[]);
-      }
-
-      // Multi-segment arrays only ever occur for TXT (handled above).
-      if (typeof rec.value === 'object') {
-        return this.formatSOA(rec.value);
-      }
-
-      return String(rec.value);
-    };
-
     // For deletions, include RDATA to delete only the specific RR, not the entire RRset
     const deleteCommand = (() => {
       if (!isDelete) return '';
@@ -178,11 +156,11 @@ class DNSService {
         return `update delete ${record.name} ${record.type}`;
       }
       // Use the provided value verbatim so it matches add semantics
-      const rdata = formatValue(record);
+      const rdata = this.formatRdata(record);
       return `update delete ${record.name} ${record.type} ${rdata}`;
     })();
 
-    const addCommand = `update add ${record.name} ${record.ttl} ${record.class || 'IN'} ${record.type} ${formatValue(record)}`;
+    const addCommand = `update add ${record.name} ${record.ttl} ${record.class || 'IN'} ${record.type} ${this.formatRdata(record)}`;
 
     const commands = [
       `server ${keyConfig.server}`,
@@ -195,6 +173,27 @@ class DNSService {
 
     await writeFile(updateFile, fileContent);
     return updateFile;
+  }
+
+  /**
+   * Format a record's value as nsupdate presentation RDATA. Shared by add,
+   * delete and update so all three quote/serialize a value identically (a value
+   * must round-trip byte-for-byte for delete/prereq matching to work).
+   */
+  private formatRdata(rec: DNSRecord): string {
+    if (rec.value === undefined || rec.value === null || rec.value === '') {
+      throw new Error(`Record value is empty for ${rec.name} ${rec.type}`);
+    }
+    // TXT is the only type whose rdata is presentation-quoted; the value here is
+    // the raw logical value (string) or already-chunked ≤255-byte segments.
+    if (rec.type === 'TXT') {
+      return quoteTxtValue(rec.value as string | string[]);
+    }
+    // Objects are SOA structures (arrays only occur for TXT, handled above).
+    if (typeof rec.value === 'object') {
+      return this.formatSOA(rec.value);
+    }
+    return String(rec.value);
   }
 
   private formatSOA(soa: any): string {
@@ -452,20 +451,10 @@ class DNSService {
       // Reject injection payloads before any command runs
       this.assertSafeRecord(record);
 
-      // Get existing records first
-      const existingRecords = await this.fetchZoneRecords(zone, keyConfig);
-      
-      // Check for duplicate records
-      const isDuplicate = existingRecords.some(existing => 
-        existing.name === record.name && 
-        existing.type === record.type &&
-        existing.value === record.value
-      );
-
-      if (isDuplicate) {
-        throw new Error('DUPLICATE_RECORD');
-      }
-
+      // No pre-add zone transfer / duplicate check: adding an RR identical to
+      // one already present is an idempotent no-op server-side (RFC 2136
+      // §3.4.2.2), and the previous string-equality check never matched
+      // normalized vs. formatted values anyway while costing a full AXFR.
       const updateFile = await this.createNSUpdateFile(zone, record, keyConfig);
 
       try {
@@ -476,12 +465,7 @@ class DNSService {
         await unlink(updateFile).catch(console.error);
       }
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        if (error.message === 'DUPLICATE_RECORD') {
-          throw new Error(`Record already exists: ${record.name} ${record.type} ${record.value}`);
-        }
-        throw error;
-      }
+      if (error instanceof Error) throw error;
       throw new Error('Unknown error occurred');
     }
   }
@@ -558,32 +542,31 @@ class DNSService {
 
         await writeFile(updateFile, fileContent);
       } else {
-        // Standard record update (non-SOA)
+        // Standard record update (non-SOA). Use formatRdata so TXT/SOA/array
+        // values are serialized identically to add/delete.
         const hasOldData = oldRecord.value !== undefined && oldRecord.value !== null && oldRecord.value !== '';
-        let deleteCommand: string;
 
-        if (!hasOldData) {
-          deleteCommand = `update delete ${oldRecord.name} ${oldRecord.type}`;
-        } else {
-          // Delete specific record with RDATA
-          const oldRdata = typeof oldRecord.value === 'object'
-            ? this.formatSOA(oldRecord.value)
-            : String(oldRecord.value);
-          deleteCommand = `update delete ${oldRecord.name} ${oldRecord.type} ${oldRdata}`;
-        }
+        // Require the record being replaced to exist as given, so a value
+        // mismatch fails the whole transaction loudly (NXRRSET) instead of
+        // silently deleting nothing and adding a duplicate (RFC 2136 §2.4.1).
+        const prereqCommand = hasOldData
+          ? `prereq yxrrset ${oldRecord.name} ${oldRecord.type} ${this.formatRdata(oldRecord)}`
+          : `prereq yxrrset ${oldRecord.name} ${oldRecord.type}`;
 
-        // Build add command for new record
-        const addCommand = `update add ${newRecord.name} ${newRecord.ttl} ${newRecord.class || 'IN'} ${newRecord.type} ${
-          typeof newRecord.value === 'object' ? this.formatSOA(newRecord.value) : newRecord.value
-        }`;
+        const deleteCommand = hasOldData
+          ? `update delete ${oldRecord.name} ${oldRecord.type} ${this.formatRdata(oldRecord)}`
+          : `update delete ${oldRecord.name} ${oldRecord.type}`;
 
-        // Create atomic transaction - both commands in single nsupdate file
+        const addCommand = `update add ${newRecord.name} ${newRecord.ttl} ${newRecord.class || 'IN'} ${newRecord.type} ${this.formatRdata(newRecord)}`;
+
+        // Single atomic transaction: prerequisite + delete + add in one send.
         const commands = [
           `server ${keyConfig.server}`,
           `zone ${zone}`,
+          prereqCommand,
           deleteCommand,
           addCommand,
-          'send'  // Single send makes this atomic
+          'send'
         ];
 
         await writeFile(updateFile, commands.join('\n'));

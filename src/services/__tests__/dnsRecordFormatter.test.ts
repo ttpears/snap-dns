@@ -60,6 +60,34 @@ describe('DNSRecordFormatter CAA handling', () => {
   });
 });
 
+describe('DNSRecordFormatter.qualifyName', () => {
+  const q = DNSRecordFormatter.qualifyName;
+
+  it('appends the zone to an unqualified name', () => {
+    expect(q('www', 'example.com')).toBe('www.example.com');
+  });
+
+  it('does not re-append when the name is already an FQDN under the zone', () => {
+    expect(q('www.example.com', 'example.com')).toBe('www.example.com');
+    expect(q('www.example.com.', 'example.com')).toBe('www.example.com'); // trailing dot
+    expect(q('example.com', 'example.com')).toBe('example.com'); // apex
+  });
+
+  it('qualifies a name that only shares a suffix (label boundary)', () => {
+    expect(q('notexample.com', 'example.com')).toBe('notexample.com.example.com');
+  });
+
+  it('is case-insensitive when matching the zone', () => {
+    expect(q('WWW.Example.COM', 'example.com')).toBe('WWW.Example.COM');
+  });
+
+  it('handles wildcards without double-appending the zone', () => {
+    expect(q('*', 'example.com')).toBe('*.example.com');
+    expect(q('*.dev', 'example.com')).toBe('*.dev.example.com');
+    expect(q('*.example.com', 'example.com')).toBe('*.example.com');
+  });
+});
+
 describe('DNSRecordFormatter AAAA handling', () => {
   const aaaa = (value: string) =>
     DNSRecordFormatter.formatRecord(
