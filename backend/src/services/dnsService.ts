@@ -631,8 +631,15 @@ class DNSService {
       case 'delete': {
         const r = change.record!;
         this.assertSafeRecord(r);
+        // Every zone must keep exactly one SOA; deleting it is never valid. The
+        // single-record deleteRecord() enforces this at its call site, so the
+        // batch builder must too (a "select all → delete" would otherwise wipe
+        // the apex SOA in one atomic transaction).
+        if (r.type === 'SOA') {
+          throw new Error('SOA records cannot be deleted. Every zone must have exactly one SOA record. Use the edit function to modify SOA fields.');
+        }
         const hasData = r.value !== undefined && r.value !== null && r.value !== '';
-        if (!hasData || r.type === 'SOA') {
+        if (!hasData) {
           return [`update delete ${r.name} ${r.type}`];
         }
         return [`update delete ${r.name} ${r.type} ${this.formatRdata(r)}`];
