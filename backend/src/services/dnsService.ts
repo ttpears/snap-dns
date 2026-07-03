@@ -1,12 +1,27 @@
 // backend/src/services/dnsService.ts
 import { DNSRecord, ZoneConfig, ZoneOperationResult } from '../types/dns';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { config } from '../config';
+import { assertNoControlChars, isValidDnsName, isValidZoneName } from './dnsSafety';
 
-const execAsync = promisify(exec);
+// execFile (not exec) runs the binary directly with an argv array — no shell is
+// spawned, so zone/server/key arguments cannot be interpreted as shell syntax.
+const execFileAsync = promisify(execFile);
+
+// TSIG algorithms we will write into a BIND key file. Matches the zod enum used
+// when keys are created; re-checked here as defence in depth before the value is
+// interpolated into the key clause.
+const ALLOWED_TSIG_ALGORITHMS = new Set([
+  'hmac-md5', 'hmac-sha1', 'hmac-sha224', 'hmac-sha256', 'hmac-sha384', 'hmac-sha512',
+]);
+
+// A DNS server address is a bare host or IP: no whitespace (would split the
+// nsupdate `server` directive) and no control characters (would inject one).
+// eslint-disable-next-line no-control-regex -- matching control bytes is the point
+const SERVER_UNSAFE = /[\s\x00-\x1f\x7f]/;
 
 // Configuration for zone transfer limits
 const ZONE_TRANSFER_CONFIG = {
@@ -46,7 +61,88 @@ class DNSService {
     }
   }
 
+  /**
+   * Validate the TSIG material before it is written into a key file or used as a
+   * command argument. Rejects anything that could break out of the key clause or
+   * inject shell/command syntax. (execFile already prevents shell interpretation;
+   * these checks additionally protect the generated key-file contents.)
+   */
+  private validateKeyConfig(keyConfig: ZoneConfig): void {
+    if (!keyConfig.server || SERVER_UNSAFE.test(keyConfig.server)) {
+      throw new Error('Invalid DNS server address');
+    }
+    if (!/^[A-Za-z0-9._-]+$/.test(keyConfig.keyName)) {
+      throw new Error('Invalid TSIG key name');
+    }
+    if (!ALLOWED_TSIG_ALGORITHMS.has(keyConfig.algorithm)) {
+      throw new Error(`Unsupported TSIG algorithm: ${keyConfig.algorithm}`);
+    }
+    if (!/^[A-Za-z0-9+/=]+$/.test(keyConfig.keyValue)) {
+      throw new Error('Invalid TSIG key secret');
+    }
+  }
+
+  /**
+   * Validate every field of a record that will be interpolated into an nsupdate
+   * command file, so no field can inject an extra directive or split a token.
+   */
+  private assertSafeRecord(record: DNSRecord): void {
+    if (!isValidDnsName(record.name)) {
+      throw new Error(`Invalid record name: ${record.name}`);
+    }
+    assertNoControlChars(String(record.type), 'record type');
+    if (record.class) assertNoControlChars(String(record.class), 'record class');
+
+    const value = record.value as unknown;
+    if (typeof value === 'string') {
+      assertNoControlChars(value, 'record value');
+    } else if (Array.isArray(value)) {
+      value.forEach((seg, i) => assertNoControlChars(String(seg), `record value segment ${i}`));
+    } else if (value && typeof value === 'object') {
+      for (const [field, fieldValue] of Object.entries(value)) {
+        if (typeof fieldValue === 'string') assertNoControlChars(fieldValue, `record value ${field}`);
+      }
+    }
+  }
+
+  /**
+   * Write a short-lived BIND key file for `dig -k` / `nsupdate -k`. Passing the
+   * secret via a 0600 file instead of `-y alg:name:secret` keeps it out of the
+   * process argument list (visible in `ps`), per RFC 8945 secret-handling
+   * guidance. Caller is responsible for unlinking the returned path.
+   */
+  private async writeKeyFile(keyConfig: ZoneConfig): Promise<string> {
+    await this.initialize();
+    const keyFile = join(this.getTempDir(), `key-${Date.now()}-${Math.random()}.conf`);
+    const content =
+      `key "${keyConfig.keyName}" {\n` +
+      `    algorithm ${keyConfig.algorithm};\n` +
+      `    secret "${keyConfig.keyValue}";\n` +
+      `};\n`;
+    await writeFile(keyFile, content, { mode: 0o600 });
+    return keyFile;
+  }
+
+  /** Run `nsupdate -k <keyfile> <updateFile>` with no shell. */
+  private async runNsupdate(updateFile: string, keyConfig: ZoneConfig): Promise<void> {
+    this.validateKeyConfig(keyConfig);
+    const keyFile = await this.writeKeyFile(keyConfig);
+    try {
+      const { stderr } = await execFileAsync('nsupdate', ['-k', keyFile, updateFile]);
+      if (stderr) {
+        console.error('nsupdate error:', stderr);
+        throw new Error(stderr);
+      }
+    } finally {
+      await unlink(keyFile).catch(() => undefined);
+    }
+  }
+
   private async createNSUpdateFile(zone: string, record: DNSRecord, keyConfig: ZoneConfig, isDelete = false): Promise<string> {
+    if (!isValidZoneName(zone)) {
+      throw new Error(`Invalid zone name: ${zone}`);
+    }
+    this.assertSafeRecord(record);
     await this.initialize();
     const updateFile = join(this.getTempDir(), `update-${Date.now()}-${Math.random()}.txt`);
 
@@ -161,13 +257,27 @@ class DNSService {
 
   async fetchZoneRecords(zone: string, keyConfig: ZoneConfig): Promise<DNSRecord[]> {
     try {
+      if (!isValidZoneName(zone)) {
+        throw new Error(`Invalid zone name: ${zone}`);
+      }
+      this.validateKeyConfig(keyConfig);
+
       // Set a reasonable buffer size limit for child_process
       const maxBuffer = ZONE_TRANSFER_CONFIG.maxOutputSize;
 
-      const { stdout, stderr } = await execAsync(
-        `dig @${keyConfig.server} ${zone} AXFR -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue}`,
-        { maxBuffer }
-      );
+      // Pass the TSIG secret via a 0600 key file (-k), not on the command line.
+      const keyFile = await this.writeKeyFile(keyConfig);
+      let stdout: string;
+      let stderr: string;
+      try {
+        ({ stdout, stderr } = await execFileAsync(
+          'dig',
+          [`@${keyConfig.server}`, zone, 'AXFR', '-k', keyFile],
+          { maxBuffer }
+        ));
+      } finally {
+        await unlink(keyFile).catch(() => undefined);
+      }
 
       if (stderr) {
         console.error('dig error:', stderr);
@@ -294,6 +404,9 @@ class DNSService {
 
   async addRecord(zone: string, record: DNSRecord, keyConfig: ZoneConfig): Promise<ZoneOperationResult> {
     try {
+      // Reject injection payloads before any command runs
+      this.assertSafeRecord(record);
+
       // Get existing records first
       const existingRecords = await this.fetchZoneRecords(zone, keyConfig);
       
@@ -309,17 +422,9 @@ class DNSService {
       }
 
       const updateFile = await this.createNSUpdateFile(zone, record, keyConfig);
-      
+
       try {
-        const { stderr } = await execAsync(
-          `nsupdate -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue} ${updateFile}`
-        );
-
-        if (stderr) {
-          console.error('nsupdate error:', stderr);
-          throw new Error(stderr);
-        }
-
+        await this.runNsupdate(updateFile, keyConfig);
         return { success: true, message: 'Record added successfully' };
       } finally {
         // Clean up the temporary file
@@ -343,18 +448,13 @@ class DNSService {
         throw new Error('SOA records cannot be deleted. Every zone must have exactly one SOA record. Use the edit function to modify SOA fields.');
       }
 
+      // Reject injection payloads before any command runs
+      this.assertSafeRecord(record);
+
       const updateFile = await this.createNSUpdateFile(zone, record, keyConfig, true);
 
       try {
-        const { stderr } = await execAsync(
-          `nsupdate -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue} ${updateFile}`
-        );
-
-        if (stderr) {
-          console.error('nsupdate error:', stderr);
-          throw new Error(stderr);
-        }
-
+        await this.runNsupdate(updateFile, keyConfig);
         return { success: true, message: 'Record deleted successfully' };
       } finally {
         // Clean up the temporary file
@@ -376,6 +476,12 @@ class DNSService {
     newRecord: DNSRecord,
     keyConfig: ZoneConfig
   ): Promise<ZoneOperationResult> {
+    if (!isValidZoneName(zone)) {
+      throw new Error(`Invalid zone name: ${zone}`);
+    }
+    this.assertSafeRecord(oldRecord);
+    this.assertSafeRecord(newRecord);
+
     await this.initialize();
     const updateFile = join(this.getTempDir(), `update-${Date.now()}-${Math.random()}.txt`);
 
@@ -439,15 +545,7 @@ class DNSService {
       }
 
       try {
-        const { stderr } = await execAsync(
-          `nsupdate -y ${keyConfig.algorithm}:${keyConfig.keyName}:${keyConfig.keyValue} ${updateFile}`
-        );
-
-        if (stderr) {
-          console.error('nsupdate error:', stderr);
-          throw new Error(stderr);
-        }
-
+        await this.runNsupdate(updateFile, keyConfig);
         return { success: true, message: 'Record updated successfully' };
       } finally {
         // Clean up the temporary file
