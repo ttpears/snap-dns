@@ -271,21 +271,11 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
       }
 
       try {
-        let name = record.name;
-        if (name) {
-          name = name.replace(/[^\d.]/g, '');
-
-          if (!name.endsWith('.in-addr.arpa')) {
-            const octets = name.split('.');
-            if (octets.length <= 4) {
-              while (octets.length < 4) {
-                octets.push('');
-              }
-              name = octets.reverse().filter(Boolean).join('.');
-            }
-          }
-
-          setPtrPreview(`${name}${name.endsWith('.') ? '' : '.'}${reverseZone}`);
+        if (record.name) {
+          // Use the same reverse-name logic as submission so the preview is
+          // exactly what will be created.
+          const owner = DNSRecordFormatter.toReversePtrName(record.name, reverseZone);
+          setPtrPreview(`${owner}.`);
         } else {
           setPtrPreview('');
         }
@@ -457,9 +447,12 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
           value: `${record.priority} ${record.weight} ${record.port} ${record.target}`
         };
       case 'CAA':
+        // Pass the raw value; DNSRecordFormatter adds the presentation quoting
+        // exactly once. Quoting here as well produced literal quote bytes in the
+        // published RDATA.
         return {
           ...baseRecord,
-          value: `${record.flags} ${record.tag} "${record.value}"`
+          value: `${record.flags} ${record.tag} ${record.value}`
         };
       case 'SSHFP':
         return {
