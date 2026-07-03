@@ -58,6 +58,13 @@ describe('DNSRecordFormatter CAA handling', () => {
   it('escapes embedded quotes in the value', () => {
     expect(caa('0 iodef mailto:a@b."x"')).toBe('0 iodef "mailto:a@b.\\"x\\""');
   });
+
+  it('canonicalizeCaaValue quotes an unquoted edited value and is idempotent', () => {
+    // The edit path (RecordEditor) uses this so a hand-edited CAA value gets the
+    // same one-time quoting the add path applies.
+    expect(DNSRecordFormatter.canonicalizeCaaValue('0 issue sectigo.com')).toBe('0 issue "sectigo.com"');
+    expect(DNSRecordFormatter.canonicalizeCaaValue('0 issue "letsencrypt.org"')).toBe('0 issue "letsencrypt.org"');
+  });
 });
 
 describe('DNSRecordFormatter.qualifyName', () => {

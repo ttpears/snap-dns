@@ -95,6 +95,13 @@ describe('validateSpf', () => {
       expect(result.errors).toHaveLength(0);
     });
 
+    it('counts redirect= toward the 10 DNS-lookup limit', () => {
+      const includes = Array.from({ length: 10 }, (_, i) => `include:d${i}.example.com`).join(' ');
+      // 10 includes + redirect = 11 lookups → permerror
+      const result = validateSpf(`v=spf1 ${includes} redirect=_spf.example.com`);
+      expect(result.errors.some(e => e.includes('permerror'))).toBe(true);
+    });
+
     it('accepts the exp= modifier and ignores unknown modifiers', () => {
       const result = validateSpf('v=spf1 mx exp=explain.example.com custom=value -all');
       expect(result.errors).toHaveLength(0);

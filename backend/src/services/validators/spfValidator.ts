@@ -67,7 +67,11 @@ export function validateSpf(value: string): TxtValidationResult {
     // Modifiers are name=value (RFC 7208 §6): "redirect=" and "exp=" are
     // standard, and unrecognised modifiers MUST be ignored — not treated as
     // unknown mechanisms.
-    if (/^[A-Za-z][A-Za-z0-9._-]*=/.test(qualified)) {
+    const modMatch = qualified.match(/^([A-Za-z][A-Za-z0-9._-]*)=/);
+    if (modMatch) {
+      // redirect= resolves another SPF record, so it costs a DNS lookup toward
+      // the RFC 7208 §4.6.4 limit (exp= does not).
+      if (modMatch[1].toLowerCase() === 'redirect') dnsLookupCount++;
       continue;
     }
 

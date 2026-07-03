@@ -128,6 +128,16 @@ export class DNSRecordFormatter {
     return `${nums[0]} ${nums[1]} ${nums[2]} ${this.formatNameRecord(target)}`;
   }
 
+  /**
+   * Canonicalize a CAA presentation value (quote exactly once). Exposed so the
+   * record editor applies the same one-time quoting the add path already does —
+   * the backend writes CAA rdata verbatim, so the frontend owns the quoting and
+   * every entry point must produce the quoted form.
+   */
+  static canonicalizeCaaValue(value: string): string {
+    return this.formatCAARecord(value);
+  }
+
   private static formatCAARecord(value: string): string {
     // flags and tag are single tokens; everything after the tag is the value,
     // which may contain spaces (e.g. issue with CA parameters).
@@ -154,13 +164,6 @@ export class DNSRecordFormatter {
   }
 
   /**
-   * Build the fully-qualified reverse-DNS owner name for a PTR record in an
-   * .in-addr.arpa zone. Accepts a full IPv4 address (reversed under
-   * in-addr.arpa), an already-qualified reverse name (returned as-is), or a
-   * host-relative label (qualified against the reverse zone). Returned without a
-   * trailing dot; the caller appends it.
-   */
-  /**
    * Qualify a record name against its zone. Handles a leftmost wildcard label,
    * a trailing dot, and a case-insensitive label-boundary check, so an
    * already-qualified name (including an FQDN with a trailing dot) is not
@@ -185,6 +188,13 @@ export class DNSRecordFormatter {
     return alreadyQualified ? `${wildcard}${rest}` : `${wildcard}${rest}.${bareZone}`;
   }
 
+  /**
+   * Build the fully-qualified reverse-DNS owner name for a PTR record in an
+   * .in-addr.arpa zone. Accepts a full IPv4 address (reversed under
+   * in-addr.arpa), an already-qualified reverse name (returned as-is), or a
+   * host-relative label (qualified against the reverse zone). Returned without a
+   * trailing dot; the caller appends it.
+   */
   static toReversePtrName(input: string, zone: string): string {
     const name = input.replace(/\.$/, '');
     if (/\.(in-addr|ip6)\.arpa$/i.test(name)) {

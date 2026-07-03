@@ -57,6 +57,12 @@ describe('dnsService injection guards', () => {
     expect(mockedExecFile).not.toHaveBeenCalled();
   });
 
+  it('rejects a record class that would inject an extra command token', async () => {
+    const evil = record({ class: 'IN A 6.6.6.6' });
+    await expect(dnsService.addRecord('example.com', evil, keyConfig)).rejects.toThrow(/Invalid record class/);
+    expect(mockedExecFile).not.toHaveBeenCalled();
+  });
+
   it('rejects a zone name with shell/nsupdate metacharacters', async () => {
     await expect(dnsService.fetchZoneRecords('example.com; rm -rf /', keyConfig)).rejects.toThrow(/Invalid zone name/);
     await expect(dnsService.fetchZoneRecords('example.com\nsend', keyConfig)).rejects.toThrow(/Invalid zone name/);

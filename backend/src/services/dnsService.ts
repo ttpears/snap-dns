@@ -91,8 +91,15 @@ class DNSService {
     if (!isValidDnsName(record.name)) {
       throw new Error(`Invalid record name: ${record.name}`);
     }
-    assertNoControlChars(String(record.type), 'record type');
-    if (record.class) assertNoControlChars(String(record.class), 'record class');
+    // type and class are single unquoted tokens on the nsupdate command line;
+    // restrict them to alphanumerics so neither can inject whitespace/newlines
+    // that would split or add a directive.
+    if (!/^[A-Za-z0-9]+$/.test(String(record.type))) {
+      throw new Error(`Invalid record type: ${record.type}`);
+    }
+    if (record.class !== undefined && record.class !== null && !/^[A-Za-z0-9]+$/.test(String(record.class))) {
+      throw new Error(`Invalid record class: ${record.class}`);
+    }
 
     const value = record.value as unknown;
     if (typeof value === 'string') {
@@ -147,6 +154,9 @@ class DNSService {
       throw new Error(`Invalid zone name: ${zone}`);
     }
     this.assertSafeRecord(record);
+    // Validate TSIG/server before anything is written to disk (server is
+    // interpolated into the command file).
+    this.validateKeyConfig(keyConfig);
     await this.initialize();
     const updateFile = join(this.getTempDir(), `update-${Date.now()}-${Math.random()}.txt`);
 
@@ -520,6 +530,8 @@ class DNSService {
     }
     this.assertSafeRecord(oldRecord);
     this.assertSafeRecord(newRecord);
+    // Validate TSIG/server before writing the command file to disk.
+    this.validateKeyConfig(keyConfig);
 
     await this.initialize();
     const updateFile = join(this.getTempDir(), `update-${Date.now()}-${Math.random()}.txt`);
