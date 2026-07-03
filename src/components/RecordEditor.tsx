@@ -10,6 +10,7 @@ import {
   Alert,
 } from '@mui/material';
 import { DNSValidationService } from '../services/dnsValidationService';
+import { DNSRecordFormatter } from '../services/dnsRecordFormatter';
 import { DNSRecord } from '../types/dns';
 import { detectTxtSubtype, TxtSubtype } from '../services/validators/detectTxtSubtype';
 import SpfEditor from './editors/SpfEditor';
@@ -313,8 +314,18 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }: RecordEditor
 
   const handleSave = () => {
     try {
+      let value = editedRecord.value;
+      // CAA rdata is written verbatim by the backend, so the frontend must quote
+      // the value exactly once — the same canonicalization the add path applies.
+      // Editing the value in the plain text field could otherwise submit an
+      // unquoted (malformed) CAA record.
+      if (editedRecord.type === 'CAA' && typeof value === 'string') {
+        value = DNSRecordFormatter.canonicalizeCaaValue(value);
+      }
+
       const processedRecord = {
         ...editedRecord,
+        value,
         id: isCopy ? undefined : (editedRecord as any).id
       };
 

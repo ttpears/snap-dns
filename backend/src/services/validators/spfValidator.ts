@@ -54,6 +54,8 @@ export function validateSpf(value: string): TxtValidationResult {
   let dnsLookupCount = 0;
 
   for (const token of tokens) {
+    if (token === '') continue;
+
     // Strip qualifier (+, -, ~, ?)
     let qualified = token;
     let qualifier = '+';
@@ -62,10 +64,22 @@ export function validateSpf(value: string): TxtValidationResult {
       qualified = token.slice(1);
     }
 
-    // Split mechanism:value
-    const colonIdx = qualified.indexOf(':');
-    const mechanism = colonIdx >= 0 ? qualified.substring(0, colonIdx).toLowerCase() : qualified.toLowerCase();
-    const arg = colonIdx >= 0 ? qualified.substring(colonIdx + 1) : undefined;
+    // Modifiers are name=value (RFC 7208 §6): "redirect=" and "exp=" are
+    // standard, and unrecognised modifiers MUST be ignored — not treated as
+    // unknown mechanisms.
+    const modMatch = qualified.match(/^([A-Za-z][A-Za-z0-9._-]*)=/);
+    if (modMatch) {
+      // redirect= resolves another SPF record, so it costs a DNS lookup toward
+      // the RFC 7208 §4.6.4 limit (exp= does not).
+      if (modMatch[1].toLowerCase() === 'redirect') dnsLookupCount++;
+      continue;
+    }
+
+    // A mechanism name ends at the first ':' (its value) or '/' (a CIDR prefix),
+    // e.g. "a", "mx/24", "ip4:1.2.3.4/24", "a:example.com/24" (RFC 7208 §5).
+    const sepIdx = qualified.search(/[:/]/);
+    const mechanism = (sepIdx >= 0 ? qualified.slice(0, sepIdx) : qualified).toLowerCase();
+    const arg = qualified.includes(':') ? qualified.slice(qualified.indexOf(':') + 1) : undefined;
 
     if (!KNOWN_MECHANISMS.has(mechanism)) {
       errors.push(`Unknown mechanism: "${mechanism}"`);
@@ -75,7 +89,8 @@ export function validateSpf(value: string): TxtValidationResult {
     // Check duplicates (use the full token minus qualifier for comparison)
     const canonical = qualified.toLowerCase();
     if (seen.has(canonical)) {
-      errors.push(`Duplicate mechanism: "${qualified}"`);
+      // A duplicate mechanism is legal but pointless (RFC 7208) — warn, don't reject.
+      warnings.push(`Duplicate mechanism: "${qualified}"`);
     }
     seen.add(canonical);
 
@@ -129,7 +144,8 @@ export function validateSpf(value: string): TxtValidationResult {
   }
 
   if (dnsLookupCount > 10) {
-    warnings.push(`SPF record requires ${dnsLookupCount} DNS lookups, exceeding the 10 lookup limit`);
+    // RFC 7208 §4.6.4: exceeding 10 DNS-lookup mechanisms is a permerror.
+    errors.push(`SPF record requires ${dnsLookupCount} DNS lookups, exceeding the RFC 7208 limit of 10 (permerror)`);
   }
 
   return { errors, warnings };

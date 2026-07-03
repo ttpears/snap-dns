@@ -73,14 +73,11 @@ class DNSService {
           return `${mx.priority} ${mx.target}`;
         }
       }
-      case 'TXT': {
-        if (Array.isArray(record.value)) {
-          return record.value.map(v => `"${v.replace(/"/g, '\\"')}"`).join(' ');
-        } else if (typeof record.value === 'string') {
-          return `"${record.value.replace(/"/g, '\\"')}"`;
-        }
-        return '""';
-      }
+      case 'TXT':
+        // Send the raw, unquoted logical value (string) or chunked segments
+        // (string[]). The backend adds presentation quoting exactly once when
+        // building the nsupdate command; quoting here would double-quote it.
+        return record.value;
       default:
         return String(record.value);
     }

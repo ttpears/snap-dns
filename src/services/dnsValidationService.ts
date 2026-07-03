@@ -23,8 +23,9 @@ class DNSValidationService {
       errors.push('Invalid record name format');
     }
 
-    // Validate TTL
-    if (!record.ttl) {
+    // Validate TTL. TTL 0 is valid (RFC 2181 §8: "no caching"), so only a
+    // missing value is an error — not a falsy 0.
+    if (record.ttl === undefined || record.ttl === null || record.ttl === '') {
       errors.push('TTL is required');
     } else if (record.ttl < 0 || record.ttl > 2147483647) {
       errors.push('TTL must be between 0 and 2147483647');
@@ -96,127 +97,105 @@ class DNSValidationService {
     };
   }
 
-  private static isValidHostname(hostname: string, recordType?: string): boolean {
-    // Handle wildcard records
+  private static isValidHostname(hostname: string, _recordType?: string): boolean {
+    // RFC 1035 §2.3.4: a domain name is at most 255 octets.
+    if (hostname.length > 255) return false;
+
+    // Bare wildcard (a wildcard record directly at the zone apex, RFC 4592).
+    if (hostname === '*') return true;
+
+    // Wildcards are only valid as the leftmost label; validate the remainder.
     if (hostname.startsWith('*.')) {
-      // Wildcards are only valid at the start of a name
-      // Remove the wildcard and validate the rest of the hostname
-      return this.isValidHostname(hostname.substring(2), recordType);
+      return this.isValidHostname(hostname.substring(2), _recordType);
     }
 
-    // Special case for TXT records which allow underscores
-    if (recordType === 'TXT') {
-      // Modified regex to allow underscores anywhere in TXT record names
-      const regex = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*\.?$/;
-      return regex.test(hostname);
-    }
-
-    // Special case for SRV records which allow underscores at start
-    if (recordType === 'SRV') {
-      const regex = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*\.?$/;
-      return regex.test(hostname);
-    }
-
-    // Regular hostname validation for other record types
-    // Allow wildcards at the start of labels
-    const regex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.?$/;
+    // Underscore labels are legal in the DNS (RFC 2181 §11) and required for
+    // service names (_dmarc, _acme-challenge, selector._domainkey), so allow
+    // underscores in every label rather than only for TXT/SRV.
+    const regex = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*\.?$/;
     return regex.test(hostname);
   }
 
   private static isValidIPv4(ip: string): boolean {
-    const regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-    if (!regex.test(ip)) return false;
-    
     const parts = ip.split('.');
+    if (parts.length !== 4) return false;
     return parts.every(part => {
+      if (!/^\d{1,3}$/.test(part)) return false;
+      // Reject leading zeros (192.168.001.1): ambiguous octal-vs-decimal.
+      if (part.length > 1 && part[0] === '0') return false;
       const num = parseInt(part, 10);
       return num >= 0 && num <= 255;
     });
   }
 
-  private static isValidIPv6(ip: string): boolean {
-    // Comprehensive IPv6 validation including:
-    // - Full format: 2001:0db8:85a3:0000:0000:8a2e:0370:7334
-    // - Compressed format: 2001:db8:85a3::8a2e:370:7334
-    // - IPv4-mapped: ::ffff:192.0.2.1
-    // - Loopback: ::1
-    // - All zeros: ::
-
-    // Remove leading/trailing whitespace
+  static isValidIPv6(ip: string): boolean {
+    // Handles full, compressed (::), and embedded-IPv4 forms in any position
+    // (::ffff:192.0.2.1, 64:ff9b::1.2.3.4). An embedded dotted-quad may only be
+    // the final element and counts as two 16-bit groups (RFC 4291 §2.2).
     ip = ip.trim();
+    if (ip.length === 0) return false;
 
-    // Check for IPv4-mapped IPv6 (::ffff:192.0.2.1)
-    const ipv4MappedRegex = /^::ffff:(\d{1,3}\.){3}\d{1,3}$/i;
-    if (ipv4MappedRegex.test(ip)) {
-      const ipv4Part = ip.split(':').pop();
-      return ipv4Part ? this.isValidIPv4(ipv4Part) : false;
-    }
-
-    // Split on ::
     const parts = ip.split('::');
+    if (parts.length > 2) return false; // at most one "::"
+    const compressed = parts.length === 2;
 
-    // Can only have one :: compression
-    if (parts.length > 2) return false;
-
-    // Validate each part
-    const validatePart = (part: string): boolean => {
-      if (!part) return true; // Empty is ok for ::
-      const segments = part.split(':');
-      return segments.every(seg => {
-        if (!seg) return false; // Empty segment not allowed within a part
-        return /^[0-9a-f]{1,4}$/i.test(seg);
-      });
+    // Count the 16-bit groups a segment contributes, or null if malformed.
+    const groupCount = (segment: string): number | null => {
+      if (segment === '') return 0;
+      const groups = segment.split(':');
+      let count = 0;
+      for (let i = 0; i < groups.length; i++) {
+        const g = groups[i];
+        if (g.includes('.')) {
+          if (i !== groups.length - 1) return null; // IPv4 only as the last element
+          if (!this.isValidIPv4(g)) return null;
+          count += 2;
+        } else {
+          if (!/^[0-9a-f]{1,4}$/i.test(g)) return null;
+          count += 1;
+        }
+      }
+      return count;
     };
 
-    if (parts.length === 2) {
-      // Compressed format (has ::)
-      const [left, right] = parts;
-
-      // Both can't be empty unless it's :: (all zeros)
-      if (!left && !right) {
-        return ip === '::';
-      }
-
-      // Validate both parts
-      if (!validatePart(left) || !validatePart(right)) return false;
-
-      // Check total segment count doesn't exceed 8
-      const leftSegments = left ? left.split(':').length : 0;
-      const rightSegments = right ? right.split(':').length : 0;
-      return leftSegments + rightSegments < 8;
-
-    } else {
-      // Full format (no ::)
-      const segments = ip.split(':');
-
-      // Must have exactly 8 segments in full format
-      if (segments.length !== 8) return false;
-
-      // Validate all segments
-      return segments.every(seg => /^[0-9a-f]{1,4}$/i.test(seg));
+    if (compressed) {
+      const left = groupCount(parts[0]);
+      const right = groupCount(parts[1]);
+      if (left === null || right === null) return false;
+      // "::" must stand in for at least one group.
+      return left + right < 8;
     }
+
+    return groupCount(ip) === 8;
+  }
+
+  private static isValidUint16(token: string): boolean {
+    // Digits only (parseInt would accept "10x"/"1.5"), 0..65535.
+    if (!/^\d+$/.test(token)) return false;
+    const num = parseInt(token, 10);
+    return num >= 0 && num <= 65535;
   }
 
   private static isValidMX(value: string): boolean {
     const parts = value.split(/\s+/);
     if (parts.length !== 2) return false;
-    
-    const priority = parseInt(parts[0], 10);
+
     const target = parts[1];
-    const hostnameOk = target === '@' || this.isValidHostname(target);
-    return !isNaN(priority) && priority >= 0 && priority <= 65535 && hostnameOk;
+    // "." is the null-MX target (RFC 7505: "0 .").
+    const hostnameOk = target === '.' || target === '@' || this.isValidHostname(target);
+    return this.isValidUint16(parts[0]) && hostnameOk;
   }
 
   private static isValidSRV(value: string): boolean {
     const parts = value.split(/\s+/);
     if (parts.length !== 4) return false;
 
-    const [priority, weight, port] = parts.map(p => parseInt(p, 10));
-    return !isNaN(priority) && !isNaN(weight) && !isNaN(port) &&
-           priority >= 0 && priority <= 65535 &&
-           weight >= 0 && weight <= 65535 &&
-           port >= 0 && port <= 65535 &&
-           this.isValidHostname(parts[3]);
+    // "." is a valid SRV target meaning "service not available" (RFC 2782).
+    const targetOk = parts[3] === '.' || this.isValidHostname(parts[3]);
+    return this.isValidUint16(parts[0]) &&
+           this.isValidUint16(parts[1]) &&
+           this.isValidUint16(parts[2]) &&
+           targetOk;
   }
 }
 
