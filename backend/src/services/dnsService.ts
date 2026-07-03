@@ -243,10 +243,22 @@ class DNSService {
         // record.data is already the raw, unquoted logical value (parseTxtRdata).
         value = record.data;
         break;
-      default:
+      case 'CNAME':
+      case 'NS':
+      case 'PTR':
+      case 'DNAME':
+        // Single domain-name rdata: names are case-insensitive (RFC 4343), so
+        // canonicalise to lowercase without a trailing dot.
         if (typeof value === 'string') {
           value = value.toLowerCase().replace(/\.+$/, '');
         }
+        break;
+      default:
+        // Every other type (A/AAAA, CAA, SSHFP, DNSKEY/RRSIG/DS, NAPTR, TLSA,
+        // unknown types) carries case-sensitive rdata — base64 and hex in DNSSEC
+        // records especially. Pass it through verbatim; lowercasing corrupted
+        // signatures and keys.
+        break;
     }
 
     return {
@@ -284,6 +296,19 @@ class DNSService {
 
       if (stderr) {
         console.error('dig error:', stderr);
+      }
+
+      // A refused or failed transfer can still exit 0, emitting only comment
+      // lines (e.g. "; Transfer failed."). Those are filtered out below, so a
+      // failure would otherwise look like an empty zone — surface it instead.
+      // Only comment (;) lines are inspected so record data that happens to
+      // contain these words can't trigger a false failure.
+      const transferFailed = stdout.split('\n').some(line =>
+        line.startsWith(';') &&
+        /transfer failed|communications error|connection timed out|no servers could be reached|couldn't get address/i.test(line)
+      );
+      if (transferFailed) {
+        throw new Error(`Zone transfer for ${zone} failed (see server logs)`);
       }
 
       // Check output size
@@ -388,6 +413,13 @@ class DNSService {
       }
 
       const records = Array.from(recordMap.values());
+
+      // RFC 5936: a complete AXFR begins and ends with the zone's SOA. Absence
+      // of an SOA means the response was not a valid/complete transfer (refused,
+      // truncated, or wrong server) rather than a genuinely empty zone.
+      if (!records.some(r => r.type === 'SOA')) {
+        throw new Error(`Zone transfer for ${zone} was incomplete (no SOA record received)`);
+      }
 
       // Log statistics
       console.log(`Zone ${zone} transfer complete:`, {

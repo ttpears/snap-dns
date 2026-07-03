@@ -32,9 +32,14 @@ const record = (over: Partial<DNSRecord>): DNSRecord => ({
 beforeEach(() => {
   mockedExecFile.mockReset();
   // promisify(execFile) invokes the callback form: (cmd, args, opts, cb)
+  // A minimal well-formed AXFR (starts with the SOA) so fetchZoneRecords treats
+  // it as a complete transfer; injection tests reject before dig is ever run.
   mockedExecFile.mockImplementation((_cmd: string, ...rest: unknown[]) => {
     const cb = rest[rest.length - 1] as (err: unknown, out: { stdout: string; stderr: string }) => void;
-    cb(null, { stdout: '', stderr: '' });
+    cb(null, {
+      stdout: 'example.com.\t300\tIN\tSOA\tns1.example.com. admin.example.com. 1 3600 600 86400 300\n',
+      stderr: '',
+    });
   });
 });
 
