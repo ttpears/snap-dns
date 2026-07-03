@@ -1,7 +1,7 @@
 // src/services/backupService.ts
 import { notificationService } from './notificationService';
-import { dnsService, type DNSRecord } from './dnsService';
-import type { Config, KeyConfig } from '../config';
+import type { DNSRecord } from './dnsService';
+import type { Config } from '../config';
 
 import { getApiUrl } from '../utils/apiUrl';
 const API_URL = getApiUrl();
@@ -142,23 +142,6 @@ export class BackupService {
         throw new Error(`Failed to create backup: ${error.message}`);
       }
       throw new Error('Failed to create backup: Unknown error');
-    }
-  }
-
-  async restoreRecords(backup: DNSBackup, config: Config, selectedRecords?: DNSRecord[]): Promise<void> {
-    try {
-      const recordsToRestore = selectedRecords || backup.records;
-
-      // Keys are now handled server-side, no need for keyConfig
-      for (const record of recordsToRestore) {
-        await dnsService.addRecord(backup.zone, record);
-      }
-    } catch (error: unknown) {
-      console.error('Failed to restore records:', error);
-      if (error instanceof Error) {
-        throw new Error(`Failed to restore records: ${error.message}`);
-      }
-      throw new Error('Failed to restore records: Unknown error');
     }
   }
 
