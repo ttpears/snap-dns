@@ -38,7 +38,9 @@ class ValidationService {
       errors.push('Record value is required');
     }
 
-    if (!record.ttl) {
+    // TTL 0 is valid (RFC 2181 §8: "no caching"); only a missing value is an
+    // error, not a falsy 0.
+    if (record.ttl === undefined || record.ttl === null || record.ttl === '') {
       errors.push('TTL is required');
     } else if (record.ttl < 0 || record.ttl > 2147483647) {
       errors.push('TTL must be between 0 and 2147483647');
@@ -214,6 +216,9 @@ class ValidationService {
   private isValidHostname(hostname: string): boolean {
     if (!hostname || hostname === '@') return true;
 
+    // Bare wildcard at the zone apex (RFC 4592).
+    if (hostname === '*') return true;
+
     // Allow wildcards
     if (hostname.startsWith('*.')) {
       hostname = hostname.substring(2);
@@ -238,7 +243,8 @@ class ValidationService {
       !isNaN(priority) &&
       priority >= 0 &&
       priority <= 65535 &&
-      this.isValidHostname(target)
+      // "." is the null-MX target (RFC 7505: "0 .").
+      (target === '.' || this.isValidHostname(target))
     );
   }
 
@@ -254,7 +260,8 @@ class ValidationService {
       !isNaN(priority) && priority >= 0 && priority <= 65535 &&
       !isNaN(weight) && weight >= 0 && weight <= 65535 &&
       !isNaN(port) && port >= 0 && port <= 65535 &&
-      this.isValidHostname(parts[3])
+      // "." is a valid SRV target meaning "service not available" (RFC 2782).
+      (parts[3] === '.' || this.isValidHostname(parts[3]))
     );
   }
 

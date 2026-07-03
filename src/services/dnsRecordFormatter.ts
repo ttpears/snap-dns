@@ -1,5 +1,6 @@
 // src/services/dnsRecordFormatter.ts
 import { DNSRecord } from '../types/dns';
+import { DNSValidationService } from './dnsValidationService';
 
 // We can't directly use dns-packet in the frontend due to Node.js dependencies,
 // but we can follow its formatting rules
@@ -90,17 +91,14 @@ export class DNSRecordFormatter {
   }
 
   private static formatAAAARecord(value: string): string {
-    // Basic IPv6 validation and normalization
-    const parts = value.split(':');
-    if (parts.length !== 8) {
+    // Accept every valid IPv6 form — full, compressed (::), and IPv4-mapped —
+    // and preserve the address as written (lowercased, per RFC 5952). The old
+    // 8-group split rejected legal addresses like ::1 and 2001:db8::1.
+    const addr = value.trim();
+    if (!DNSValidationService.isValidIPv6(addr)) {
       throw new Error('Invalid IPv6 address format');
     }
-    return parts.map(part => {
-      if (!/^[0-9A-Fa-f]{1,4}$/.test(part)) {
-        throw new Error('Invalid IPv6 address value');
-      }
-      return part.toUpperCase();
-    }).join(':');
+    return addr.toLowerCase();
   }
 
   private static formatNameRecord(value: string): string {

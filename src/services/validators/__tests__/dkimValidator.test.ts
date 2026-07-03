@@ -3,9 +3,14 @@ import { validateDkim } from '../dkimValidator';
 
 describe('validateDkim', () => {
   describe('errors (block submission)', () => {
-    it('requires v=DKIM1', () => {
+    it('rejects a present-but-wrong v= tag', () => {
+      const result = validateDkim('v=DKIM2; k=rsa; p=ABC123');
+      expect(result.errors.some(e => /v=/.test(e))).toBe(true);
+    });
+
+    it('accepts a record with no v= tag (RFC 6376: v= is recommended, not required)', () => {
       const result = validateDkim('k=rsa; p=ABC123');
-      expect(result.errors).toContain('DKIM record must contain "v=DKIM1"');
+      expect(result.errors).toHaveLength(0);
     });
 
     it('requires p= tag', () => {

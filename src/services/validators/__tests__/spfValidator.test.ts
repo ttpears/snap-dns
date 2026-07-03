@@ -88,5 +88,20 @@ describe('validateSpf', () => {
       const result = validateSpf('V=SPF1 mx ~all');
       expect(result.errors).toHaveLength(0);
     });
+
+    it('accepts the redirect= modifier (RFC 7208 §6)', () => {
+      const result = validateSpf('v=spf1 redirect=_spf.example.com');
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('accepts the exp= modifier and ignores unknown modifiers', () => {
+      const result = validateSpf('v=spf1 mx exp=explain.example.com custom=value -all');
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('accepts CIDR forms on a and mx mechanisms (RFC 7208 §5.3/§5.4)', () => {
+      expect(validateSpf('v=spf1 a/24 mx/24 -all').errors).toHaveLength(0);
+      expect(validateSpf('v=spf1 a:example.com/24 -all').errors).toHaveLength(0);
+    });
   });
 });

@@ -54,6 +54,8 @@ export function validateSpf(value: string): TxtValidationResult {
   let dnsLookupCount = 0;
 
   for (const token of tokens) {
+    if (token === '') continue;
+
     // Strip qualifier (+, -, ~, ?)
     let qualified = token;
     let qualifier = '+';
@@ -62,10 +64,18 @@ export function validateSpf(value: string): TxtValidationResult {
       qualified = token.slice(1);
     }
 
-    // Split mechanism:value
-    const colonIdx = qualified.indexOf(':');
-    const mechanism = colonIdx >= 0 ? qualified.substring(0, colonIdx).toLowerCase() : qualified.toLowerCase();
-    const arg = colonIdx >= 0 ? qualified.substring(colonIdx + 1) : undefined;
+    // Modifiers are name=value (RFC 7208 §6): "redirect=" and "exp=" are
+    // standard, and unrecognised modifiers MUST be ignored — not treated as
+    // unknown mechanisms.
+    if (/^[A-Za-z][A-Za-z0-9._-]*=/.test(qualified)) {
+      continue;
+    }
+
+    // A mechanism name ends at the first ':' (its value) or '/' (a CIDR prefix),
+    // e.g. "a", "mx/24", "ip4:1.2.3.4/24", "a:example.com/24" (RFC 7208 §5).
+    const sepIdx = qualified.search(/[:/]/);
+    const mechanism = (sepIdx >= 0 ? qualified.slice(0, sepIdx) : qualified).toLowerCase();
+    const arg = qualified.includes(':') ? qualified.slice(qualified.indexOf(':') + 1) : undefined;
 
     if (!KNOWN_MECHANISMS.has(mechanism)) {
       errors.push(`Unknown mechanism: "${mechanism}"`);

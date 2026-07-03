@@ -23,8 +23,9 @@ class DNSValidationService {
       errors.push('Invalid record name format');
     }
 
-    // Validate TTL
-    if (!record.ttl) {
+    // Validate TTL. TTL 0 is valid (RFC 2181 §8: "no caching"), so only a
+    // missing value is an error — not a falsy 0.
+    if (record.ttl === undefined || record.ttl === null || record.ttl === '') {
       errors.push('TTL is required');
     } else if (record.ttl < 0 || record.ttl > 2147483647) {
       errors.push('TTL must be between 0 and 2147483647');
@@ -96,30 +97,19 @@ class DNSValidationService {
     };
   }
 
-  private static isValidHostname(hostname: string, recordType?: string): boolean {
-    // Handle wildcard records
+  private static isValidHostname(hostname: string, _recordType?: string): boolean {
+    // Bare wildcard (a wildcard record directly at the zone apex, RFC 4592).
+    if (hostname === '*') return true;
+
+    // Wildcards are only valid as the leftmost label; validate the remainder.
     if (hostname.startsWith('*.')) {
-      // Wildcards are only valid at the start of a name
-      // Remove the wildcard and validate the rest of the hostname
-      return this.isValidHostname(hostname.substring(2), recordType);
+      return this.isValidHostname(hostname.substring(2), _recordType);
     }
 
-    // Special case for TXT records which allow underscores
-    if (recordType === 'TXT') {
-      // Modified regex to allow underscores anywhere in TXT record names
-      const regex = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*\.?$/;
-      return regex.test(hostname);
-    }
-
-    // Special case for SRV records which allow underscores at start
-    if (recordType === 'SRV') {
-      const regex = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*\.?$/;
-      return regex.test(hostname);
-    }
-
-    // Regular hostname validation for other record types
-    // Allow wildcards at the start of labels
-    const regex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.?$/;
+    // Underscore labels are legal in the DNS (RFC 2181 §11) and required for
+    // service names (_dmarc, _acme-challenge, selector._domainkey), so allow
+    // underscores in every label rather than only for TXT/SRV.
+    const regex = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*\.?$/;
     return regex.test(hostname);
   }
 
@@ -134,7 +124,7 @@ class DNSValidationService {
     });
   }
 
-  private static isValidIPv6(ip: string): boolean {
+  static isValidIPv6(ip: string): boolean {
     // Comprehensive IPv6 validation including:
     // - Full format: 2001:0db8:85a3:0000:0000:8a2e:0370:7334
     // - Compressed format: 2001:db8:85a3::8a2e:370:7334
@@ -203,7 +193,8 @@ class DNSValidationService {
     
     const priority = parseInt(parts[0], 10);
     const target = parts[1];
-    const hostnameOk = target === '@' || this.isValidHostname(target);
+    // "." is the null-MX target (RFC 7505: "0 .").
+    const hostnameOk = target === '.' || target === '@' || this.isValidHostname(target);
     return !isNaN(priority) && priority >= 0 && priority <= 65535 && hostnameOk;
   }
 
@@ -212,11 +203,13 @@ class DNSValidationService {
     if (parts.length !== 4) return false;
 
     const [priority, weight, port] = parts.map(p => parseInt(p, 10));
+    // "." is a valid SRV target meaning "service not available" (RFC 2782).
+    const targetOk = parts[3] === '.' || this.isValidHostname(parts[3]);
     return !isNaN(priority) && !isNaN(weight) && !isNaN(port) &&
            priority >= 0 && priority <= 65535 &&
            weight >= 0 && weight <= 65535 &&
            port >= 0 && port <= 65535 &&
-           this.isValidHostname(parts[3]);
+           targetOk;
   }
 }
 

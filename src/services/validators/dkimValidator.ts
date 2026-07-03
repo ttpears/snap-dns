@@ -22,10 +22,11 @@ export function validateDkim(value: string): TxtValidationResult {
     tags.set(key, val);
   }
 
-  // v=DKIM1 required (case-insensitive)
+  // RFC 6376 §3.6.1: the v= tag is RECOMMENDED, not required. If present it must
+  // be DKIM1; its absence is not an error.
   const vTag = tags.get('v');
-  if (!vTag || vTag.toUpperCase() !== 'DKIM1') {
-    errors.push('DKIM record must contain "v=DKIM1"');
+  if (vTag !== undefined && vTag.toUpperCase() !== 'DKIM1') {
+    errors.push('DKIM v= tag, if present, must be "DKIM1"');
   }
 
   // p= tag required

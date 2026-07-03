@@ -12,8 +12,10 @@ describe('validationService.validateRecord', () => {
     });
 
     it('requires name, value and ttl', () => {
+      // ttl omitted entirely — note ttl:0 is valid (RFC 2181), so a missing TTL
+      // must be undefined, not falsy 0, to trigger the "required" error.
       const res = validationService.validateRecord(
-        { type: 'A', value: '', ttl: 0 },
+        { type: 'A', value: '' },
         'example.com'
       );
       expect(res.isValid).toBe(false);
@@ -125,6 +127,21 @@ describe('validationService.validateRecord', () => {
     it('accepts a valid CAA and rejects an unknown tag', () => {
       expect(validate({ type: 'CAA', value: '0 issue "letsencrypt.org"' }).isValid).toBe(true);
       expect(validate({ type: 'CAA', value: '0 bogus x' }).isValid).toBe(false);
+    });
+
+    it('accepts the null MX target "." (RFC 7505)', () => {
+      expect(validate({ type: 'MX', value: '0 .' }).isValid).toBe(true);
+    });
+
+    it('accepts the null SRV target "." (RFC 2782)', () => {
+      expect(validate({ type: 'SRV', value: '0 0 0 .' }).isValid).toBe(true);
+    });
+  });
+
+  describe('RFC edge cases (G5)', () => {
+    it('accepts TTL 0 (RFC 2181 §8)', () => {
+      const res = validationService.validateRecord({ name: 'host', type: 'A', value: '1.2.3.4', ttl: 0 }, 'example.com');
+      expect(res.isValid).toBe(true);
     });
   });
 

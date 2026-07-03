@@ -60,6 +60,28 @@ describe('DNSRecordFormatter CAA handling', () => {
   });
 });
 
+describe('DNSRecordFormatter AAAA handling', () => {
+  const aaaa = (value: string) =>
+    DNSRecordFormatter.formatRecord(
+      { name: 'host', type: 'AAAA', value, ttl: 300 } as unknown as DNSRecord,
+      'example.com'
+    ).value;
+
+  it('accepts compressed and IPv4-mapped IPv6 forms', () => {
+    expect(aaaa('::1')).toBe('::1');
+    expect(aaaa('2001:db8::1')).toBe('2001:db8::1');
+    expect(aaaa('::ffff:192.0.2.1')).toBe('::ffff:192.0.2.1');
+  });
+
+  it('lowercases the address (RFC 5952)', () => {
+    expect(aaaa('2001:DB8::AbCd')).toBe('2001:db8::abcd');
+  });
+
+  it('rejects a malformed address', () => {
+    expect(() => aaaa('gggg::1')).toThrow(/IPv6/);
+  });
+});
+
 describe('DNSRecordFormatter PTR handling', () => {
   const ptrName = (name: string, zone: string) =>
     DNSRecordFormatter.formatRecord(
