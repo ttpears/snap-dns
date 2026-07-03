@@ -45,4 +45,25 @@ describe('DNSValidationService (G5 RFC edge cases)', () => {
       expect(validate({ type: 'SRV', value: '0 0 0 .' }).isValid).toBe(true);
     });
   });
+
+  describe('false-accepts tightened (G7)', () => {
+    it('rejects IPv4 octets with leading zeros', () => {
+      expect(validate({ type: 'A', value: '192.168.001.1' }).isValid).toBe(false);
+      expect(validate({ type: 'A', value: '10.0.0.0' }).isValid).toBe(true);
+    });
+
+    it('rejects non-numeric MX/SRV integer fields', () => {
+      expect(validate({ type: 'MX', value: '10x mail.example.com' }).isValid).toBe(false);
+      expect(validate({ type: 'SRV', value: '10 20 5060x sip.example.com' }).isValid).toBe(false);
+    });
+
+    it('accepts a general embedded-IPv4 IPv6 form (64:ff9b::/96 NAT64)', () => {
+      expect(validate({ type: 'AAAA', value: '64:ff9b::192.0.2.1' }).isValid).toBe(true);
+    });
+
+    it('rejects an over-length name (>255 octets)', () => {
+      const long = Array(20).fill('abcdefghijkl').join('.') + '.example.com';
+      expect(validate({ type: 'CNAME', value: long }).isValid).toBe(false);
+    });
+  });
 });

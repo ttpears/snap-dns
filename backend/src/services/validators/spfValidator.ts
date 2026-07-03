@@ -85,7 +85,8 @@ export function validateSpf(value: string): TxtValidationResult {
     // Check duplicates (use the full token minus qualifier for comparison)
     const canonical = qualified.toLowerCase();
     if (seen.has(canonical)) {
-      errors.push(`Duplicate mechanism: "${qualified}"`);
+      // A duplicate mechanism is legal but pointless (RFC 7208) — warn, don't reject.
+      warnings.push(`Duplicate mechanism: "${qualified}"`);
     }
     seen.add(canonical);
 
@@ -139,7 +140,8 @@ export function validateSpf(value: string): TxtValidationResult {
   }
 
   if (dnsLookupCount > 10) {
-    warnings.push(`SPF record requires ${dnsLookupCount} DNS lookups, exceeding the 10 lookup limit`);
+    // RFC 7208 §4.6.4: exceeding 10 DNS-lookup mechanisms is a permerror.
+    errors.push(`SPF record requires ${dnsLookupCount} DNS lookups, exceeding the RFC 7208 limit of 10 (permerror)`);
   }
 
   return { errors, warnings };

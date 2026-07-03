@@ -33,9 +33,10 @@ describe('validateSpf', () => {
       expect(result.errors.some(e => e.includes('CIDR'))).toBe(true);
     });
 
-    it('rejects duplicate mechanisms', () => {
-      const result = validateSpf('v=spf1 ip4:1.2.3.4 ip4:1.2.3.4 ~all');
-      expect(result.errors.some(e => e.includes('Duplicate'))).toBe(true);
+    it('flags more than 10 DNS lookups as an error (RFC 7208 §4.6.4 permerror)', () => {
+      const mechanisms = Array.from({ length: 11 }, (_, i) => `include:d${i}.example.com`);
+      const result = validateSpf(`v=spf1 ${mechanisms.join(' ')} ~all`);
+      expect(result.errors.some(e => e.includes('permerror'))).toBe(true);
     });
   });
 
@@ -46,10 +47,10 @@ describe('validateSpf', () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it('warns when DNS lookup count exceeds 10', () => {
-      const mechanisms = Array.from({ length: 11 }, (_, i) => `include:d${i}.example.com`);
-      const result = validateSpf(`v=spf1 ${mechanisms.join(' ')} ~all`);
-      expect(result.warnings.some(w => w.includes('10'))).toBe(true);
+    it('warns (does not reject) on a duplicate mechanism', () => {
+      const result = validateSpf('v=spf1 ip4:1.2.3.4 ip4:1.2.3.4 ~all');
+      expect(result.warnings.some(w => w.includes('Duplicate'))).toBe(true);
+      expect(result.errors).toHaveLength(0);
     });
 
     it('warns on ptr mechanism', () => {

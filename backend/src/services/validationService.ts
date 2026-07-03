@@ -13,6 +13,12 @@ interface ValidationResult {
 }
 
 class ValidationService {
+  // IANA CAA property registry (RFC 8659 + registered extensions). Well-formed
+  // tags outside this set are allowed with a warning, not rejected.
+  private static readonly CAA_KNOWN_TAGS = new Set([
+    'issue', 'issuewild', 'iodef', 'contactemail', 'contactphone', 'issuevmc', 'issuewildvmc',
+  ]);
+
   /**
    * Validate a DNS record
    */
@@ -140,9 +146,7 @@ class ValidationService {
         break;
 
       case 'CAA':
-        if (!this.isValidCAA(record.value)) {
-          errors.push('Invalid CAA record format (should be: flags tag value)');
-        }
+        this.validateCAA(record.value, errors, warnings);
         break;
 
       case 'SOA':
@@ -160,11 +164,12 @@ class ValidationService {
    * Validate IPv4 address
    */
   private isValidIPv4(ip: string): boolean {
-    const regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-    if (!regex.test(ip)) return false;
-
     const parts = ip.split('.');
+    if (parts.length !== 4) return false;
     return parts.every(part => {
+      if (!/^\d{1,3}$/.test(part)) return false;
+      // Reject leading zeros (192.168.001.1): ambiguous octal-vs-decimal.
+      if (part.length > 1 && part[0] === '0') return false;
       const num = parseInt(part, 10);
       return num >= 0 && num <= 255;
     });
@@ -174,40 +179,42 @@ class ValidationService {
    * Validate IPv6 address (comprehensive)
    */
   private isValidIPv6(ip: string): boolean {
+    // Handles full, compressed (::), and embedded-IPv4 forms in any position
+    // (::ffff:192.0.2.1, 64:ff9b::1.2.3.4). An embedded dotted-quad may only be
+    // the final element and counts as two 16-bit groups (RFC 4291 §2.2).
     ip = ip.trim();
-
-    // IPv4-mapped IPv6
-    const ipv4MappedRegex = /^::ffff:(\d{1,3}\.){3}\d{1,3}$/i;
-    if (ipv4MappedRegex.test(ip)) {
-      const ipv4Part = ip.split(':').pop();
-      return ipv4Part ? this.isValidIPv4(ipv4Part) : false;
-    }
+    if (ip.length === 0) return false;
 
     const parts = ip.split('::');
-    if (parts.length > 2) return false;
+    if (parts.length > 2) return false; // at most one "::"
+    const compressed = parts.length === 2;
 
-    const validatePart = (part: string): boolean => {
-      if (!part) return true;
-      const segments = part.split(':');
-      return segments.every(seg => {
-        if (!seg) return false;
-        return /^[0-9a-f]{1,4}$/i.test(seg);
-      });
+    const groupCount = (segment: string): number | null => {
+      if (segment === '') return 0;
+      const groups = segment.split(':');
+      let count = 0;
+      for (let i = 0; i < groups.length; i++) {
+        const g = groups[i];
+        if (g.includes('.')) {
+          if (i !== groups.length - 1) return null; // IPv4 only as the last element
+          if (!this.isValidIPv4(g)) return null;
+          count += 2;
+        } else {
+          if (!/^[0-9a-f]{1,4}$/i.test(g)) return null;
+          count += 1;
+        }
+      }
+      return count;
     };
 
-    if (parts.length === 2) {
-      const [left, right] = parts;
-      if (!left && !right) return ip === '::';
-      if (!validatePart(left) || !validatePart(right)) return false;
-
-      const leftSegments = left ? left.split(':').length : 0;
-      const rightSegments = right ? right.split(':').length : 0;
-      return leftSegments + rightSegments < 8;
-    } else {
-      const segments = ip.split(':');
-      if (segments.length !== 8) return false;
-      return segments.every(seg => /^[0-9a-f]{1,4}$/i.test(seg));
+    if (compressed) {
+      const left = groupCount(parts[0]);
+      const right = groupCount(parts[1]);
+      if (left === null || right === null) return false;
+      return left + right < 8; // "::" stands in for at least one group
     }
+
+    return groupCount(ip) === 8;
   }
 
   /**
@@ -215,6 +222,9 @@ class ValidationService {
    */
   private isValidHostname(hostname: string): boolean {
     if (!hostname || hostname === '@') return true;
+
+    // RFC 1035 §2.3.4: a domain name is at most 255 octets.
+    if (hostname.length > 255) return false;
 
     // Bare wildcard at the zone apex (RFC 4592).
     if (hostname === '*') return true;
@@ -229,6 +239,13 @@ class ValidationService {
     return regex.test(hostname);
   }
 
+  // Digits only (parseInt would accept "10x"/"1.5"), 0..65535.
+  private isValidUint16(token: string): boolean {
+    if (!/^\d+$/.test(token)) return false;
+    const num = parseInt(token, 10);
+    return num >= 0 && num <= 65535;
+  }
+
   /**
    * Validate MX record
    */
@@ -236,13 +253,9 @@ class ValidationService {
     const parts = value.split(/\s+/);
     if (parts.length !== 2) return false;
 
-    const priority = parseInt(parts[0], 10);
     const target = parts[1];
-
     return (
-      !isNaN(priority) &&
-      priority >= 0 &&
-      priority <= 65535 &&
+      this.isValidUint16(parts[0]) &&
       // "." is the null-MX target (RFC 7505: "0 .").
       (target === '.' || this.isValidHostname(target))
     );
@@ -255,11 +268,10 @@ class ValidationService {
     const parts = value.split(/\s+/);
     if (parts.length !== 4) return false;
 
-    const [priority, weight, port] = parts.map(p => parseInt(p, 10));
     return (
-      !isNaN(priority) && priority >= 0 && priority <= 65535 &&
-      !isNaN(weight) && weight >= 0 && weight <= 65535 &&
-      !isNaN(port) && port >= 0 && port <= 65535 &&
+      this.isValidUint16(parts[0]) &&
+      this.isValidUint16(parts[1]) &&
+      this.isValidUint16(parts[2]) &&
       // "." is a valid SRV target meaning "service not available" (RFC 2782).
       (parts[3] === '.' || this.isValidHostname(parts[3]))
     );
@@ -268,19 +280,35 @@ class ValidationService {
   /**
    * Validate CAA record
    */
-  private isValidCAA(value: string): boolean {
+  private validateCAA(value: string, errors: string[], warnings: string[]): void {
+    if (typeof value !== 'string') {
+      errors.push('Invalid CAA record format (should be: flags tag value)');
+      return;
+    }
     const parts = value.split(/\s+/);
-    if (parts.length < 3) return false;
+    if (parts.length < 3) {
+      errors.push('Invalid CAA record format (should be: flags tag value)');
+      return;
+    }
 
-    const flags = parseInt(parts[0], 10);
-    const tag = parts[1];
+    const [flagsStr, tag] = parts;
+    if (!/^\d+$/.test(flagsStr) || parseInt(flagsStr, 10) > 255) {
+      errors.push('CAA flags must be an integer between 0 and 255');
+    }
 
-    return (
-      !isNaN(flags) &&
-      flags >= 0 &&
-      flags <= 255 &&
-      ['issue', 'issuewild', 'iodef'].includes(tag)
-    );
+    // RFC 8659 §4.1: a property tag is 1*(ALPHA / DIGIT). Tags are extensible,
+    // so an unrecognised but well-formed tag is a warning, not an error — the
+    // IANA registry includes contactemail/contactphone/issuevmc beyond the
+    // common three.
+    if (!/^[a-z0-9]+$/i.test(tag)) {
+      errors.push(`Invalid CAA tag: "${tag}"`);
+    } else if (!ValidationService.CAA_KNOWN_TAGS.has(tag.toLowerCase())) {
+      warnings.push(`Unrecognised CAA tag "${tag}" (not an IANA-registered property)`);
+    }
+
+    if (parts.slice(2).join(' ').trim() === '') {
+      errors.push('CAA record is missing its value');
+    }
   }
 
 }

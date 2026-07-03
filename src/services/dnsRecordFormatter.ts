@@ -140,7 +140,10 @@ export class DNSRecordFormatter {
     if (isNaN(num) || num < 0 || num > 255) {
       throw new Error('Invalid CAA flags value');
     }
-    if (!['issue', 'issuewild', 'iodef'].includes(tag)) {
+    // RFC 8659 §4.1: a tag is 1*(ALPHA / DIGIT). Tags are extensible (the IANA
+    // registry has contactemail/contactphone/issuevmc beyond the common three),
+    // so accept any well-formed tag rather than a fixed whitelist.
+    if (!/^[a-z0-9]+$/i.test(tag)) {
       throw new Error('Invalid CAA tag');
     }
     // Accept the value with or without surrounding quotes, then quote exactly

@@ -131,8 +131,11 @@ class DNSService {
     try {
       const { stderr } = await execFileAsync('nsupdate', ['-k', keyFile, updateFile]);
       if (stderr) {
-        console.error('nsupdate error:', stderr);
-        throw new Error(stderr);
+        // nsupdate exits non-zero on real failure (execFile rejects and the
+        // callers surface it). stderr on a zero-exit run is a non-fatal
+        // diagnostic — logging it must not turn a succeeded update into a
+        // reported failure.
+        console.warn('nsupdate warning:', stderr);
       }
     } finally {
       await unlink(keyFile).catch(() => undefined);
@@ -197,7 +200,14 @@ class DNSService {
   }
 
   private formatSOA(soa: any): string {
-    return `${soa.mname} ${soa.rname} ${soa.serial || 1} ${soa.refresh} ${soa.retry} ${soa.expire} ${soa.minimum}`;
+    // Coerce each numeric field, preserving a legitimate 0 (e.g. serial 0) and
+    // never emitting a literal "NaN" into the nsupdate file.
+    const num = (v: any, fallback: number): number => {
+      const n = typeof v === 'number' ? v : parseInt(v, 10);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    return `${soa.mname} ${soa.rname} ${num(soa.serial, 0)} ${num(soa.refresh, 3600)} ` +
+           `${num(soa.retry, 1800)} ${num(soa.expire, 604800)} ${num(soa.minimum, 86400)}`;
   }
 
   private parseSOA(value: string): any {
@@ -205,7 +215,7 @@ class DNSService {
     return {
       mname: mname.toLowerCase().replace(/\.+$/, ''),
       rname: rname.toLowerCase().replace(/\.+$/, ''),
-      serial: parseInt(serial),
+      serial: parseInt(serial) || 0,
       refresh: parseInt(refresh) || 0,
       retry: parseInt(retry) || 0,
       expire: parseInt(expire) || 0,
