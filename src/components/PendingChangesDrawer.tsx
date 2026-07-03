@@ -27,7 +27,7 @@ import {
   KeyboardArrowDown as ExpandMoreIcon,
   KeyboardArrowUp as ExpandLessIcon
 } from '@mui/icons-material';
-import { dnsService } from '../services/dnsService';
+import { dnsService, type BatchChange } from '../services/dnsService';
 import { notificationService } from '../services/notificationService';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { backupService } from '../services/backupService';
@@ -146,58 +146,26 @@ function PendingChangesDrawer({
             // Don't fail the entire operation if snapshot creation fails
           }
 
-          // Apply changes in order
-          for (const change of changes) {
-            try {
-              switch ((change as any).type) {
-                case 'ADD': {
-                  const addResult = await dnsService.addRecord(zone, change.record! as any);
-                  if (addResult?.warnings?.length) allWarnings.push(...addResult.warnings);
-                  allSuccessfulChanges.push({
-                    ...change,
-                    type: 'ADD'
-                  });
-                  break;
-                }
-                case 'RESTORE': {
-                  // For restore, we need to ensure the record is properly formatted
-                  const recordToRestore = {
-                    ...change.record!,
-                    name: change.record!.name,
-                    type: change.record!.type,
-                    value: change.record!.value,
-                    ttl: change.record!.ttl || 3600  // Ensure TTL exists
-                  };
-                  const restoreResult = await dnsService.addRecord(zone, recordToRestore as any);
-                  if (restoreResult?.warnings?.length) allWarnings.push(...restoreResult.warnings);
-                  allSuccessfulChanges.push({
-                    ...change,
-                    type: 'ADD',
-                    record: recordToRestore as any
-                  });
-                  break;
-                }
-                case 'DELETE': {
-                  const deleteResult = await dnsService.deleteRecord(zone, change.record! as any);
-                  if (deleteResult?.warnings?.length) allWarnings.push(...deleteResult.warnings);
-                  allSuccessfulChanges.push(change);
-                  break;
-                }
-                case 'MODIFY': {
-                  // Use atomic update for modifications (especially important for SOA)
-                  const updateResult = await dnsService.updateRecord(zone, change.originalRecord! as any, change.newRecord! as any);
-                  if (updateResult?.warnings?.length) allWarnings.push(...updateResult.warnings);
-                  allSuccessfulChanges.push(change);
-                  break;
-                }
-                default:
-                  console.warn(`Unknown change type: ${change.type}`);
-              }
-            } catch (changeError) {
-              console.error(`Failed to apply change:`, changeError);
-              throw new Error(`Failed to apply change: ${(changeError as Error).message}`);
+          // Apply all of this zone's changes as one atomic transaction, so a
+          // failure can't leave the zone half-updated.
+          const batchChanges: BatchChange[] = changes.map((change) => {
+            switch ((change as any).type) {
+              case 'ADD':
+                return { op: 'add', record: change.record! as any };
+              case 'RESTORE':
+                return { op: 'add', record: { ...(change.record! as any), ttl: change.record!.ttl || 3600 } };
+              case 'DELETE':
+                return { op: 'delete', record: change.record! as any };
+              case 'MODIFY':
+                return { op: 'update', oldRecord: change.originalRecord! as any, newRecord: change.newRecord! as any };
+              default:
+                throw new Error(`Unknown change type: ${(change as any).type}`);
             }
-          }
+          });
+
+          const batchResult = await dnsService.applyBatch(zone, batchChanges);
+          if (batchResult?.warnings?.length) allWarnings.push(...batchResult.warnings);
+          allSuccessfulChanges.push(...changes);
 
           // Add zone to affected zones
           if (!affectedZones.includes(zone)) {

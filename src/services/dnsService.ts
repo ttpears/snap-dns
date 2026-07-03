@@ -30,6 +30,15 @@ interface DNSRecord {
 
 export type { DNSRecord, SRVRecord, MXRecord };
 
+/** A single change in an atomic batch. `add`/`delete` use `record`; `update`
+ *  uses `oldRecord` + `newRecord`. */
+export interface BatchChange {
+  op: 'add' | 'delete' | 'update';
+  record?: DNSRecord;
+  oldRecord?: DNSRecord;
+  newRecord?: DNSRecord;
+}
+
 // Add error types
 export class DNSError extends Error {
   code?: string;
@@ -252,6 +261,56 @@ class DNSService {
         const errorData = await response.json().catch(() => ({ error: response.statusText }));
         throw new DNSError(
           errorData.error || `Failed to update record: ${response.statusText}`,
+          errorData.code,
+          errorData.details
+        );
+      }
+
+      const data = await response.json().catch(() => ({}));
+      return { warnings: data.warnings };
+    } catch (error) {
+      if (error instanceof DNSError) {
+        throw error;
+      }
+      throw new DNSError(
+        'Failed to communicate with DNS server',
+        'SERVER_ERROR',
+        error instanceof Error ? error.message : undefined
+      );
+    }
+  }
+
+  /**
+   * Apply a set of changes to one zone atomically (single backend transaction).
+   * Each record is formatted the same way the single-record calls format it.
+   */
+  async applyBatch(zone: string, changes: BatchChange[]): Promise<{ warnings?: string[] }> {
+    try {
+      if (!zone || !changes || changes.length === 0) {
+        throw new Error('Zone and at least one change are required');
+      }
+
+      const prepared = changes.map((c) =>
+        c.op === 'update'
+          ? {
+              op: c.op,
+              oldRecord: this.prepareRecordForRequest(c.oldRecord!),
+              newRecord: this.prepareRecordForRequest(c.newRecord!),
+            }
+          : { op: c.op, record: this.prepareRecordForRequest(c.record!) }
+      );
+
+      const response = await fetch(`${this.baseUrl}/api/zones/${encodeURIComponent(zone)}/records/batch`, {
+        method: 'POST',
+        headers: this.createHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ changes: prepared }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new DNSError(
+          errorData.error || `Failed to apply changes: ${response.statusText}`,
           errorData.code,
           errorData.details
         );

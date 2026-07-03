@@ -8,6 +8,15 @@ import { config } from '../config';
 import { assertNoControlChars, isValidDnsName, isValidZoneName } from './dnsSafety';
 import { parseTxtRdata, quoteTxtValue } from './dnsPresentation';
 
+/** A single change in an atomic batch. `add`/`delete` use `record`; `update`
+ *  uses `oldRecord` + `newRecord`. */
+export interface BatchChange {
+  op: 'add' | 'delete' | 'update';
+  record?: DNSRecord;
+  oldRecord?: DNSRecord;
+  newRecord?: DNSRecord;
+}
+
 // execFile (not exec) runs the binary directly with an argv array — no shell is
 // spawned, so zone/server/key arguments cannot be interpreted as shell syntax.
 const execFileAsync = promisify(execFile);
@@ -606,6 +615,100 @@ class DNSService {
       throw new Error(`Failed to update record: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Build the nsupdate command lines for a single change (no server/zone/send).
+   * Add/delete/update produce the same directives the single-record methods do,
+   * so a batch is byte-for-byte consistent with applying each change alone.
+   */
+  private buildChangeLines(change: BatchChange): string[] {
+    switch (change.op) {
+      case 'add': {
+        const r = change.record!;
+        this.assertSafeRecord(r);
+        return [`update add ${r.name} ${r.ttl} ${r.class || 'IN'} ${r.type} ${this.formatRdata(r)}`];
+      }
+      case 'delete': {
+        const r = change.record!;
+        this.assertSafeRecord(r);
+        const hasData = r.value !== undefined && r.value !== null && r.value !== '';
+        if (!hasData || r.type === 'SOA') {
+          return [`update delete ${r.name} ${r.type}`];
+        }
+        return [`update delete ${r.name} ${r.type} ${this.formatRdata(r)}`];
+      }
+      case 'update': {
+        const oldR = change.oldRecord!;
+        const newR = change.newRecord!;
+        this.assertSafeRecord(oldR);
+        this.assertSafeRecord(newR);
+
+        if (newR.type === 'SOA') {
+          const oldSOA = oldR.value as any;
+          const newSOA = newR.value as any;
+          if (typeof newSOA?.serial === 'number' && typeof oldSOA?.serial === 'number' && newSOA.serial <= oldSOA.serial) {
+            newSOA.serial = oldSOA.serial + 1;
+          }
+          return [
+            `update delete ${oldR.name} ${oldR.type}`,
+            `update add ${newR.name} ${newR.ttl} ${newR.class || 'IN'} ${newR.type} ${this.formatSOA(newSOA)}`,
+          ];
+        }
+
+        const hasOldData = oldR.value !== undefined && oldR.value !== null && oldR.value !== '';
+        const lines: string[] = [];
+        if (hasOldData) {
+          const oldRdata = this.formatRdata(oldR);
+          // Fail the whole transaction if the record being replaced isn't present
+          // as given (RFC 2136 §2.4.1), rather than silently adding a duplicate.
+          lines.push(`prereq yxrrset ${oldR.name} ${oldR.type} ${oldRdata}`);
+          lines.push(`update delete ${oldR.name} ${oldR.type} ${oldRdata}`);
+        } else {
+          lines.push(`prereq yxrrset ${oldR.name} ${oldR.type}`);
+          lines.push(`update delete ${oldR.name} ${oldR.type}`);
+        }
+        lines.push(`update add ${newR.name} ${newR.ttl} ${newR.class || 'IN'} ${newR.type} ${this.formatRdata(newR)}`);
+        return lines;
+      }
+      default:
+        throw new Error(`Unknown batch operation: ${(change as { op?: string }).op}`);
+    }
+  }
+
+  /**
+   * Apply a set of changes to one zone as a single atomic nsupdate transaction
+   * (one `send`). RFC 2136 makes the whole set all-or-nothing: if any operation
+   * or prerequisite fails, nothing is applied — no half-updated zone. Used by
+   * the pending-changes apply / restore flow.
+   */
+  async applyBatch(zone: string, changes: BatchChange[], keyConfig: ZoneConfig): Promise<ZoneOperationResult> {
+    if (!isValidZoneName(zone)) {
+      throw new Error(`Invalid zone name: ${zone}`);
+    }
+    this.validateKeyConfig(keyConfig);
+    if (!Array.isArray(changes) || changes.length === 0) {
+      throw new Error('Batch contains no changes');
+    }
+
+    await this.initialize();
+    const updateFile = join(this.getTempDir(), `batch-${Date.now()}-${Math.random()}.txt`);
+
+    const lines: string[] = [`server ${keyConfig.server}`, `zone ${zone}`];
+    for (const change of changes) {
+      lines.push(...this.buildChangeLines(change));
+    }
+    lines.push('send'); // single send → atomic
+
+    try {
+      await writeFile(updateFile, lines.join('\n'));
+      await this.runNsupdate(updateFile, keyConfig);
+      return { success: true, message: `Applied ${changes.length} change${changes.length !== 1 ? 's' : ''}` };
+    } catch (error) {
+      throw new Error(`Failed to apply changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      await unlink(updateFile).catch(() => undefined);
+    }
+  }
 }
 
-export const dnsService = new DNSService(); 
+export const dnsService = new DNSService();

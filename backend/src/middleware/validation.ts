@@ -64,6 +64,21 @@ export const UpdateRecordRequestSchema = z.object({
 });
 
 /**
+ * Atomic batch of changes for one zone (used by the pending-changes apply /
+ * restore flow).
+ */
+export const BatchChangeSchema = z.object({
+  op: z.enum(['add', 'delete', 'update']),
+  record: DNSRecordSchema.optional(),
+  oldRecord: DNSRecordSchema.optional(),
+  newRecord: DNSRecordSchema.optional()
+});
+
+export const BatchRequestSchema = z.object({
+  changes: z.array(BatchChangeSchema).min(1, 'At least one change is required').max(1000, 'Too many changes in one batch')
+});
+
+/**
  * TSIG Key schemas
  */
 export const TSIGKeyCreateSchema = z.object({
@@ -239,6 +254,7 @@ export const validateDNSRecord = validateRequest(DNSRecordSchema);
 export const validateAddRecord = validateRequest(AddRecordRequestSchema);
 export const validateDeleteRecord = validateRequest(DeleteRecordRequestSchema);
 export const validateUpdateRecord = validateRequest(UpdateRecordRequestSchema);
+export const validateBatch = validateRequest(BatchRequestSchema);
 export const validateTSIGKeyCreate = validateRequest(TSIGKeyCreateSchema);
 export const validateTSIGKeyUpdate = validateRequest(TSIGKeyUpdateSchema);
 export const validateLogin = validateRequest(LoginRequestSchema);

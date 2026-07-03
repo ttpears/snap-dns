@@ -9,7 +9,8 @@ import { userService } from '../services/userService';
 import { validationService } from '../services/validationService';
 import { auditService } from '../services/auditService';
 import { dnsQueryLimiter, dnsModifyLimiter } from '../middleware/rateLimiter';
-import { validateAddRecord, validateDeleteRecord, validateUpdateRecord } from '../middleware/validation';
+import { validateAddRecord, validateDeleteRecord, validateUpdateRecord, validateBatch } from '../middleware/validation';
+import { BatchChange } from '../services/dnsService';
 
 const router = Router();
 
@@ -487,4 +488,103 @@ router.patch(
   }
 });
 
-export default router; 
+// Apply a batch of changes to a zone atomically (single nsupdate transaction).
+// Used by the pending-changes apply / restore flow so a multi-record change is
+// all-or-nothing rather than partially applied on failure.
+router.post(
+  '/:zone/records/batch',
+  dnsModifyLimiter,
+  requireAuth,
+  requireWriteAccess,
+  validateBatch,
+  async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const user = authReq.user!;
+    const { zone } = req.params;
+    const { changes } = req.body as { changes: BatchChange[] };
+
+    if (!await checkZoneAccess(user, zone)) {
+      return res.status(403).json({
+        success: false,
+        code: ErrorCodes.PERMISSION_DENIED,
+        error: 'Access denied to this zone',
+        details: { zone }
+      });
+    }
+
+    // Validate every record in the batch on the backend (don't trust frontend).
+    const allWarnings: string[] = [];
+    for (const change of changes) {
+      const records = change.op === 'update'
+        ? [change.oldRecord, change.newRecord]
+        : [change.record];
+      for (const record of records) {
+        if (!record) {
+          return res.status(400).json({
+            success: false,
+            code: ErrorCodes.VALIDATION_ERROR,
+            error: `Missing record for "${change.op}" change`,
+            details: { change }
+          });
+        }
+        const validation = validationService.validateRecord(record, zone);
+        if (!validation.isValid) {
+          return res.status(400).json({
+            success: false,
+            code: ErrorCodes.VALIDATION_ERROR,
+            error: 'Invalid DNS record in batch',
+            details: { errors: validation.errors, record }
+          });
+        }
+        allWarnings.push(...validation.warnings);
+      }
+    }
+
+    // For admins, get all key IDs; otherwise use the user's allowed keys
+    let allowedKeyIds = user.allowedKeyIds;
+    if (user.role === 'admin') {
+      const allKeys = await tsigKeyService.listKeys();
+      allowedKeyIds = allKeys.map(k => k.id);
+    }
+
+    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
+    if (!tsigKey) {
+      return res.status(403).json({
+        success: false,
+        code: ErrorCodes.MISSING_CONFIG,
+        error: 'No TSIG key found for this zone',
+        details: { zone }
+      });
+    }
+
+    const keyConfig: ZoneConfig = {
+      server: tsigKey.server,
+      keyName: tsigKey.keyName,
+      keyValue: tsigKey.keyValue,
+      algorithm: tsigKey.algorithm,
+      id: tsigKey.id
+    };
+
+    const result = await dnsService.applyBatch(zone, changes, keyConfig);
+
+    // Audit each applied operation (the transaction succeeded as a whole).
+    for (const change of changes) {
+      const record = change.op === 'update' ? { old: change.oldRecord, new: change.newRecord } : change.record;
+      await auditService.logDNSOperation(change.op, zone, record, user.userId, user.username, true);
+    }
+
+    res.json({ ...result, warnings: allWarnings });
+  } catch (err: unknown) {
+    const error = err as DNSError;
+    console.error('Failed to apply batch:', error);
+    res.status(500).json({
+      success: false,
+      code: ErrorCodes.SERVER_ERROR,
+      error: 'Failed to apply changes',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+export default router;
