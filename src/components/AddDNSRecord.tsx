@@ -71,6 +71,15 @@ const RECORD_TYPES: Record<string, RecordTypeDefinition> = {
       required: true
     }]
   },
+  NS: {
+    fields: [{
+      name: 'value',
+      label: 'Nameserver',
+      helperText: 'Fully qualified domain name of the authoritative nameserver',
+      validate: (value) => value.length > 0,
+      required: true
+    }]
+  },
   MX: {
     fields: [
       {

@@ -43,6 +43,9 @@ export interface PendingChange {
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
+  // Non-blocking advisories (e.g. SPF/DKIM/CAA warnings) the UI surfaces
+  // alongside errors; the validation service always returns this array.
+  warnings?: string[];
 }
 
 // DNS operation result
