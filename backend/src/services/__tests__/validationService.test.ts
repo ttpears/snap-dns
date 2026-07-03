@@ -54,13 +54,21 @@ describe('validationService.validateRecord', () => {
       expect(res.errors.some(e => /exceeds 255 bytes/.test(e))).toBe(true);
     });
 
-    it('rejects quotes and backslashes', () => {
-      expect(validate({ type: 'TXT', value: 'has "quotes"' }).isValid).toBe(false);
-      expect(validate({ type: 'TXT', value: 'back\\slash' }).isValid).toBe(false);
+    it('accepts quotes and backslashes as legal TXT data', () => {
+      // Quoting is a presentation concern added once at the nsupdate boundary,
+      // so raw quotes/backslashes in the logical value must not be rejected.
+      expect(validate({ type: 'TXT', value: 'has "quotes"' }).isValid).toBe(true);
+      expect(validate({ type: 'TXT', value: 'back\\slash' }).isValid).toBe(true);
     });
 
     it('rejects control characters', () => {
       expect(validate({ type: 'TXT', value: 'bad\x01char' }).isValid).toBe(false);
+    });
+
+    it('enforces the 255-byte limit even for recognised subtypes (e.g. long DKIM)', () => {
+      const res = validate({ type: 'TXT', name: 'sel._domainkey', value: 'v=DKIM1; k=rsa; p=' + 'A'.repeat(300) });
+      expect(res.isValid).toBe(false);
+      expect(res.errors.some(e => /exceeds 255 bytes/.test(e))).toBe(true);
     });
 
     it('rejects a non-string, non-array value', () => {

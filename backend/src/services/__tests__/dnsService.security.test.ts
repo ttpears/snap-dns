@@ -32,7 +32,8 @@ const record = (over: Partial<DNSRecord>): DNSRecord => ({
 beforeEach(() => {
   mockedExecFile.mockReset();
   // promisify(execFile) invokes the callback form: (cmd, args, opts, cb)
-  mockedExecFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+  mockedExecFile.mockImplementation((_cmd: string, ...rest: unknown[]) => {
+    const cb = rest[rest.length - 1] as (err: unknown, out: { stdout: string; stderr: string }) => void;
     cb(null, { stdout: '', stderr: '' });
   });
 });

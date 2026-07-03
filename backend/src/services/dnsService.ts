@@ -6,6 +6,7 @@ import { writeFile, unlink, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { config } from '../config';
 import { assertNoControlChars, isValidDnsName, isValidZoneName } from './dnsSafety';
+import { parseTxtRdata, quoteTxtValue } from './dnsPresentation';
 
 // execFile (not exec) runs the binary directly with an argv array — no shell is
 // spawned, so zone/server/key arguments cannot be interpreted as shell syntax.
@@ -153,13 +154,14 @@ class DNSService {
         throw new Error(`Record value is empty for ${rec.name} ${rec.type}`);
       }
 
-      // Multi-segment TXT values arrive as an array; quote each chunk
-      // independently for nsupdate ("seg1" "seg2"). Must precede the object
-      // check below since arrays are also typeof 'object'.
-      if (Array.isArray(rec.value)) {
-        return rec.value.map((seg) => `"${String(seg).replace(/"/g, '\\"')}"`).join(' ');
+      // TXT is the only type whose rdata is presentation-quoted. The value
+      // reaching here is the raw, unquoted logical value (single string) or an
+      // already-chunked array of ≤255-byte segments; quote each exactly once.
+      if (rec.type === 'TXT') {
+        return quoteTxtValue(rec.value as string | string[]);
       }
 
+      // Multi-segment arrays only ever occur for TXT (handled above).
       if (typeof rec.value === 'object') {
         return this.formatSOA(rec.value);
       }
@@ -238,7 +240,8 @@ class DNSService {
         value = `${record.data.priority} ${record.data.weight} ${record.data.port} ${record.data.target.toLowerCase().replace(/\.+$/, '')}`;
         break;
       case 'TXT':
-        value = Array.isArray(record.data) ? record.data.join(' ') : record.data;
+        // record.data is already the raw, unquoted logical value (parseTxtRdata).
+        value = record.data;
         break;
       default:
         if (typeof value === 'string') {
@@ -329,8 +332,16 @@ class DNSService {
 
         try {
           recordCount++;
-          const parts = line.split(/\s+/);
-          const [name, ttl, recordClass, type, ...data] = parts;
+          // Split into the fixed leading columns plus the RDATA remainder, so
+          // RDATA keeps its original spacing (quoted TXT strings can contain
+          // significant whitespace that a naive /\s+/ split would collapse).
+          const match = line.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+([\s\S]*)$/);
+          if (!match) {
+            skippedCount++;
+            continue;
+          }
+          const [, name, ttl, recordClass, type, rdata] = match;
+          const data = rdata.split(/\s+/);
 
           // Skip TSIG records - they're ephemeral authentication signatures, not real DNS records
           if (type === 'TSIG') {
@@ -344,7 +355,7 @@ class DNSService {
             ttl: parseInt(ttl),
             class: recordClass,
             type,
-            data: type === 'SOA' ? this.parseSOA(data.join(' ')) :
+            data: type === 'SOA' ? this.parseSOA(rdata) :
                   type === 'MX' ? { preference: parseInt(data[0]), exchange: data[1] } :
                   type === 'SRV' ? {
                     priority: parseInt(data[0]),
@@ -352,7 +363,9 @@ class DNSService {
                     port: parseInt(data[2]),
                     target: data[3]
                   } :
-                  data.join(' ')
+                  // TXT: strip presentation quoting to the raw logical value.
+                  type === 'TXT' ? parseTxtRdata(rdata) :
+                  rdata
           };
 
           const normalizedRecord = this.normalizeRecord(packetRecord);
