@@ -1,5 +1,5 @@
 // src/components/ZoneEditor.tsx
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -168,9 +168,6 @@ function ZoneEditor() {
   const [multilineRecord, setMultilineRecord] = useState<DNSRecord | null>(null);
   const [changeHistory, setChangeHistory] = useState<any[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
-  // Set when an apply commits changes; tells the history effect to restart
-  // rather than record the queue shrink as an undoable step.
-  const historyResetPendingRef = useRef(false);
   const [showAddRecord, setShowAddRecord] = useState<boolean>(false);
   const [addRecordDialogOpen, setAddRecordDialogOpen] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -404,22 +401,13 @@ function ZoneEditor() {
     const currentChanges = JSON.stringify(pendingChanges);
     const historyChanges = JSON.stringify(changeHistory[historyIndex]);
 
-    if (currentChanges === historyChanges) return;
-
-    if (historyResetPendingRef.current) {
-      // Changes were just applied to live DNS; restart history from the
-      // current queue so undo can't resurrect committed changes.
-      historyResetPendingRef.current = false;
-      setChangeHistory([[...pendingChanges]]);
-      setHistoryIndex(0);
-      return;
+    if (currentChanges !== historyChanges) {
+      setChangeHistory(prev => {
+        const newHistory = prev.slice(0, historyIndex + 1);
+        return [...newHistory, [...pendingChanges]];
+      });
+      setHistoryIndex(prev => prev + 1);
     }
-
-    setChangeHistory(prev => {
-      const newHistory = prev.slice(0, historyIndex + 1);
-      return [...newHistory, [...pendingChanges]];
-    });
-    setHistoryIndex(prev => prev + 1);
   }, [pendingChanges, historyIndex]);
 
   const handleAddRecordClick = () => {
@@ -428,12 +416,16 @@ function ZoneEditor() {
 
   useEffect(() => {
     const handleChangesApplied = (event: Event) => {
-      const { zones } = (event as CustomEvent<{ zones: string[] }>).detail;
+      const { zones, changeIds } = (event as CustomEvent<{ zones: string[]; changeIds?: string[] }>).detail;
 
-      // Applied changes leave the pending queue; flag the history effect to
-      // restart so undo/redo can't bring them back (regardless of which
-      // zone is currently selected).
-      historyResetPendingRef.current = true;
+      // Purge the committed changes from every undo/redo history entry so
+      // no undo/redo path can resurrect them into the pending queue and
+      // risk a double-apply. Ids are unique, so this is safe regardless of
+      // timing relative to the drawer's own queue pruning.
+      if (changeIds?.length) {
+        const appliedIds = new Set(changeIds);
+        setChangeHistory(prev => prev.map(entry => entry.filter((c: any) => !appliedIds.has(c.id))));
+      }
 
       if (selectedZone && zones.includes(selectedZone)) {
         // The event fires after the backend transaction completed, so the

@@ -182,9 +182,11 @@ function PendingChangesDrawer({
         appliedChanges.push(...changes);
         appliedZones.push(zone);
 
-        // Dispatch event to notify components that changes were applied
+        // Dispatch event to notify components that changes were applied.
+        // changeIds lets listeners purge the committed changes from any
+        // local state (e.g. the undo/redo history) so they can't come back.
         window.dispatchEvent(new CustomEvent('dnsChangesApplied', {
-          detail: { zones: [zone] }
+          detail: { zones: [zone], changeIds: changes.map(c => c.id) }
         }));
       } catch (error) {
         console.error(`Failed to process changes for zone ${zone}:`, error);
