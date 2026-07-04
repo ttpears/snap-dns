@@ -46,6 +46,13 @@ describe('DNSValidationService (G5 RFC edge cases)', () => {
     });
   });
 
+  describe('NS records', () => {
+    it('accepts a valid nameserver and rejects a malformed one', () => {
+      expect(validate({ type: 'NS', value: 'ns1.example.com.' }).isValid).toBe(true);
+      expect(validate({ type: 'NS', value: 'not a hostname' }).isValid).toBe(false);
+    });
+  });
+
   describe('false-accepts tightened (G7)', () => {
     it('rejects IPv4 octets with leading zeros', () => {
       expect(validate({ type: 'A', value: '192.168.001.1' }).isValid).toBe(false);
