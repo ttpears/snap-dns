@@ -238,7 +238,6 @@ function ZoneEditor() {
   const handleDeleteRecord = async (record: DNSRecord) => {
     try {
       const change = {
-        id: Date.now(),
         type: 'DELETE' as const,
         zone: selectedZone!,
         keyId: selectedKey!.id,
@@ -262,7 +261,6 @@ function ZoneEditor() {
 
       deletable.forEach(record => {
         const change = {
-          id: Date.now() + Math.random(),
           type: 'DELETE' as const,
           zone: selectedZone!,
           keyId: selectedKey!.id,
@@ -290,7 +288,6 @@ function ZoneEditor() {
   const handleEditSave = async (updatedRecord: DNSRecord) => {
     try {
       const change = {
-        id: Date.now(),
         type: 'MODIFY' as const,
         zone: selectedZone!,
         keyId: selectedKey!.id,
@@ -422,9 +419,10 @@ function ZoneEditor() {
       const { zones } = (event as CustomEvent<{ zones: string[] }>).detail;
 
       if (selectedZone && zones.includes(selectedZone)) {
+        // The event fires after the backend transaction completed, so the
+        // zone can be re-fetched immediately.
         setIsRefreshing(true);
-
-        setTimeout(async () => {
+        (async () => {
           try {
             await loadZoneRecords();
           } catch (error) {
@@ -433,7 +431,7 @@ function ZoneEditor() {
           } finally {
             setIsRefreshing(false);
           }
-        }, 2000);
+        })();
       }
     };
 
