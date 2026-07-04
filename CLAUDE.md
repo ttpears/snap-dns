@@ -235,23 +235,11 @@ The following design issues should be addressed before production use:
 
 6. ~~**Duplicate Context Files**~~ — **RESOLVED**: Single `src/context/` directory, all files migrated to TypeScript.
 
-7. **Non-Atomic Update Operations** (src/services/dnsService.ts:272-287)
-   - `updateRecord()` performs DELETE then ADD
-   - If ADD fails after DELETE succeeds, record is lost
-   - **Impact**: Data loss risk during updates
-   - **Fix**: Use BIND's atomic update operations or implement rollback
+7. ~~**Non-Atomic Update Operations**~~ — **RESOLVED**: `updateRecord()` uses a single nsupdate transaction with a `prereq yxrrset` guard (RFC 2136 §2.4.1), and bulk apply/restore goes through `dnsService.applyBatch()` — one all-or-nothing transaction per zone.
 
-8. **No Backend Validation** (backend/src/routes/zoneRoutes.ts)
-   - Backend trusts frontend validation completely
-   - No validation layer in route handlers
-   - **Impact**: Malicious clients can bypass validation
-   - **Fix**: Implement server-side validation using existing validation service
+8. ~~**No Backend Validation**~~ — **RESOLVED**: route handlers validate every record server-side via `validationService.validateRecord` (add/delete/update/batch), plus Zod request schemas and the `dnsSafety` name/injection guards.
 
-9. **Incomplete IPv6 Validation** (src/services/dnsValidationService.ts:121)
-   - Regex doesn't handle compressed IPv6 notation (::)
-   - Doesn't validate IPv6 with embedded IPv4 (::ffff:192.0.2.1)
-   - **Impact**: Valid IPv6 addresses rejected, invalid ones accepted
-   - **Fix**: Use proper IPv6 parsing library
+9. ~~**Incomplete IPv6 Validation**~~ — **RESOLVED**: `isValidIPv6` (frontend `dnsValidationService.ts` and backend `validationService.ts`) accepts compressed (`::`), IPv4-mapped, and general embedded-IPv4 forms and rejects malformed input; `formatAAAARecord` delegates to it. IPv4 leading zeros are rejected.
 
 ### 🟡 Medium Priority Issues
 

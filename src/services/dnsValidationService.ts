@@ -48,6 +48,11 @@ class DNSValidationService {
           errors.push('Invalid CNAME target format');
         }
         break;
+      case 'NS':
+        if (!this.isValidHostname(record.value)) {
+          errors.push('Invalid NS target format');
+        }
+        break;
       case 'DNAME':
         if (!this.isValidHostname(record.value)) {
           errors.push('Invalid DNAME target format');

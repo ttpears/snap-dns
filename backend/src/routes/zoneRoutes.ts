@@ -568,10 +568,16 @@ router.post(
 
     const result = await dnsService.applyBatch(zone, changes, keyConfig);
 
-    // Audit each applied operation (the transaction succeeded as a whole).
-    for (const change of changes) {
-      const record = change.op === 'update' ? { old: change.oldRecord, new: change.newRecord } : change.record;
-      await auditService.logDNSOperation(change.op, zone, record, user.userId, user.username, true);
+    // The transaction already committed to DNS. Audit-logging is best-effort:
+    // a logging failure must not be reported to the client as if the DNS change
+    // failed (which would prompt a confusing re-apply).
+    try {
+      for (const change of changes) {
+        const record = change.op === 'update' ? { old: change.oldRecord, new: change.newRecord } : change.record;
+        await auditService.logDNSOperation(change.op, zone, record, user.userId, user.username, true);
+      }
+    } catch (auditErr) {
+      console.error('Batch applied but audit logging failed:', auditErr);
     }
 
     res.json({ ...result, warnings: allWarnings });
