@@ -8,7 +8,10 @@ import { z, ZodError } from 'zod';
  * DNS Record Type enum
  */
 const RecordTypeSchema = z.enum([
-  'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP', 'SOA'
+  'A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'NS', 'PTR', 'CAA', 'SSHFP', 'SOA',
+  // Managed as opaque presentation-format values (RFC 3597 style).
+  'DS', 'DNSKEY', 'CDS', 'CDNSKEY', 'TLSA', 'SMIMEA', 'NAPTR', 'SVCB', 'HTTPS',
+  'DNAME', 'LOC', 'CERT', 'URI', 'KX'
 ]);
 
 /**

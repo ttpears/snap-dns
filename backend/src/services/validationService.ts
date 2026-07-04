@@ -84,6 +84,7 @@ class ValidationService {
       case 'CNAME':
       case 'NS':
       case 'PTR':
+      case 'DNAME':
         if (!this.isValidHostname(record.value)) {
           errors.push(`Invalid ${record.type} target format`);
         }
@@ -147,6 +148,20 @@ class ValidationService {
 
       case 'CAA':
         this.validateCAA(record.value, errors, warnings);
+        break;
+
+      case 'DS':
+      case 'CDS':
+        if (!this.isValidDS(record.value)) {
+          errors.push(`Invalid ${record.type} record format (should be: key-tag algorithm digest-type digest-hex)`);
+        }
+        break;
+
+      case 'TLSA':
+      case 'SMIMEA':
+        if (!this.isValidTLSA(record.value)) {
+          errors.push(`Invalid ${record.type} record format (should be: usage selector matching-type certificate-hex)`);
+        }
         break;
 
       case 'SOA':
@@ -244,6 +259,36 @@ class ValidationService {
     if (!/^\d+$/.test(token)) return false;
     const num = parseInt(token, 10);
     return num >= 0 && num <= 65535;
+  }
+
+  private isValidUint8(token: string): boolean {
+    if (!/^\d+$/.test(token)) return false;
+    const num = parseInt(token, 10);
+    return num >= 0 && num <= 255;
+  }
+
+  // DS/CDS: key-tag(uint16) algorithm(uint8) digest-type(uint8) digest(hex).
+  private isValidDS(value: string): boolean {
+    if (typeof value !== 'string') return false;
+    const parts = value.trim().split(/\s+/);
+    if (parts.length < 4) return false;
+    const digest = parts.slice(3).join('');
+    return this.isValidUint16(parts[0]) &&
+      this.isValidUint8(parts[1]) &&
+      this.isValidUint8(parts[2]) &&
+      /^[0-9a-fA-F]+$/.test(digest);
+  }
+
+  // TLSA/SMIMEA: usage(uint8) selector(uint8) matching-type(uint8) cert(hex).
+  private isValidTLSA(value: string): boolean {
+    if (typeof value !== 'string') return false;
+    const parts = value.trim().split(/\s+/);
+    if (parts.length < 4) return false;
+    const cert = parts.slice(3).join('');
+    return this.isValidUint8(parts[0]) &&
+      this.isValidUint8(parts[1]) &&
+      this.isValidUint8(parts[2]) &&
+      /^[0-9a-fA-F]+$/.test(cert);
   }
 
   /**

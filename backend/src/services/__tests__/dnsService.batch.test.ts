@@ -63,6 +63,17 @@ describe('applyBatch', () => {
     expect(cmds).toEqual(['nsupdate']);
   });
 
+  it('writes generic presentation-format types (TLSA/DS) verbatim', async () => {
+    const changes: BatchChange[] = [
+      { op: 'add', record: rec({ name: '_443._tcp.example.com', type: 'TLSA', value: '3 0 1 ABCDEF0123456789' }) },
+      { op: 'add', record: rec({ name: 'example.com', type: 'DS', value: '12345 8 2 49FD46E6' }) },
+    ];
+    await dnsService.applyBatch('example.com', changes, keyConfig);
+    const c = batchFileContent();
+    expect(c).toContain('update add _443._tcp.example.com 300 IN TLSA 3 0 1 ABCDEF0123456789');
+    expect(c).toContain('update add example.com 300 IN DS 12345 8 2 49FD46E6');
+  });
+
   it('quotes TXT values in a batched update', async () => {
     const changes: BatchChange[] = [
       { op: 'update', oldRecord: rec({ name: 't.example.com', type: 'TXT', value: 'v=spf1 -all' }), newRecord: rec({ name: 't.example.com', type: 'TXT', value: 'v=spf1 ~all' }) },

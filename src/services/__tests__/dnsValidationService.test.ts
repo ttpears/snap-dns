@@ -46,6 +46,20 @@ describe('DNSValidationService (G5 RFC edge cases)', () => {
     });
   });
 
+  describe('DS / TLSA structured validation', () => {
+    it('accepts well-formed DS and rejects a bad digest / oversized key-tag', () => {
+      expect(validate({ type: 'DS', value: '12345 8 2 49FD46E6C4B4' }).isValid).toBe(true);
+      expect(validate({ type: 'DS', value: '12345 8 2 nothex!' }).isValid).toBe(false);
+      expect(validate({ type: 'DS', value: '99999999 8 2 ABCD' }).isValid).toBe(false);
+    });
+
+    it('accepts well-formed TLSA and rejects too-few fields / non-hex cert', () => {
+      expect(validate({ type: 'TLSA', value: '3 0 1 ABCDEF' }).isValid).toBe(true);
+      expect(validate({ type: 'TLSA', value: '3 0 1 zz' }).isValid).toBe(false);
+      expect(validate({ type: 'TLSA', value: '3 0' }).isValid).toBe(false);
+    });
+  });
+
   describe('NS records', () => {
     it('accepts a valid nameserver and rejects a malformed one', () => {
       expect(validate({ type: 'NS', value: 'ns1.example.com.' }).isValid).toBe(true);

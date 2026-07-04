@@ -52,6 +52,7 @@ export class DNSRecordFormatter {
         return this.formatAAAARecord(value);
       case 'CNAME':
       case 'NS':
+      case 'DNAME':
         return this.formatNameRecord(value);
       case 'MX':
         return this.formatMXRecord(value);
