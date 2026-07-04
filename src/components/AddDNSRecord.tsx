@@ -21,6 +21,7 @@ import { useConfig } from '../context/ConfigContext';
 import { DNSValidationService } from '../services/dnsValidationService';
 import { DNSRecordFormatter } from '../services/dnsRecordFormatter';
 import { detectTxtSubtype, TxtSubtype } from '../services/validators/detectTxtSubtype';
+import { VALUE_FIELD_HINTS, GENERIC_VALUE_TYPES } from '../services/recordTypeHints';
 import SpfEditor from './editors/SpfEditor';
 import DkimEditor from './editors/DkimEditor';
 import DmarcEditor from './editors/DmarcEditor';
@@ -220,27 +221,10 @@ const RECORD_TYPES: Record<string, RecordTypeDefinition> = {
 // Additional record types managed as a single presentation-format value. The
 // backend guards against injection and nsupdate/BIND validates the exact rdata
 // syntax on apply, so the UI keeps a light touch (one value field + a format
-// hint) rather than a bespoke editor per type.
-const GENERIC_TYPE_HINTS: Record<string, string> = {
-  DS: 'key-tag algorithm digest-type digest — e.g. 12345 8 2 49FD46E6C4B4...',
-  DNSKEY: 'flags protocol algorithm public-key (base64)',
-  CDS: 'key-tag algorithm digest-type digest',
-  CDNSKEY: 'flags protocol algorithm public-key (base64)',
-  TLSA: 'usage selector matching-type certificate-data (hex)',
-  SMIMEA: 'usage selector matching-type certificate-data (hex)',
-  NAPTR: 'order preference "flags" "service" "regexp" replacement',
-  SVCB: 'priority target [params] — e.g. 1 . alpn="h2,h3"',
-  HTTPS: 'priority target [params] — e.g. 1 . alpn="h2,h3"',
-  DNAME: 'Target domain (FQDN ending with a dot)',
-  LOC: 'geographic location — e.g. 52 22 23.000 N 4 53 32.000 E 2.00m',
-  CERT: 'type key-tag algorithm certificate (base64)',
-  URI: 'priority weight "target-uri"',
-  KX: 'preference exchanger (FQDN)',
-};
-
-for (const [type, helperText] of Object.entries(GENERIC_TYPE_HINTS)) {
+// hint from the shared VALUE_FIELD_HINTS) rather than a bespoke editor per type.
+for (const type of GENERIC_VALUE_TYPES) {
   RECORD_TYPES[type] = {
-    fields: [{ name: 'value', label: 'Value (presentation format)', helperText, required: true }],
+    fields: [{ name: 'value', label: 'Value (presentation format)', helperText: VALUE_FIELD_HINTS[type], required: true }],
   };
 }
 

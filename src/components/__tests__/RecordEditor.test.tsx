@@ -20,3 +20,24 @@ describe('RecordEditor CAA quoting', () => {
     );
   });
 });
+
+describe('RecordEditor value-field format hints', () => {
+  const renderType = (type: string, value: string) =>
+    render(
+      <RecordEditor
+        record={{ name: 'x', type, value, ttl: 300 } as unknown as DNSRecord}
+        onSave={jest.fn()}
+        onCancel={() => {}}
+      />
+    );
+
+  it('shows a format hint for a type that previously had none (DS)', () => {
+    renderType('DS', '12345 8 2 ABCD');
+    expect(screen.getByText(/key-tag algorithm digest-type digest/)).toBeInTheDocument();
+  });
+
+  it('shows a format hint for CAA', () => {
+    renderType('CAA', '0 issue "letsencrypt.org"');
+    expect(screen.getByText(/flags tag value/)).toBeInTheDocument();
+  });
+});
