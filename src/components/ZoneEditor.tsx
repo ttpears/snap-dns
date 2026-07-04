@@ -256,7 +256,11 @@ function ZoneEditor() {
 
   const handleDeleteSelected = async () => {
     try {
-      selectedRecords.forEach(record => {
+      // SOA records cannot be deleted (every zone must keep exactly one), so
+      // skip them rather than queue a delete that would fail the whole batch.
+      const deletable = selectedRecords.filter(record => record.type !== 'SOA');
+
+      deletable.forEach(record => {
         const change = {
           id: Date.now() + Math.random(),
           type: 'DELETE' as const,
@@ -267,7 +271,9 @@ function ZoneEditor() {
         addPendingChange(change);
       });
 
-      setShowPendingDrawer(true);
+      if (deletable.length > 0) {
+        setShowPendingDrawer(true);
+      }
       setSelectedRecords([]);
       setEditDialogOpen(false);
       setEditingRecord(null);

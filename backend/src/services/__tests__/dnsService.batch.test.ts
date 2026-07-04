@@ -85,4 +85,29 @@ describe('applyBatch', () => {
   it('rejects an empty batch', async () => {
     await expect(dnsService.applyBatch('example.com', [], keyConfig)).rejects.toThrow(/no changes/i);
   });
+
+  it('refuses to delete an SOA record in a batch (never runs anything)', async () => {
+    const changes: BatchChange[] = [
+      { op: 'delete', record: rec({ name: 'example.com', type: 'SOA', value: 'ns admin 1 2 3 4 5' }) },
+    ];
+    await expect(dnsService.applyBatch('example.com', changes, keyConfig)).rejects.toThrow(/SOA records cannot be deleted/);
+    expect(mockedExecFile).not.toHaveBeenCalled();
+  });
+
+  it('propagates an nsupdate failure so nothing is reported as applied', async () => {
+    mockedExecFile.mockImplementation((_cmd: string, ...rest: unknown[]) => {
+      const cb = rest[rest.length - 1] as (err: unknown, out: { stdout: string; stderr: string }) => void;
+      cb(new Error('update failed: REFUSED'), { stdout: '', stderr: 'update failed: REFUSED' });
+    });
+    const changes: BatchChange[] = [{ op: 'add', record: rec({ name: 'a.example.com' }) }];
+    await expect(dnsService.applyBatch('example.com', changes, keyConfig)).rejects.toThrow(/Failed to apply changes/);
+  });
+});
+
+describe('deleteRecord SOA guard (single-record path)', () => {
+  it('refuses to delete an SOA record', async () => {
+    const soa = rec({ name: 'example.com', type: 'SOA', value: 'ns admin 1 2 3 4 5' });
+    await expect(dnsService.deleteRecord('example.com', soa, keyConfig)).rejects.toThrow(/SOA records cannot be deleted/);
+    expect(mockedExecFile).not.toHaveBeenCalled();
+  });
 });
