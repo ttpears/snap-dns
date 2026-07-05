@@ -23,6 +23,9 @@ interface KeyContextType {
   // zones should read selectedKey.zones directly.
   availableZones: string[];
   availableKeys: AvailableKey[];
+  // True until the first backend key fetch settles; consumers should show a
+  // loading state rather than a "no keys" empty state while this is true.
+  keysLoading: boolean;
 }
 
 const KeyContext = createContext<KeyContextType | undefined>(undefined);
@@ -35,6 +38,7 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [backendKeys, setBackendKeys] = useState<TSIGKey[]>([]);
+  const [keysLoading, setKeysLoading] = useState(true);
 
   // Fetch keys from backend when authenticated
   useEffect(() => {
@@ -46,6 +50,8 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
           console.error('Failed to fetch keys from backend:', error);
           setBackendKeys([]);
+        } finally {
+          setKeysLoading(false);
         }
       } else {
         setBackendKeys([]);
@@ -171,7 +177,8 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
       selectKey,
       selectZone,
       availableZones,
-      availableKeys
+      availableKeys,
+      keysLoading
     }}>
       {children}
     </KeyContext.Provider>

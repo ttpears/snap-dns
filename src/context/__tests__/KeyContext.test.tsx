@@ -183,4 +183,28 @@ describe('KeyContext selection transitions', () => {
     });
     expect(result.current.selectedZone).toBe('other.org');
   });
+
+  it('reports keysLoading until the backend fetch settles, then exposes keys', async () => {
+    const { result } = renderHook(() => useKey(), { wrapper });
+
+    // Before the fetch resolves the context must say "loading", not "no keys",
+    // so consumers don't flash an empty state at users who have keys.
+    expect(result.current.keysLoading).toBe(true);
+    expect(result.current.availableKeys).toHaveLength(0);
+
+    await waitFor(() => {
+      expect(result.current.keysLoading).toBe(false);
+    });
+    expect(result.current.availableKeys).toHaveLength(2);
+  });
+
+  it('clears keysLoading even when the backend fetch fails', async () => {
+    mockListKeys.mockRejectedValueOnce(new Error('backend down'));
+    const { result } = renderHook(() => useKey(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.keysLoading).toBe(false);
+    });
+    expect(result.current.availableKeys).toHaveLength(0);
+  });
 });

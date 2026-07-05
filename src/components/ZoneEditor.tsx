@@ -147,7 +147,8 @@ function ZoneEditor() {
     selectedKey,
     selectedZone,
     availableZones = [],
-    availableKeys = []
+    availableKeys = [],
+    keysLoading = false
   } = useKey();
 
   const { showError } = useNotification();
@@ -491,6 +492,18 @@ function ZoneEditor() {
   // First-run empty state: with no TSIG keys configured there is nothing the
   // zone editor can do, so point the user at Settings instead of showing a
   // disabled toolbar and empty table.
+  // While the backend key list is still loading, show a spinner rather than
+  // flashing the no-keys onboarding panel at users who do have keys.
+  if (keysLoading) {
+    return (
+      <Paper sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress />
+        </Box>
+      </Paper>
+    );
+  }
+
   if (availableKeys.length === 0) {
     return (
       <Paper sx={{ p: 3 }}>
