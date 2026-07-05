@@ -300,6 +300,139 @@ const compareSOA = (record1: DNSRecord, record2: DNSRecord): boolean => {
   return JSON.stringify(soa1) === JSON.stringify(soa2);
 };
 
+// Value-aware equality for two records of the same name/type. Pure; used by the
+// restore-diff computation below and the comparison UI.
+export const isRecordEqual = (record1: DNSRecord, record2: DNSRecord): boolean => {
+  if (record1.name !== record2.name || record1.type !== record2.type) {
+    return false;
+  }
+
+  switch (record1.type) {
+    case 'SOA':
+      return compareSOA(record1, record2);
+    case 'MX': {
+      const [prio1, exchange1] = String(record1.value).split(/\s+/);
+      const [prio2, exchange2] = String(record2.value).split(/\s+/);
+      return parseInt(prio1) === parseInt(prio2) &&
+             exchange1.toLowerCase().replace(/\.+$/, '') === exchange2.toLowerCase().replace(/\.+$/, '');
+    }
+    case 'SRV': {
+      const [p1, w1, port1, target1] = String(record1.value).split(/\s+/);
+      const [p2, w2, port2, target2] = String(record2.value).split(/\s+/);
+      return parseInt(p1) === parseInt(p2) &&
+             parseInt(w1) === parseInt(w2) &&
+             parseInt(port1) === parseInt(port2) &&
+             target1.toLowerCase().replace(/\.+$/, '') === target2.toLowerCase().replace(/\.+$/, '');
+    }
+    default:
+      return record1.value.toString().toLowerCase().replace(/\.+$/, '') ===
+             record2.value.toString().toLowerCase().replace(/\.+$/, '') &&
+             record1.ttl === record2.ttl &&
+             (record1.class || 'IN') === (record2.class || 'IN');
+  }
+};
+
+// A single change intent produced by computeRestoreChanges. Shape matches the
+// pending-change objects consumed by PendingChangesContext.addPendingChange.
+export interface RestoreChange {
+  type: 'ADD' | 'MODIFY' | 'DELETE';
+  zone: string;
+  keyId: string;
+  record?: DNSRecord;
+  originalRecord?: DNSRecord;
+  newRecord?: DNSRecord;
+  source: { type: 'backup'; id: string | number; timestamp: number };
+}
+
+interface RestoreChangeContext {
+  zone: string;
+  keyId: string;
+  source: { type: 'backup'; id: string | number; timestamp: number };
+}
+
+// Pure diff between a snapshot and the current zone, producing the set of
+// pending changes for a restore. Two modes:
+//
+//   Partial restore (isFullRestore=false): the user picked a SUBSET of the
+//   snapshot's records to bring back. We only ADD/MODIFY those selected records
+//   and NEVER delete anything — the user asked to restore specific records, not
+//   to prune the zone.
+//
+//   Full restore (isFullRestore=true): make the zone match the snapshot exactly.
+//   ADD/MODIFY the selected records (which equal the full snapshot) AND delete
+//   current records that are absent from the snapshot (drift removal).
+//
+// The deletion baseline is ALWAYS `snapshotRecords` (the full snapshot), never
+// `selectedRecords`. This is the crux of the partial-restore data-loss fix:
+// computing deletions against the selected subset would wipe every unselected
+// record even though the snapshot still contains it.
+export const computeRestoreChanges = (
+  currentRecords: DNSRecord[],
+  snapshotRecords: DNSRecord[],
+  selectedRecords: DNSRecord[],
+  isFullRestore: boolean,
+  context: RestoreChangeContext
+): RestoreChange[] => {
+  const { zone, keyId, source } = context;
+  const changes: RestoreChange[] = [];
+
+  const filteredSelected = selectedRecords.filter(r => (r.type as string) !== 'TSIG');
+  const filteredCurrent = currentRecords.filter(r => (r.type as string) !== 'TSIG');
+  const filteredSnapshot = snapshotRecords.filter(r => (r.type as string) !== 'TSIG');
+
+  // Add/modify pass: bring the selected records back into the zone.
+  filteredSelected.forEach(record => {
+    const normalizedRecord: DNSRecord = {
+      ...record,
+      name: record.name,
+      type: record.type,
+      value: record.value,
+      ttl: record.ttl || 3600,
+      class: record.class || 'IN'
+    };
+
+    const exactMatch = filteredCurrent.find(r =>
+      r.name === normalizedRecord.name &&
+      r.type === normalizedRecord.type &&
+      isRecordEqual(r, normalizedRecord)
+    );
+
+    if (!exactMatch) {
+      const partialMatch = filteredCurrent.find(r =>
+        r.name === normalizedRecord.name &&
+        r.type === normalizedRecord.type
+      );
+
+      if (partialMatch) {
+        changes.push({ type: 'MODIFY', zone, keyId, originalRecord: partialMatch, newRecord: normalizedRecord, source });
+      } else {
+        changes.push({ type: 'ADD', zone, keyId, record: normalizedRecord, source });
+      }
+    }
+  });
+
+  // Deletion (drift-removal) pass: ONLY for a full-snapshot restore. Prune
+  // current records that are absent from the FULL snapshot so the zone ends up
+  // matching the snapshot. Skipped entirely for a partial selection.
+  if (isFullRestore) {
+    filteredCurrent.forEach(currentRecord => {
+      if (currentRecord.type === 'SOA') return;
+
+      const inSnapshot = filteredSnapshot.find(r =>
+        r.name === currentRecord.name &&
+        r.type === currentRecord.type &&
+        isRecordEqual(currentRecord, r)
+      );
+
+      if (!inSnapshot) {
+        changes.push({ type: 'DELETE', zone, keyId, record: currentRecord, source });
+      }
+    });
+  }
+
+  return changes;
+};
+
 function Snapshots() {
   const { addPendingChange, setShowPendingDrawer } = usePendingChanges();
   const { config } = useConfig();
@@ -360,6 +493,23 @@ function Snapshots() {
     if (!selectedZone) return [];
     return backendKeys.filter(key => key.zones?.includes(selectedZone)) || [];
   }, [backendKeys, selectedZone]);
+
+  // Auto-select the DNS key that serves the chosen zone in the Create Snapshot
+  // panel, mirroring the Zone Editor sidebar: keep the current key if it still
+  // serves the zone, otherwise pick the first key whose `zones` include it. This
+  // stops the "select a zone but the key stays empty" confusion.
+  useEffect(() => {
+    if (!selectedZone) {
+      setSelectedKeyId('');
+      return;
+    }
+    setSelectedKeyId(prev => {
+      if (prev && availableKeys.some(key => key.id === prev)) {
+        return prev;
+      }
+      return availableKeys[0]?.id || '';
+    });
+  }, [selectedZone, availableKeys]);
 
   useEffect(() => {
     const loadBackups = async () => {
@@ -702,39 +852,14 @@ function Snapshots() {
     return { added, removed, modified, unchanged: [] };
   };
 
-  const isRecordEqual = (record1: DNSRecord, record2: DNSRecord): boolean => {
-    if (record1.name !== record2.name || record1.type !== record2.type) {
-      return false;
-    }
-
-    switch (record1.type) {
-      case 'SOA':
-        return compareSOA(record1, record2);
-      case 'MX': {
-        const [prio1, exchange1] = String(record1.value).split(/\s+/);
-        const [prio2, exchange2] = String(record2.value).split(/\s+/);
-        return parseInt(prio1) === parseInt(prio2) &&
-               exchange1.toLowerCase().replace(/\.+$/, '') === exchange2.toLowerCase().replace(/\.+$/, '');
-      }
-      case 'SRV': {
-        const [p1, w1, port1, target1] = String(record1.value).split(/\s+/);
-        const [p2, w2, port2, target2] = String(record2.value).split(/\s+/);
-        return parseInt(p1) === parseInt(p2) &&
-               parseInt(w1) === parseInt(w2) &&
-               parseInt(port1) === parseInt(port2) &&
-               target1.toLowerCase().replace(/\.+$/, '') === target2.toLowerCase().replace(/\.+$/, '');
-      }
-      default:
-        return record1.value.toString().toLowerCase().replace(/\.+$/, '') ===
-               record2.value.toString().toLowerCase().replace(/\.+$/, '') &&
-               record1.ttl === record2.ttl &&
-               (record1.class || 'IN') === (record2.class || 'IN');
-    }
-  };
-
-  const confirmRestore = async (recordsToRestore: DNSRecord[]) => {
+  // Queue a restore. `isFullRestore` distinguishes the two modes handled by
+  // computeRestoreChanges: partial (add/modify the selected subset only) vs full
+  // (make the zone match the snapshot, including drift deletions). The deletion
+  // baseline is always the full snapshot (`selectedBackup.records`), never the
+  // selected subset.
+  const confirmRestore = async (recordsToRestore: DNSRecord[], isFullRestore = false) => {
     try {
-      const keyForZone = backendKeys.find(k => k.zones.includes(selectedBackup.zone));
+      const keyForZone = backendKeys.find(k => k.zones?.includes(selectedBackup.zone));
 
       if (!keyForZone) {
         throw new Error('No key found for this zone');
@@ -742,85 +867,21 @@ function Snapshots() {
 
       const currentRecords = await dnsService.fetchZoneRecords(selectedBackup.zone);
 
-      const changes: any[] = [];
-
-      const filteredRecordsToRestore = recordsToRestore.filter(r => r.type !== 'TSIG');
-      const filteredCurrentRecords = currentRecords.filter(r => (r.type as string) !== 'TSIG');
-
-      filteredRecordsToRestore.forEach(record => {
-        const normalizedRecord: DNSRecord = {
-          ...record,
-          name: record.name,
-          type: record.type,
-          value: record.value,
-          ttl: record.ttl || 3600,
-          class: record.class || 'IN'
-        };
-
-        const exactMatch = filteredCurrentRecords.find(r =>
-          r.name === normalizedRecord.name &&
-          r.type === normalizedRecord.type &&
-          isRecordEqual(r, normalizedRecord)
-        );
-
-        if (!exactMatch) {
-          const partialMatch = filteredCurrentRecords.find(r =>
-            r.name === normalizedRecord.name &&
-            r.type === normalizedRecord.type
-          );
-
-          if (partialMatch) {
-            changes.push({
-              type: 'MODIFY',
-              zone: selectedBackup.zone,
-              keyId: keyForZone.id,
-              originalRecord: partialMatch,
-              newRecord: normalizedRecord,
-              source: {
-                type: 'backup',
-                id: selectedBackup.id,
-                timestamp: selectedBackup.timestamp
-              }
-            });
-          } else {
-            changes.push({
-              type: 'ADD',
-              zone: selectedBackup.zone,
-              keyId: keyForZone.id,
-              record: normalizedRecord,
-              source: {
-                type: 'backup',
-                id: selectedBackup.id,
-                timestamp: selectedBackup.timestamp
-              }
-            });
+      const changes = computeRestoreChanges(
+        currentRecords,
+        selectedBackup.records || [],
+        recordsToRestore,
+        isFullRestore,
+        {
+          zone: selectedBackup.zone,
+          keyId: keyForZone.id,
+          source: {
+            type: 'backup',
+            id: selectedBackup.id,
+            timestamp: selectedBackup.timestamp
           }
         }
-      });
-
-      filteredCurrentRecords.forEach(currentRecord => {
-        if (currentRecord.type === 'SOA') return;
-
-        const inSnapshot = filteredRecordsToRestore.find(r =>
-          r.name === currentRecord.name &&
-          r.type === currentRecord.type &&
-          isRecordEqual(currentRecord, r)
-        );
-
-        if (!inSnapshot) {
-          changes.push({
-            type: 'DELETE',
-            zone: selectedBackup.zone,
-            keyId: keyForZone.id,
-            record: currentRecord,
-            source: {
-              type: 'backup',
-              id: selectedBackup.id,
-              timestamp: selectedBackup.timestamp
-            }
-          });
-        }
-      });
+      );
 
       if (changes.length === 0) {
         showInfo('No changes needed - all selected records are already up to date');
@@ -940,7 +1001,7 @@ function Snapshots() {
               variant="contained"
               startIcon={<BackupIcon />}
               onClick={handleBackup}
-              disabled={loading || !selectedZone}
+              disabled={loading || !selectedZone || !selectedKeyId}
             >
               Create Snapshot
             </Button>
@@ -1478,7 +1539,9 @@ function Snapshots() {
             onClick={async () => {
               setCompareDialogOpen(false);
               setRecordsToRestore(selectedBackup.records);
-              await confirmRestore(selectedBackup.records);
+              // Full restore: make the zone match the snapshot exactly (adds,
+              // modifies, and drift deletions against the full snapshot).
+              await confirmRestore(selectedBackup.records, true);
             }}
             color="warning"
             variant="contained"
