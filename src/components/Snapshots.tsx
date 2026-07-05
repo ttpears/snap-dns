@@ -59,6 +59,7 @@ import {
   AutoMode as AutoModeIcon
 } from '@mui/icons-material';
 import { useConfig } from '../context/ConfigContext';
+import { useNotification } from '../context/NotificationContext';
 import { dnsService } from '../services/dnsService';
 import { backupService } from '../services/backupService';
 import { notificationService } from '../services/notificationService';
@@ -305,8 +306,9 @@ function Snapshots() {
   const { selectedKey } = useKey();
   const [selectedZone, setSelectedZone] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const { showSuccess, showError, showInfo } = useNotification();
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [backups, setBackups] = useState<any[]>([]);
   const [selectedBackup, setSelectedBackup] = useState<any>(null);
   const [loadingBackups, setLoadingBackups] = useState<boolean>(false);
@@ -382,7 +384,6 @@ function Snapshots() {
 
     setLoading(true);
     setError(null);
-    setSuccess(null);
 
     try {
       const keyConfig = backendKeys.find(key => key.id === selectedKeyId);
@@ -401,10 +402,10 @@ function Snapshots() {
 
       const backupList = await backupService.getBackups();
       setBackups(backupList);
-      setSuccess('Snapshot created successfully');
+      showSuccess('Snapshot created successfully');
     } catch (err) {
       console.error('Backup failed:', err);
-      setError(`Failed to create snapshot: ${(err as Error).message}`);
+      showError(`Failed to create snapshot: ${(err as Error).message}`);
     } finally {
       setLoading(false);
     }
@@ -412,12 +413,12 @@ function Snapshots() {
 
   const handleImportSnapshot = async () => {
     if (!importFile) {
-      setError('Please select a file to import');
+      setImportError('Please select a file to import');
       return;
     }
 
     setImporting(true);
-    setError(null);
+    setImportError(null);
 
     try {
       const fileContent = await importFile.text();
@@ -432,12 +433,12 @@ function Snapshots() {
       const backupList = await backupService.getBackups();
       setBackups(backupList);
 
-      setSuccess(`Snapshot imported successfully for zone ${snapshotData.zone}`);
+      showSuccess(`Snapshot imported successfully for zone ${snapshotData.zone}`);
       setImportDialogOpen(false);
       setImportFile(null);
     } catch (err) {
       console.error('Import failed:', err);
-      setError(`Failed to import snapshot: ${(err as Error).message}`);
+      showError(`Failed to import snapshot: ${(err as Error).message}`);
     } finally {
       setImporting(false);
     }
@@ -455,9 +456,9 @@ function Snapshots() {
       await backupService.deleteBackup(backupToDelete.zone, backupToDelete.id);
       const backupList = await backupService.getBackups();
       setBackups(backupList);
-      setSuccess('Snapshot deleted successfully');
+      showSuccess('Snapshot deleted successfully');
     } catch (error) {
-      setError(`Failed to delete snapshot: ${(error as Error).message}`);
+      showError(`Failed to delete snapshot: ${(error as Error).message}`);
       console.error('Delete backup error:', error);
     } finally {
       setDeleteDialogOpen(false);
@@ -481,7 +482,7 @@ function Snapshots() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      setError(`Failed to download snapshot: ${(error as Error).message}`);
+      showError(`Failed to download snapshot: ${(error as Error).message}`);
     }
   };
 
@@ -530,7 +531,7 @@ function Snapshots() {
       setRestoreDialogOpen(true);
     } catch (error) {
       console.error('Failed to load backup:', error);
-      setError(`Failed to load snapshot: ${(error as Error).message}`);
+      showError(`Failed to load snapshot: ${(error as Error).message}`);
     }
   };
 
@@ -552,7 +553,7 @@ function Snapshots() {
       setComparisonData(comparison);
     } catch (error) {
       console.error('Failed to load current zone records:', error);
-      setError(`Failed to load current zone records: ${(error as Error).message}`);
+      showError(`Failed to load current zone records: ${(error as Error).message}`);
     } finally {
       setLoadingComparison(false);
     }
@@ -820,7 +821,7 @@ function Snapshots() {
       });
 
       if (changes.length === 0) {
-        setSuccess('No changes needed - all selected records are already up to date');
+        showInfo('No changes needed - all selected records are already up to date');
         setRestoreDialogOpen(false);
         setRecordsToRestore([]);
         return;
@@ -842,10 +843,10 @@ function Snapshots() {
       setShowPendingDrawer(true);
       setRestoreDialogOpen(false);
       setRecordsToRestore([]);
-      setSuccess(`Restore queued: ${parts.join(', ')}`);
+      showSuccess(`Restore queued: ${parts.join(', ')}`);
     } catch (error) {
       console.error('Failed to restore records:', error);
-      setError('Failed to restore zone: ' + (error as Error).message);
+      showError('Failed to restore zone: ' + (error as Error).message);
     }
   };
 
@@ -1134,11 +1135,6 @@ function Snapshots() {
       {error && (
         <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
           {error}
-        </Alert>
-      )}
-      {success && (
-        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccess(null)}>
-          {success}
         </Alert>
       )}
 
@@ -1501,7 +1497,7 @@ function Snapshots() {
         onClose={() => {
           setImportDialogOpen(false);
           setImportFile(null);
-          setError(null);
+          setImportError(null);
         }}
         maxWidth="sm"
         fullWidth
@@ -1512,9 +1508,9 @@ function Snapshots() {
             Select a snapshot JSON file to import. The snapshot will be added to the list and can be restored later.
           </DialogContentText>
 
-          {error && (
+          {importError && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
+              {importError}
             </Alert>
           )}
 
@@ -1533,7 +1529,7 @@ function Snapshots() {
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
                   setImportFile(e.target.files[0]);
-                  setError(null);
+                  setImportError(null);
                 }
               }}
             />
@@ -1550,7 +1546,7 @@ function Snapshots() {
             onClick={() => {
               setImportDialogOpen(false);
               setImportFile(null);
-              setError(null);
+              setImportError(null);
             }}
             disabled={importing}
           >
