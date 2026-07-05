@@ -33,3 +33,14 @@ export const GENERIC_VALUE_TYPES = [
   'DS', 'DNSKEY', 'CDS', 'CDNSKEY', 'TLSA', 'SMIMEA', 'NAPTR', 'SVCB', 'HTTPS',
   'DNAME', 'LOC', 'CERT', 'URI', 'KX',
 ] as const;
+
+// Generic RDATA hint for RFC 3597 unknown TYPE#### records.
+export const RFC3597_VALUE_HINT =
+  '\\# <length> <hex> — RFC 3597 generic RDATA, e.g. \\# 4 0A000001 (\\# 0 for empty)';
+
+// Value-field hint lookup that also covers RFC 3597 unknown types, which
+// cannot be enumerated in VALUE_FIELD_HINTS.
+export function getValueFieldHint(type: string): string | undefined {
+  if (/^TYPE\d+$/.test(type)) return RFC3597_VALUE_HINT;
+  return VALUE_FIELD_HINTS[type];
+}

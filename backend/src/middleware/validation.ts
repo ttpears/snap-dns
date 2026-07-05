@@ -15,11 +15,23 @@ const RecordTypeSchema = z.enum([
 ]);
 
 /**
+ * RFC 3597 unknown-type token: TYPE1..TYPE65535 (e.g. TYPE65534). Values for
+ * these use the generic "\# <length> <hex>" form, enforced per record by
+ * validationService's unknown-type branch on every write path.
+ */
+const UnknownRecordTypeSchema = z.string()
+  .regex(/^TYPE\d{1,5}$/, 'Invalid record type')
+  .refine(v => {
+    const num = parseInt(v.slice(4), 10);
+    return num >= 1 && num <= 65535;
+  }, 'Unknown record type number must be between 1 and 65535');
+
+/**
  * DNS Record validation schema
  */
 export const DNSRecordSchema = z.object({
   name: z.string().min(1, 'Record name is required').max(255, 'Record name too long'),
-  type: RecordTypeSchema,
+  type: z.union([RecordTypeSchema, UnknownRecordTypeSchema]),
   value: z.union([
     z.string().min(1, 'Record value is required'),
     z.array(z.string()),

@@ -438,6 +438,21 @@ function ZoneEditor() {
     [sortedRecords, searchText, filterType]
   );
 
+  // Type-filter options: the RecordType enum plus any other types present in
+  // the loaded zone (e.g. RFC 3597 TYPE#### unknown types), so records the UI
+  // doesn't model are still filterable. The current selection is kept in the
+  // list even if a refresh removed its last record, so the Select never holds
+  // an out-of-range value.
+  const typeOptions = useMemo(() => {
+    const known = new Set<string>(recordTypes);
+    const extra = new Set<string>();
+    records.forEach(r => {
+      if (!known.has(r.type)) extra.add(r.type);
+    });
+    if (filterType !== 'ALL' && !known.has(filterType)) extra.add(filterType);
+    return [...recordTypes, ...[...extra].sort()];
+  }, [records, filterType]);
+
   // Drop selections that the current filter hides, so bulk actions only
   // ever operate on records the user can see.
   useEffect(() => {
@@ -633,7 +648,7 @@ function ZoneEditor() {
             SelectDisplayProps={{ id: 'record-type-filter' } as React.HTMLAttributes<HTMLDivElement>}
           >
             <MenuItem value="ALL">All Record Types</MenuItem>
-            {recordTypes.map(type => (
+            {typeOptions.map(type => (
               <MenuItem key={type} value={type}>{type}</MenuItem>
             ))}
           </Select>
