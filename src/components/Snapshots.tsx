@@ -926,6 +926,7 @@ function Snapshots() {
               m: 0,
               p: 1,
               backgroundColor: 'error.light',
+              color: 'error.contrastText',
               borderRadius: 1,
               fontSize: '0.875rem',
               whiteSpace: 'pre-wrap',
@@ -942,6 +943,7 @@ function Snapshots() {
               m: 0,
               p: 1,
               backgroundColor: 'success.light',
+              color: 'success.contrastText',
               borderRadius: 1,
               fontSize: '0.875rem',
               whiteSpace: 'pre-wrap',
@@ -1029,6 +1031,7 @@ function Snapshots() {
               placeholder="Search snapshots..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              inputProps={{ 'aria-label': 'Search snapshots' }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -1083,8 +1086,8 @@ function Snapshots() {
         </Grid>
 
         {loadingBackups ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }} role="status">
+            <CircularProgress aria-label="Loading" />
           </Box>
         ) : Object.entries(groupedBackups).length > 0 ? (
           Object.entries(groupedBackups).map(([date, dateBackups]) => (
@@ -1148,6 +1151,7 @@ function Snapshots() {
                             <Tooltip title="Download snapshot">
                               <IconButton
                                 size="small"
+                                aria-label="Download snapshot"
                                 onClick={() => handleDownloadBackup(backup)}
                               >
                                 <DownloadIcon />
@@ -1156,6 +1160,7 @@ function Snapshots() {
                             <Tooltip title="Compare with current zone">
                               <IconButton
                                 size="small"
+                                aria-label="Compare with current zone"
                                 onClick={() => handleCompareBackup(backup)}
                               >
                                 <CompareIcon />
@@ -1173,6 +1178,7 @@ function Snapshots() {
                             <Tooltip title="Delete snapshot">
                               <IconButton
                                 size="small"
+                                aria-label="Delete snapshot"
                                 onClick={() => handleDeleteBackup(backup)}
                                 color="error"
                               >
@@ -1311,8 +1317,8 @@ function Snapshots() {
         </DialogTitle>
         <DialogContent>
           {loadingComparison ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }} role="status">
+              <CircularProgress aria-label="Loading" />
             </Box>
           ) : comparisonData ? (
             <Box>
@@ -1358,6 +1364,8 @@ function Snapshots() {
                               <TableCell>
                                 <IconButton
                                   size="small"
+                                  aria-label={expandedRecords[`modified-${index}`] ? 'Collapse changed fields' : 'Expand changed fields'}
+                                  aria-expanded={Boolean(expandedRecords[`modified-${index}`])}
                                   onClick={() => setExpandedRecords(prev => ({
                                     ...prev,
                                     [`modified-${index}`]: !prev[`modified-${index}`]
@@ -1435,6 +1443,7 @@ function Snapshots() {
                                   m: 0,
                                   p: 1,
                                   backgroundColor: 'success.light',
+                                  color: 'success.contrastText',
                                   borderRadius: 1,
                                   fontSize: '0.875rem',
                                   whiteSpace: 'pre-wrap',
@@ -1490,6 +1499,7 @@ function Snapshots() {
                                   m: 0,
                                   p: 1,
                                   backgroundColor: 'error.light',
+                                  color: 'error.contrastText',
                                   borderRadius: 1,
                                   fontSize: '0.875rem',
                                   whiteSpace: 'pre-wrap',
