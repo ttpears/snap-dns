@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import { WebhookConfig, WebhookPayload } from '../types/webhook';
 import { webhookService } from '../services/webhookService';
 import { webhookLimiter } from '../middleware/rateLimiter';
+import { requireAuth, requireWriteAccess } from '../middleware/auth';
 
 const router = Router();
 
@@ -14,7 +15,10 @@ interface WebhookRequestBody {
   payload: WebhookPayload;
 }
 
-router.post('/notify', async (req: Request<Record<string, never>, any, WebhookRequestBody>, res: Response) => {
+// Auth + write access required: this route triggers an outbound fetch to a
+// caller-supplied URL, so it must never be reachable unauthenticated (SSRF).
+// requireWriteAccess mirrors zoneRoutes: viewers cannot send notifications.
+router.post('/notify', requireAuth, requireWriteAccess, async (req: Request<Record<string, never>, any, WebhookRequestBody>, res: Response) => {
   try {
     const { config, payload } = req.body;
 

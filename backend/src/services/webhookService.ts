@@ -2,6 +2,7 @@
 import { WebhookConfig, WebhookResponse } from '../types/webhook';
 import type { WebhookPayload as ImportedWebhookPayload } from '../types/webhook';
 import fetch from 'node-fetch';
+import { checkWebhookUrl } from './webhookUrlGuard';
 
 export type WebhookPayload = ImportedWebhookPayload;
 
@@ -250,6 +251,21 @@ class WebhookService {
 
   async send(config: WebhookConfig, payload: WebhookPayload): Promise<WebhookResponse> {
     try {
+      // SSRF guard: applied here (not only on the route) so the webhook-config
+      // test path is covered too. Blocked targets never reach fetch().
+      const urlCheck = checkWebhookUrl(config.url);
+      if (!urlCheck.allowed) {
+        console.warn(`Blocked webhook request to disallowed URL: ${urlCheck.reason}`);
+        return {
+          success: false,
+          error: 'Webhook URL is not allowed',
+          details: urlCheck.reason,
+        };
+      }
+      if (urlCheck.warning) {
+        console.warn(`Webhook request to private target allowed: ${urlCheck.warning}`);
+      }
+
       const formattedPayload = this.formatPayload(config.provider, payload);
 
       // Webhook URLs embed secret tokens (Slack/Discord/Teams/Mattermost) - never log them.
