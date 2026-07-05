@@ -6,6 +6,7 @@ import path from 'path';
 import session from 'express-session';
 import FileStore from 'session-file-store';
 import { requestLogger } from './middleware/logging';
+import { getAllowedOrigins, isOriginAllowed } from './middleware/corsOrigin';
 import { generalApiLimiter } from './middleware/rateLimiter';
 import { userService } from './services/userService';
 import { tsigKeyService } from './services/tsigKeyService';
@@ -51,24 +52,21 @@ const sessionStore = new SessionFileStore({
   retries: 0
 });
 
-// CORS configuration
+// CORS configuration: production uses ALLOWED_ORIGINS exclusively;
+// development/test use the known dev origins plus ALLOWED_ORIGINS.
+const allowedOrigins = getAllowedOrigins(NODE_ENV, process.env.ALLOWED_ORIGINS);
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // In test/development, allow all origins
-    if (NODE_ENV === 'test' || NODE_ENV === 'development') {
+    if (isOriginAllowed(origin, allowedOrigins)) {
       callback(null, true);
       return;
     }
-
-    // Production: strict CORS
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
-
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
+    if (NODE_ENV === 'production') {
       console.warn(`Rejected CORS request from origin: ${origin}`);
-      callback(new Error(`CORS not allowed for origin: ${origin}`));
+    } else {
+      console.warn(`CORS: rejected ${NODE_ENV}-mode request from origin ${origin}; allowed origins are [${allowedOrigins.join(', ')}] - set ALLOWED_ORIGINS to add yours`);
     }
+    callback(new Error(`CORS not allowed for origin: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
