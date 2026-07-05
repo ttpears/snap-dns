@@ -31,6 +31,15 @@ export enum AuditEventType {
   RECORD_UPDATED = 'dns.record.updated',
   ZONE_QUERIED = 'dns.zone.queried',
 
+  // Snapshot (server-side zone backup) lifecycle
+  SNAPSHOT_CREATED = 'snapshot.created',
+  SNAPSHOT_DELETED = 'snapshot.deleted',
+
+  // Server-side configuration changes
+  WEBHOOK_CONFIG_UPDATED = 'config.webhook.updated',
+  WEBHOOK_CONFIG_DELETED = 'config.webhook.deleted',
+  SSO_CONFIG_UPDATED = 'config.sso.updated',
+
   // Security events
   UNAUTHORIZED_ACCESS = 'security.unauthorized',
   VALIDATION_FAILURE = 'security.validation_failure',

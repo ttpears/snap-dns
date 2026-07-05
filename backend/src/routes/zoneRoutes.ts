@@ -436,11 +436,13 @@ router.patch(
     // Use atomic update operation
     const result = await dnsService.updateRecord(zone, oldRecord, newRecord, keyConfig);
 
-    // Log successful DNS operation
+    // Log successful DNS operation. Pass the new record (not a {old,new}
+    // wrapper) so the audit entry carries the record name/type and a correct
+    // valueLength, consistent with the add/delete entries.
     await auditService.logDNSOperation(
       'update',
       zone,
-      { old: oldRecord, new: newRecord },
+      newRecord,
       user.userId,
       user.username,
       true
@@ -573,7 +575,9 @@ router.post(
     // failed (which would prompt a confusing re-apply).
     try {
       for (const change of changes) {
-        const record = change.op === 'update' ? { old: change.oldRecord, new: change.newRecord } : change.record;
+        // For updates, audit the new record so the entry carries name/type/
+        // valueLength (a {old,new} wrapper would log valueLength:0 with no name).
+        const record = change.op === 'update' ? change.newRecord : change.record;
         await auditService.logDNSOperation(change.op, zone, record, user.userId, user.username, true);
       }
     } catch (auditErr) {

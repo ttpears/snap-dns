@@ -5,6 +5,7 @@ import { AuthenticatedRequest, UserRole } from '../types/auth';
 import { tsigKeyService, TSIGKeyCreate } from '../services/tsigKeyService';
 import { keyManagementLimiter } from '../middleware/rateLimiter';
 import { validateTSIGKeyCreate, validateTSIGKeyUpdate } from '../middleware/validation';
+import { auditService, AuditEventType } from '../services/auditService';
 
 const router = Router();
 
@@ -59,6 +60,17 @@ router.post('/', requireAuth, requireWriteAccess, validateTSIGKeyCreate, async (
     }
 
     const key = await tsigKeyService.createKey(user.userId, keyData);
+
+    // Audit key creation. Never log the key value/secret - only identifying metadata.
+    await auditService.log(AuditEventType.KEY_CREATED, {
+      userId: user.userId,
+      username: user.username,
+      success: true,
+      details: {
+        keyId: key.id,
+        name: key.name,
+      },
+    });
 
     res.status(201).json({
       success: true,
@@ -140,6 +152,17 @@ router.put('/:keyId', requireAuth, requireWriteAccess, validateTSIGKeyUpdate, as
     const updates: Partial<TSIGKeyCreate> = req.body;
     const key = await tsigKeyService.updateKey(keyId, updates);
 
+    // Audit key update. Never log the key value/secret - only identifying metadata.
+    await auditService.log(AuditEventType.KEY_UPDATED, {
+      userId: user.userId,
+      username: user.username,
+      success: true,
+      details: {
+        keyId: key.id,
+        name: key.name,
+      },
+    });
+
     res.json({
       success: true,
       key,
@@ -168,9 +191,21 @@ router.put('/:keyId', requireAuth, requireWriteAccess, validateTSIGKeyUpdate, as
  */
 router.delete('/:keyId', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthenticatedRequest;
+    const user = authReq.user!;
     const { keyId } = req.params;
 
     await tsigKeyService.deleteKey(keyId);
+
+    // Audit key deletion.
+    await auditService.log(AuditEventType.KEY_DELETED, {
+      userId: user.userId,
+      username: user.username,
+      success: true,
+      details: {
+        keyId,
+      },
+    });
 
     res.json({
       success: true,

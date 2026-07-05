@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth, requireWriteAccess } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/auth';
 import { backupService } from '../services/backupService';
+import { auditService, AuditEventType } from '../services/auditService';
 
 const router = Router();
 
@@ -141,6 +142,20 @@ router.post('/zone/:zone', requireAuth, requireWriteAccess, async (req: Request,
       description,
     });
 
+    // Audit the snapshot lifecycle. Record counts/metadata only - never record values.
+    await auditService.log(AuditEventType.SNAPSHOT_CREATED, {
+      userId: user.userId,
+      username: user.username,
+      success: true,
+      details: {
+        zone,
+        snapshotId: backup.id,
+        type: backup.type,
+        description: backup.description,
+        recordCount: Array.isArray(records) ? records.length : 0,
+      },
+    });
+
     res.status(201).json({
       success: true,
       backup,
@@ -165,6 +180,17 @@ router.delete('/zone/:zone/:backupId', requireAuth, async (req: Request, res: Re
     const { zone, backupId } = req.params;
 
     await backupService.deleteBackup(zone, backupId, user.userId, user.role);
+
+    // Audit the snapshot deletion.
+    await auditService.log(AuditEventType.SNAPSHOT_DELETED, {
+      userId: user.userId,
+      username: user.username,
+      success: true,
+      details: {
+        zone,
+        snapshotId: backupId,
+      },
+    });
 
     res.json({
       success: true,
