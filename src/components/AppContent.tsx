@@ -1,29 +1,17 @@
 // src/components/AppContent.tsx
-import React, { useEffect, useRef } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './Layout';
 import ZoneEditor from './ZoneEditor';
 import Settings from './Settings';
 import Snapshots from './Snapshots';
-import { useKey } from '../context/KeyContext';
 
+// Navigation is always user-initiated. An earlier auto-redirect ("jump to
+// /zones when a zone first becomes selected on /settings") misfired whenever
+// the zone passed through null — key switches on the Settings page and
+// localStorage restores after a refresh both bounced the user out of
+// Settings — so it was removed rather than patched.
 function AppContent() {
-  const { selectedZone } = useKey();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const prevZoneRef = useRef<string | null>(selectedZone);
-
-  // Take the user to the zone editor only at the moment a zone first becomes
-  // selected while they are on the settings page. Later navigation and
-  // zone-to-zone switches are never overridden.
-  useEffect(() => {
-    const zoneJustSelected = !prevZoneRef.current && Boolean(selectedZone);
-    prevZoneRef.current = selectedZone;
-    if (zoneJustSelected && location.pathname === '/settings') {
-      navigate('/zones');
-    }
-  }, [selectedZone, navigate, location.pathname]);
-
   return (
     <Layout>
       <Routes>
