@@ -36,7 +36,6 @@ import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import AddDNSRecord from './AddDNSRecord';
 import { usePendingChanges } from '../context/PendingChangesContext';
-import { backupService } from '../services/backupService';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import UndoIcon from '@mui/icons-material/Undo';
@@ -151,11 +150,8 @@ function ZoneEditor() {
   const [records, setRecords] = useState<DNSRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState<boolean>(false);
-  const [filter, setFilter] = useState<string>('');
   const [page, setPage] = useState<number>(0);
   const [rowsPerPage, setRowsPerPage] = useState<number>(config.rowsPerPage || 10);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [searchText, setSearchText] = useState<string>('');
   const [filterType, setFilterType] = useState<string>('ALL');
   const [selectedRecords, setSelectedRecords] = useState<DNSRecord[]>([]);
@@ -164,7 +160,6 @@ function ZoneEditor() {
   const [multilineRecord, setMultilineRecord] = useState<DNSRecord | null>(null);
   const [changeHistory, setChangeHistory] = useState<any[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
-  const [showAddRecord, setShowAddRecord] = useState<boolean>(false);
   const [addRecordDialogOpen, setAddRecordDialogOpen] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -308,14 +303,6 @@ function ZoneEditor() {
     }
   };
 
-  const formatRecordValue = (record: DNSRecord): string => {
-    if (record.type === 'SOA') {
-      const soa = record.value as any;
-      return `${soa.mname} ${soa.rname} ${soa.serial} ${soa.refresh} ${soa.retry} ${soa.expire} ${soa.minimum}`;
-    }
-    return record.value as string;
-  };
-
   const isMultilineRecord = (record: DNSRecord | null): boolean => {
     if (!record) return false;
 
@@ -335,7 +322,7 @@ function ZoneEditor() {
   };
 
   const sortRecords = (records: DNSRecord[]): DNSRecord[] => {
-    return records.sort((a, b) => {
+    return [...records].sort((a, b) => {
       let aValue: any = a[orderBy];
       let bValue: any = b[orderBy];
 
@@ -362,6 +349,12 @@ function ZoneEditor() {
     });
   };
 
+  // A changed search/filter can strand the user on a now-empty page and
+  // leave hidden records selected (which a bulk delete would still act on).
+  useEffect(() => {
+    setPage(0);
+  }, [searchText, filterType]);
+
   const filteredRecords = useMemo(() => {
     const filtered = records.filter(record => {
       const searchLower = searchText.toLowerCase();
@@ -379,6 +372,15 @@ function ZoneEditor() {
 
     return sortRecords(filtered);
   }, [records, searchText, filterType, order, orderBy]);
+
+  // Drop selections that the current filter hides, so bulk actions only
+  // ever operate on records the user can see.
+  useEffect(() => {
+    setSelectedRecords(prev => {
+      const visible = prev.filter(r => filteredRecords.includes(r));
+      return visible.length === prev.length ? prev : visible;
+    });
+  }, [filteredRecords]);
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < changeHistory.length - 1;

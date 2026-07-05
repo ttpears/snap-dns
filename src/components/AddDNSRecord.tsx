@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { useKey } from '../context/KeyContext';
-import { dnsService } from '../services/dnsService';
 import { useConfig } from '../context/ConfigContext';
 import { DNSValidationService } from '../services/dnsValidationService';
 import { DNSRecordFormatter } from '../services/dnsRecordFormatter';
@@ -255,7 +254,7 @@ type ErrorState = string | { severity?: string; message: string; details?: any }
 
 function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
   const { selectedKey, selectedZone } = useKey();
-  const { addPendingChange, setShowPendingDrawer, pendingChanges } = usePendingChanges();
+  const { addPendingChange, pendingChanges } = usePendingChanges();
   const { config } = useConfig();
   const [record, setRecord] = useState<Record<string, any>>({
     name: '',
