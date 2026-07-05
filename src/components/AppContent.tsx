@@ -1,49 +1,37 @@
 // src/components/AppContent.tsx
 import React, { useEffect, useRef } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Layout from './Layout';
-import AddDNSRecord from './AddDNSRecord';
 import ZoneEditor from './ZoneEditor';
 import Settings from './Settings';
 import Snapshots from './Snapshots';
 import { useKey } from '../context/KeyContext';
 
 function AppContent() {
-  const { selectedKey, selectedZone } = useKey();
+  const { selectedZone } = useKey();
   const navigate = useNavigate();
   const location = useLocation();
-  const isManualNavigation = useRef(false);
+  const prevZoneRef = useRef<string | null>(selectedZone);
 
-  // Auto-navigate to zone editor when a zone is selected from settings
+  // Take the user to the zone editor only at the moment a zone first becomes
+  // selected while they are on the settings page. Later navigation and
+  // zone-to-zone switches are never overridden.
   useEffect(() => {
-    if (selectedZone && selectedKey && location.pathname === '/settings' && !isManualNavigation.current) {
+    const zoneJustSelected = !prevZoneRef.current && Boolean(selectedZone);
+    prevZoneRef.current = selectedZone;
+    if (zoneJustSelected && location.pathname === '/settings') {
       navigate('/zones');
     }
-    isManualNavigation.current = false;
-  }, [selectedZone, selectedKey, navigate, location.pathname]);
-
-  // Track manual navigations to prevent auto-redirect from overriding them
-  useEffect(() => {
-    const handleBeforeNavigate = () => {
-      isManualNavigation.current = true;
-    };
-
-    document.addEventListener('click', handleBeforeNavigate, true);
-    document.addEventListener('keydown', handleBeforeNavigate, true);
-
-    return () => {
-      document.removeEventListener('click', handleBeforeNavigate, true);
-      document.removeEventListener('keydown', handleBeforeNavigate, true);
-    };
-  }, []);
+  }, [selectedZone, navigate, location.pathname]);
 
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<AddDNSRecord />} />
+        <Route path="/" element={<Navigate to="/zones" replace />} />
         <Route path="/zones" element={<ZoneEditor />} />
         <Route path="/snapshots" element={<Snapshots />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="/zones" replace />} />
       </Routes>
     </Layout>
   );
