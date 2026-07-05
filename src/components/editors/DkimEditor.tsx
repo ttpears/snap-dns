@@ -103,8 +103,10 @@ export default function DkimEditor({ value, onChange }: DkimEditorProps) {
         </Grid>
         <Grid item xs={12} md={4}>
           <FormControl fullWidth size="small">
-            <InputLabel>Algorithm (k)</InputLabel>
+            <InputLabel id="dkim-k-label">Algorithm (k)</InputLabel>
             <Select
+              labelId="dkim-k-label"
+              id="dkim-k"
               value={tags.k}
               onChange={(e) => update({ ...tags, k: e.target.value })}
               label="Algorithm (k)"

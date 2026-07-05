@@ -121,8 +121,10 @@ export default function SpfEditor({ value, onChange }: SpfEditorProps) {
         <Grid container spacing={1} key={index} sx={{ mb: 1, alignItems: 'center' }}>
           <Grid item xs={2}>
             <FormControl fullWidth size="small">
-              <InputLabel>Qualifier</InputLabel>
+              <InputLabel id={`spf-qualifier-label-${index}`}>Qualifier</InputLabel>
               <Select
+                labelId={`spf-qualifier-label-${index}`}
+                id={`spf-qualifier-${index}`}
                 value={mech.qualifier}
                 onChange={(e) => updateMechanism(index, 'qualifier', e.target.value)}
                 label="Qualifier"
@@ -135,8 +137,10 @@ export default function SpfEditor({ value, onChange }: SpfEditorProps) {
           </Grid>
           <Grid item xs={3}>
             <FormControl fullWidth size="small">
-              <InputLabel>Type</InputLabel>
+              <InputLabel id={`spf-type-label-${index}`}>Type</InputLabel>
               <Select
+                labelId={`spf-type-label-${index}`}
+                id={`spf-type-${index}`}
                 value={mech.type}
                 onChange={(e) => updateMechanism(index, 'type', e.target.value)}
                 label="Type"
@@ -164,13 +168,13 @@ export default function SpfEditor({ value, onChange }: SpfEditorProps) {
             )}
           </Grid>
           <Grid item xs={2} sx={{ display: 'flex' }}>
-            <IconButton size="small" onClick={() => moveMechanism(index, -1)} disabled={index === 0}>
+            <IconButton size="small" aria-label="Move mechanism up" onClick={() => moveMechanism(index, -1)} disabled={index === 0}>
               <ArrowUpwardIcon fontSize="small" />
             </IconButton>
-            <IconButton size="small" onClick={() => moveMechanism(index, 1)} disabled={index === mechanisms.length - 1}>
+            <IconButton size="small" aria-label="Move mechanism down" onClick={() => moveMechanism(index, 1)} disabled={index === mechanisms.length - 1}>
               <ArrowDownwardIcon fontSize="small" />
             </IconButton>
-            <IconButton size="small" onClick={() => removeMechanism(index)} color="error">
+            <IconButton size="small" aria-label="Delete mechanism" onClick={() => removeMechanism(index)} color="error">
               <DeleteIcon fontSize="small" />
             </IconButton>
           </Grid>
