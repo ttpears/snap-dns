@@ -4,11 +4,14 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { resolveTsigEncryptionKey } from '../config/secrets';
 
 const KEYS_FILE = path.join(process.cwd(), 'data', 'tsig-keys.json');
 
-// Encryption key for storing TSIG keys (should be from env in production)
-const ENCRYPTION_KEY = process.env.TSIG_ENCRYPTION_KEY || 'change-this-32-char-key-in-prod!';
+// Encryption key for TSIG keys at rest. Fail fast in production if unset (see
+// config/secrets.ts): a forgotten key means the stored secrets are effectively
+// unprotected by a source-public default.
+const ENCRYPTION_KEY = resolveTsigEncryptionKey();
 const ALGORITHM = 'aes-256-cbc';
 
 export interface TSIGKey {
