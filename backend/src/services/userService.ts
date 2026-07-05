@@ -48,6 +48,12 @@ class UserService {
           if (!user.allowedZones) {
             user.allowedZones = [];
           }
+          // Migrate: older records predate mustChangePassword. Default them to
+          // false so an existing deployment is not locked out on upgrade; only
+          // freshly seeded/created accounts carry the forced-change flag.
+          if (user.mustChangePassword === undefined) {
+            user.mustChangePassword = false;
+          }
           this.users.set(user.id, user);
         });
 
@@ -91,6 +97,9 @@ class UserService {
         createdAt: new Date(),
         allowedKeyIds: [],
         allowedZones: [],
+        // Force the operator to rotate the well-known default password before
+        // the account can perform any mutating action.
+        mustChangePassword: true,
       };
 
       this.users.set(user.id, user);
@@ -135,7 +144,9 @@ class UserService {
     // Hash password
     const passwordHash = await bcrypt.hash(userData.password, SALT_ROUNDS);
 
-    // Create user
+    // Create user. The initial password is chosen by the administrator, so we
+    // force the new user to change it on first use before they can mutate
+    // anything (self-service change-password clears the flag).
     const user: User = {
       id: this.generateUserId(),
       username: userData.username,
@@ -145,6 +156,7 @@ class UserService {
       createdAt: new Date(),
       allowedKeyIds: userData.allowedKeyIds || [],
       allowedZones: userData.allowedZones || [],
+      mustChangePassword: true,
     };
 
     this.users.set(user.id, user);
@@ -199,9 +211,16 @@ class UserService {
   }
 
   /**
-   * Update user password
+   * Update user password.
+   *
+   * `mustChangePassword` controls the resulting forced-change flag:
+   * - false (default): the user chose this password themselves (self-service
+   *   change-password or admin resetting their OWN password), so the flag is
+   *   cleared and the account is unblocked.
+   * - true: an administrator set the password for another user, so the target
+   *   is forced to rotate it on first use.
    */
-  async updatePassword(userId: string, newPassword: string): Promise<void> {
+  async updatePassword(userId: string, newPassword: string, mustChangePassword = false): Promise<void> {
     if (!this.initialized) await this.initialize();
 
     const user = this.users.get(userId);
@@ -210,6 +229,7 @@ class UserService {
     }
 
     user.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    user.mustChangePassword = mustChangePassword;
     await this.saveUsers();
   }
 

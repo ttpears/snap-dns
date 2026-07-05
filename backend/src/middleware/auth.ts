@@ -42,13 +42,16 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    // Identity comes from the session; privileges come from the database.
+    // Identity comes from the session; privileges (and the forced
+    // password-change flag) come from the database so a cleared flag takes
+    // effect on the very next request.
     authReq.user = {
       userId: req.session.userId,
       username: req.session.username || dbUser.username,
       role: dbUser.role,
       allowedKeyIds: dbUser.allowedKeyIds,
       allowedZones: dbUser.allowedZones || [],
+      mustChangePassword: dbUser.mustChangePassword ?? false,
     };
 
     next();
@@ -88,6 +91,41 @@ export function requireRole(...roles: UserRole[]) {
 
     next();
   };
+}
+
+/**
+ * Middleware that blocks mutating actions while the account still owes a
+ * forced password change (e.g. the seeded default admin, or a user whose
+ * password was set by an administrator).
+ *
+ * Must run AFTER requireAuth, which loads the authoritative mustChangePassword
+ * flag from the user store onto req.user. Login, logout, session, and
+ * change-password are intentionally NOT wrapped with this guard so the user
+ * can still authenticate and clear the flag. SSO users have no local password
+ * and never carry the flag, so their requests pass through untouched.
+ */
+export function requirePasswordCurrent(req: Request, res: Response, next: NextFunction): void {
+  const authReq = req as AuthenticatedRequest;
+
+  if (!authReq.user) {
+    res.status(401).json({
+      success: false,
+      error: 'Authentication required',
+      code: 'NOT_AUTHENTICATED'
+    });
+    return;
+  }
+
+  if (authReq.user.mustChangePassword) {
+    res.status(403).json({
+      success: false,
+      error: 'You must change your password before performing this action',
+      code: 'PASSWORD_CHANGE_REQUIRED'
+    });
+    return;
+  }
+
+  next();
 }
 
 /**

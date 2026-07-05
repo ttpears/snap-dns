@@ -1,6 +1,6 @@
 // backend/src/routes/webhookConfigRoutes.ts
 import { Router, Request, Response } from 'express';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth, requireRole, requirePasswordCurrent } from '../middleware/auth';
 import { AuthenticatedRequest, UserRole } from '../types/auth';
 import { webhookConfigService } from '../services/webhookConfigService';
 import { auditService, AuditEventType } from '../services/auditService';
@@ -50,7 +50,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
  * PUT /api/webhook-config
  * Update webhook configuration for the authenticated user
  */
-router.put('/', requireAuth, async (req: Request, res: Response) => {
+router.put('/', requireAuth, requirePasswordCurrent, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;
@@ -119,7 +119,7 @@ router.put('/', requireAuth, async (req: Request, res: Response) => {
  * DELETE /api/webhook-config
  * Delete webhook configuration for the authenticated user
  */
-router.delete('/', requireAuth, async (req: Request, res: Response) => {
+router.delete('/', requireAuth, requirePasswordCurrent, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;

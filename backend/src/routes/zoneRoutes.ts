@@ -2,7 +2,7 @@
 import { Router, Request, Response } from 'express';
 import { ZoneConfig } from '../types/dns';
 import { dnsService } from '../services';
-import { requireAuth, requireWriteAccess } from '../middleware/auth';
+import { requireAuth, requireWriteAccess, requirePasswordCurrent } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/auth';
 import { tsigKeyService } from '../services/tsigKeyService';
 import { userService } from '../services/userService';
@@ -132,6 +132,7 @@ router.post(
   '/:zone/records',
   dnsModifyLimiter,
   requireAuth,
+  requirePasswordCurrent,
   requireWriteAccess,
   validateAddRecord,
   async (req: Request, res: Response) => {
@@ -240,6 +241,7 @@ router.delete(
   '/:zone/records',
   dnsModifyLimiter,
   requireAuth,
+  requirePasswordCurrent,
   requireWriteAccess,
   validateDeleteRecord,
   async (req: Request, res: Response) => {
@@ -358,6 +360,7 @@ router.patch(
   '/:zone/records',
   dnsModifyLimiter,
   requireAuth,
+  requirePasswordCurrent,
   requireWriteAccess,
   validateUpdateRecord,
   async (req: Request, res: Response) => {
@@ -497,6 +500,7 @@ router.post(
   '/:zone/records/batch',
   dnsModifyLimiter,
   requireAuth,
+  requirePasswordCurrent,
   requireWriteAccess,
   validateBatch,
   async (req: Request, res: Response) => {
