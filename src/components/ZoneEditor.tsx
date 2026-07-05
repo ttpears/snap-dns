@@ -655,18 +655,19 @@ function ZoneEditor() {
         </FormControl>
 
         <Tooltip title="Refresh Records">
-          <IconButton
-            onClick={loadZoneRecords}
-            disabled={!selectedZone || !selectedKey || refreshing}
-            size="small"
-            sx={{ alignSelf: 'center' }}
-          >
-            {refreshing ? (
-              <CircularProgress size={20} />
-            ) : (
-              <RefreshIcon />
-            )}
-          </IconButton>
+          <span style={{ alignSelf: 'center' }}>
+            <IconButton
+              onClick={loadZoneRecords}
+              disabled={!selectedZone || !selectedKey || refreshing}
+              size="small"
+            >
+              {refreshing ? (
+                <CircularProgress size={20} />
+              ) : (
+                <RefreshIcon />
+              )}
+            </IconButton>
+          </span>
         </Tooltip>
       </Box>
 
