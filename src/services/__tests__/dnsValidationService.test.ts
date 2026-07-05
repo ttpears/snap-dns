@@ -60,6 +60,128 @@ describe('DNSValidationService (G5 RFC edge cases)', () => {
     });
   });
 
+  describe('DNSKEY / CDNSKEY structured validation', () => {
+    const key = 'mdsswUyr3DPW132mOi8V9xESWE8jTo0dxCjjnopKl+GqJxpVXckHAeF+KkxLbxILfDLUT0rAK9iUzy1L53eKGQ==';
+
+    it('accepts a well-formed KSK DNSKEY with no warnings', () => {
+      const res = validate({ type: 'DNSKEY', value: `257 3 13 ${key}` });
+      expect(res.isValid).toBe(true);
+      expect(res.warnings).toHaveLength(0);
+    });
+
+    it('tolerates whitespace groups inside the base64 key', () => {
+      expect(validate({ type: 'DNSKEY', value: '256 3 8 AwEAAa4h f1 Qz' }).isValid).toBe(true);
+    });
+
+    it('rejects a protocol other than 3 (RFC 4034 §2.1.2)', () => {
+      const res = validate({ type: 'DNSKEY', value: `257 2 13 ${key}` });
+      expect(res.isValid).toBe(false);
+      expect(res.errors.some(e => /protocol must be 3/.test(e))).toBe(true);
+    });
+
+    it('rejects a non-base64 or missing public key', () => {
+      expect(validate({ type: 'DNSKEY', value: '257 3 13 not*base64!' }).isValid).toBe(false);
+      expect(validate({ type: 'DNSKEY', value: '257 3 13' }).isValid).toBe(false);
+    });
+
+    it('rejects out-of-range flags and algorithm', () => {
+      expect(validate({ type: 'DNSKEY', value: `70000 3 13 ${key}` }).isValid).toBe(false);
+      expect(validate({ type: 'DNSKEY', value: `257 3 999 ${key}` }).isValid).toBe(false);
+    });
+
+    it('warns on unusual-but-legal flags values', () => {
+      const res = validate({ type: 'DNSKEY', value: `1 3 13 ${key}` });
+      expect(res.isValid).toBe(true);
+      expect(res.warnings.some(w => /flags is normally 0, 256/.test(w))).toBe(true);
+    });
+
+    it('validates CDNSKEY identically', () => {
+      expect(validate({ type: 'CDNSKEY', value: `257 3 13 ${key}` }).isValid).toBe(true);
+      expect(validate({ type: 'CDNSKEY', value: `257 1 13 ${key}` }).isValid).toBe(false);
+    });
+  });
+
+  describe('NAPTR structured validation', () => {
+    it('accepts a classic terminal SIP NAPTR with no warnings', () => {
+      const res = validate({ type: 'NAPTR', value: '100 10 "S" "SIP+D2U" "" _sip._udp.example.com.' });
+      expect(res.isValid).toBe(true);
+      expect(res.warnings).toHaveLength(0);
+    });
+
+    it('accepts a regexp NAPTR with "." replacement', () => {
+      const res = validate({ type: 'NAPTR', value: '100 50 "u" "E2U+sip" "!^.*$!sip:info@example.com!" .' });
+      expect(res.isValid).toBe(true);
+      expect(res.warnings).toHaveLength(0);
+    });
+
+    it('rejects unquoted flags/service/regexp fields', () => {
+      expect(validate({ type: 'NAPTR', value: '100 10 S SIP+D2U "" .' }).isValid).toBe(false);
+    });
+
+    it('rejects non-numeric order and out-of-range preference', () => {
+      expect(validate({ type: 'NAPTR', value: 'abc 10 "S" "" "" .' }).isValid).toBe(false);
+      expect(validate({ type: 'NAPTR', value: '100 70000 "S" "" "" .' }).isValid).toBe(false);
+    });
+
+    it('rejects a non-alphanumeric flags charset and a bad replacement', () => {
+      expect(validate({ type: 'NAPTR', value: '100 10 "S!" "" "" .' }).isValid).toBe(false);
+      expect(validate({ type: 'NAPTR', value: '100 10 "S" "" "" bad..host' }).isValid).toBe(false);
+    });
+
+    it('warns (but accepts) when both regexp and replacement are set', () => {
+      const res = validate({ type: 'NAPTR', value: '100 10 "u" "E2U+sip" "!a!b!" example.com.' });
+      expect(res.isValid).toBe(true);
+      expect(res.warnings.some(w => /mutually exclusive/.test(w))).toBe(true);
+    });
+  });
+
+  describe('SVCB / HTTPS structured validation', () => {
+    it('accepts AliasMode and ServiceMode records', () => {
+      expect(validate({ type: 'SVCB', value: '0 svc.example.com.' }).isValid).toBe(true);
+      const res = validate({ type: 'HTTPS', value: '1 . alpn=h2,h3 port=443' });
+      expect(res.isValid).toBe(true);
+      expect(res.warnings).toHaveLength(0);
+    });
+
+    it('rejects a bad priority or target', () => {
+      expect(validate({ type: 'SVCB', value: '70000 .' }).isValid).toBe(false);
+      expect(validate({ type: 'SVCB', value: '1 bad..host' }).isValid).toBe(false);
+    });
+
+    it('rejects malformed param values (port, ipv4hint, ipv6hint)', () => {
+      expect(validate({ type: 'HTTPS', value: '1 . port=abc' }).isValid).toBe(false);
+      expect(validate({ type: 'HTTPS', value: '1 . ipv4hint=1.2.3.999' }).isValid).toBe(false);
+      expect(validate({ type: 'HTTPS', value: '1 . ipv6hint=zzzz' }).isValid).toBe(false);
+    });
+
+    it('accepts well-formed address hints (reusing IPv4/IPv6 validators)', () => {
+      expect(
+        validate({ type: 'HTTPS', value: '1 . ipv4hint=192.0.2.1,192.0.2.2 ipv6hint=2001:db8::1' }).isValid
+      ).toBe(true);
+    });
+
+    it('rejects a value on no-default-alpn and duplicate keys', () => {
+      expect(validate({ type: 'SVCB', value: '1 . no-default-alpn=x' }).isValid).toBe(false);
+      expect(validate({ type: 'SVCB', value: '1 . port=443 port=444' }).isValid).toBe(false);
+    });
+
+    it('allows keyNNNNN params and warns on other unknown keys', () => {
+      const generic = validate({ type: 'SVCB', value: '1 . key65280=foo' });
+      expect(generic.isValid).toBe(true);
+      expect(generic.warnings).toHaveLength(0);
+      expect(validate({ type: 'SVCB', value: '1 . key99999=x' }).isValid).toBe(false);
+      const unknown = validate({ type: 'SVCB', value: '1 . fancy=1' });
+      expect(unknown.isValid).toBe(true);
+      expect(unknown.warnings.some(w => /Unrecognised SVCB SvcParam/.test(w))).toBe(true);
+    });
+
+    it('warns when AliasMode (priority 0) carries params (RFC 9460 §2.4.2)', () => {
+      const res = validate({ type: 'HTTPS', value: '0 . alpn=h2' });
+      expect(res.isValid).toBe(true);
+      expect(res.warnings.some(w => /AliasMode/.test(w))).toBe(true);
+    });
+  });
+
   describe('NS records', () => {
     it('accepts a valid nameserver and rejects a malformed one', () => {
       expect(validate({ type: 'NS', value: 'ns1.example.com.' }).isValid).toBe(true);
