@@ -74,9 +74,3 @@ export interface LoginCredentials {
   username: string;
   password: string;
 }
-
-// Permission check result
-export interface PermissionCheck {
-  allowed: boolean;
-  reason?: string;
-}

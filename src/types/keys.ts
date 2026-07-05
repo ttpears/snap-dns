@@ -1,0 +1,10 @@
+// src/types/keys.ts
+export interface Key {
+  id: string;
+  name: string;
+  algorithm: string;
+  secret: string;
+  server: string;
+  zones: string[];
+  created?: number;
+}
