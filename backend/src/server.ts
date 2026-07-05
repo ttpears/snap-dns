@@ -42,22 +42,43 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 dotenv.config(); // Load default .env
 dotenv.config({ path: path.resolve(__dirname, `../.env.${NODE_ENV}`) }); // Load environment specific .env
 
-// Create express app
-const app: Express = express();
-app.set('trust proxy', 1);
+/**
+ * Options for {@link createApp}. Tests inject an in-memory `sessionStore` so
+ * they never touch the on-disk file store; production leaves it undefined and
+ * the default file store (under `data/sessions`) is used.
+ */
+export interface CreateAppOptions {
+  sessionStore?: session.Store;
+}
 
-// Session store configuration
-const SessionFileStore = FileStore(session);
-const sessionStore = new SessionFileStore({
-  path: path.join(process.cwd(), 'data', 'sessions'),
-  ttl: 86400, // 24 hours
-  retries: 0
-});
+/**
+ * Build the fully-configured Express app WITHOUT binding a port. Extracted from
+ * the listen path so integration tests can import the real middleware chain and
+ * drive it with supertest. `server.ts` run as an entrypoint still constructs the
+ * same app and calls `app.listen()` (see the bottom of this file), so runtime
+ * behavior is unchanged.
+ */
+export function createApp(options: CreateAppOptions = {}): Express {
+  // Create express app
+  const app: Express = express();
+  app.set('trust proxy', 1);
 
-// CORS configuration: production uses ALLOWED_ORIGINS exclusively;
-// development/test use the known dev origins plus ALLOWED_ORIGINS.
-const allowedOrigins = getAllowedOrigins(NODE_ENV, process.env.ALLOWED_ORIGINS);
-const corsOptions = {
+  // Session store configuration. Default to the on-disk file store; tests pass
+  // an in-memory store via options to stay isolated and repeatable.
+  let sessionStore = options.sessionStore;
+  if (!sessionStore) {
+    const SessionFileStore = FileStore(session);
+    sessionStore = new SessionFileStore({
+      path: path.join(process.cwd(), 'data', 'sessions'),
+      ttl: 86400, // 24 hours
+      retries: 0
+    });
+  }
+
+  // CORS configuration: production uses ALLOWED_ORIGINS exclusively;
+  // development/test use the known dev origins plus ALLOWED_ORIGINS.
+  const allowedOrigins = getAllowedOrigins(NODE_ENV, process.env.ALLOWED_ORIGINS);
+  const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     if (isOriginAllowed(origin, allowedOrigins)) {
       callback(null, true);
@@ -169,15 +190,21 @@ app.get('/', (req: Request, res: Response) => {
 // Error handling
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   console.error('Error:', err);
-  res.status(500).json({ 
+  res.status(500).json({
     error: 'Internal Server Error',
     details: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
 });
 
+  return app;
+}
+
 // Start server
 const startServer = async () => {
   try {
+    // Build the production app (default on-disk session store).
+    const app = createApp();
+
     // Initialize services
     console.log('Initializing user service...');
     await userService.initialize();
@@ -217,10 +244,13 @@ const startServer = async () => {
   }
 };
 
-// Start the server
-startServer().catch(error => {
-  console.error('Failed to start server:', error);
-  process.exit(1);
-});
+// Start the server only when this module is executed directly (node dist/server.js).
+// When imported (e.g. by integration tests via createApp), do NOT bind a port.
+if (require.main === module) {
+  startServer().catch(error => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  });
+}
 
-export default app;
+export default createApp;
