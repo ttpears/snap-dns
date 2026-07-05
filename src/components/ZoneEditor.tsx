@@ -778,7 +778,7 @@ function ZoneEditor() {
                       Value
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                     <TableSortLabel
                       active={orderBy === 'ttl'}
                       direction={orderBy === 'ttl' ? order : 'asc'}
@@ -848,7 +848,7 @@ function ZoneEditor() {
                           )}
                         </Box>
                       </TableCell>
-                      <TableCell>{record.ttl}</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{record.ttl}</TableCell>
                       <TableCell align="right">
                         <Box component="span" sx={{ display: 'inline-flex', gap: 1 }}>
                           {record.type !== 'SOA' && (
