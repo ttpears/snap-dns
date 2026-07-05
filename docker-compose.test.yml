@@ -59,6 +59,11 @@ services:
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3001}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001,http://10.100.0.30:3001}
       - SESSION_SECRET=test-secret-do-not-use-in-production
+      # Test stack runs over plain HTTP: a Secure cookie is never sent by the
+      # browser, so opt out explicitly. Security controls default to ON.
+      - COOKIE_SECURE=false
+      # Don't throttle the test/integration stack.
+      - RATE_LIMIT_ENABLED=false
       - TEMP_DIR=/tmp/snap-dns
       - MAX_ZONE_RECORDS=10000
       - ZONE_RECORDS_WARNING_THRESHOLD=5000

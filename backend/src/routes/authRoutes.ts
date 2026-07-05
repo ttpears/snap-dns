@@ -1,6 +1,7 @@
 // backend/src/routes/authRoutes.ts
 import { Router, Request, Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
+import { isRateLimitEnabled } from '../config/securityToggles';
 import { userService } from '../services/userService';
 import { auditService, AuditEventType } from '../services/auditService';
 import { requireAuth, requireRole } from '../middleware/auth';
@@ -22,9 +23,10 @@ const loginLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting in test/dev environments
+  // Skip only when rate limiting is explicitly disabled (default: enabled).
+  // Brute-force protection stays ON regardless of NODE_ENV.
   skip: (_req) => {
-    return process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
+    return !isRateLimitEnabled();
   }
 });
 
