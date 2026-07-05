@@ -79,12 +79,11 @@ router.put('/', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, r
     await ssoConfigService.updateConfig(updates);
 
     // Log configuration change
-    await auditService.log(AuditEventType.USER_UPDATED, {
+    await auditService.log(AuditEventType.SSO_CONFIG_UPDATED, {
       userId: req.session.userId,
       username: req.session.username,
       success: true,
       details: {
-        action: 'sso_config_updated',
         enabled: updates.enabled,
         provider: updates.provider,
       },

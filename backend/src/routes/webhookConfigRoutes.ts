@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { AuthenticatedRequest, UserRole } from '../types/auth';
 import { webhookConfigService } from '../services/webhookConfigService';
+import { auditService, AuditEventType } from '../services/auditService';
 
 const router = Router();
 
@@ -85,6 +86,19 @@ router.put('/', requireAuth, async (req: Request, res: Response) => {
       enabled !== undefined ? enabled : true
     );
 
+    // Audit the config change. Never log the webhook URL (may embed a secret
+    // token); record only the provider, enabled state, and whether a URL is set.
+    await auditService.log(AuditEventType.WEBHOOK_CONFIG_UPDATED, {
+      userId: user.userId,
+      username: user.username,
+      success: true,
+      details: {
+        provider: config.webhookProvider,
+        enabled: config.enabled,
+        hasUrl: Boolean(config.webhookUrl),
+      },
+    });
+
     // Don't send userId back to client
     const { userId: _userId, ...configWithoutUserId } = config;
 
@@ -111,6 +125,14 @@ router.delete('/', requireAuth, async (req: Request, res: Response) => {
     const user = authReq.user!;
 
     await webhookConfigService.deleteConfig(user.userId);
+
+    // Audit the config deletion.
+    await auditService.log(AuditEventType.WEBHOOK_CONFIG_DELETED, {
+      userId: user.userId,
+      username: user.username,
+      success: true,
+      details: {},
+    });
 
     res.json({
       success: true,
