@@ -5,6 +5,7 @@ import PendingChangesDrawer from '../PendingChangesDrawer';
 import { PendingChangesProvider, usePendingChanges } from '../../context/PendingChangesContext';
 import { NewPendingChange } from '../../types/dns';
 import { dnsService } from '../../services/dnsService';
+import { notificationService } from '../../services/notificationService';
 
 jest.mock('../../services/dnsService', () => ({
   dnsService: {
@@ -115,6 +116,10 @@ describe('PendingChangesDrawer apply flow', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(applyBatch).toHaveBeenCalledTimes(2);
     expect(mockShowSuccess).toHaveBeenCalledWith('Successfully applied 2 changes to 2 zones');
+    expect(notificationService.sendNotification).toHaveBeenCalledWith(
+      'Multiple Zones',
+      expect.objectContaining({ zones: ['alpha.test', 'beta.test'] })
+    );
     expect(screen.getByText('Pending Changes (0)')).toBeInTheDocument();
   });
 
@@ -146,6 +151,11 @@ describe('PendingChangesDrawer apply flow', () => {
 
     expect(mockShowError).toHaveBeenCalledWith('Failed to apply changes to 1 zone');
     expect(mockShowSuccess).toHaveBeenCalledWith('Applied 1 change to 1 zone');
+    // Single-zone applies name the zone in the webhook notification.
+    expect(notificationService.sendNotification).toHaveBeenCalledWith(
+      'alpha.test',
+      expect.objectContaining({ zones: ['alpha.test'] })
+    );
     expect(onClose).not.toHaveBeenCalled();
   });
 

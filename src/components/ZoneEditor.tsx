@@ -44,7 +44,6 @@ import RedoIcon from '@mui/icons-material/Redo';
 import RecordEditor from './RecordEditor';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useKey } from '../context/KeyContext';
-import PendingChangesDrawer from './PendingChangesDrawer';
 import { DNSRecord, RecordType } from '../types/dns';
 
 // Sourced from the RecordType enum so the type filter stays in sync with the
@@ -140,9 +139,6 @@ function ZoneEditor() {
     pendingChanges,
     setPendingChanges,
     addPendingChange,
-    removePendingChange,
-    clearPendingChanges,
-    showPendingDrawer,
     setShowPendingDrawer
   } = usePendingChanges();
 
@@ -205,7 +201,11 @@ function ZoneEditor() {
         selectedKey &&
         availableZones.includes(selectedZone) &&
         !isInitializing) {
-      loadZoneRecords();
+      // Table-level loading indicator for the initial fetch of a zone;
+      // manual refreshes and post-apply refreshes keep the table visible
+      // and use their own indicators instead.
+      setLoading(true);
+      loadZoneRecords().finally(() => setLoading(false));
     }
   }, [selectedZone, selectedKey, availableZones, isInitializing, loadZoneRecords]);
 
@@ -813,12 +813,6 @@ function ZoneEditor() {
         </Button>
       </Box>
 
-      <PendingChangesDrawer
-        open={showPendingDrawer}
-        onClose={() => setShowPendingDrawer(false)}
-        removePendingChange={removePendingChange}
-        clearPendingChanges={clearPendingChanges}
-      />
     </Paper>
   );
 }

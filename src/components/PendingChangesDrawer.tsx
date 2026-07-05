@@ -201,7 +201,7 @@ function PendingChangesDrawer({
     // Send a single notification for all successful changes
     if (appliedChanges.length > 0) {
       try {
-        await notificationService.sendNotification('Multiple Zones', {
+        await notificationService.sendNotification(appliedZones.length === 1 ? appliedZones[0] : 'Multiple Zones', {
           changes: appliedChanges,
           zones: appliedZones,
           timestamp: Date.now(),
