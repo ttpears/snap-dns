@@ -43,6 +43,7 @@ import RedoIcon from '@mui/icons-material/Redo';
 import RecordEditor from './RecordEditor';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useKey } from '../context/KeyContext';
+import { useNotification } from '../context/NotificationContext';
 import { Link as RouterLink } from 'react-router-dom';
 import { DNSRecord, RecordType } from '../types/dns';
 
@@ -149,6 +150,8 @@ function ZoneEditor() {
     availableKeys = []
   } = useKey();
 
+  const { showError } = useNotification();
+
   const [records, setRecords] = useState<DNSRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -248,7 +251,7 @@ function ZoneEditor() {
       setEditDialogOpen(false);
       setEditingRecord(null);
     } catch (error) {
-      setError(`Failed to delete record: ${(error as Error).message}`);
+      showError(`Failed to delete record: ${(error as Error).message}`);
     }
   };
 
@@ -275,7 +278,7 @@ function ZoneEditor() {
       setEditDialogOpen(false);
       setEditingRecord(null);
     } catch (error) {
-      setError(`Failed to delete records: ${(error as Error).message}`);
+      showError(`Failed to delete records: ${(error as Error).message}`);
     }
   };
 
@@ -301,7 +304,7 @@ function ZoneEditor() {
       setCopyDialogOpen(false);
       setCopyingRecord(null);
     } catch (error) {
-      setError((error as Error).message);
+      showError(`Failed to update record: ${(error as Error).message}`);
     }
   };
 
@@ -442,7 +445,7 @@ function ZoneEditor() {
             await loadZoneRecords();
           } catch (error) {
             console.error('Error refreshing zone records:', error);
-            setError('Failed to refresh zone records after changes');
+            showError('Failed to refresh zone records after changes');
           } finally {
             setIsRefreshing(false);
           }
@@ -452,7 +455,7 @@ function ZoneEditor() {
 
     window.addEventListener('dnsChangesApplied', handleChangesApplied);
     return () => window.removeEventListener('dnsChangesApplied', handleChangesApplied);
-  }, [selectedZone, loadZoneRecords]);
+  }, [selectedZone, loadZoneRecords, showError]);
 
   const handleCopyRecord = (record: DNSRecord) => {
     setCopyingRecord({

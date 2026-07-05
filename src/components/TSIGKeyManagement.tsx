@@ -31,13 +31,15 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import KeyIcon from '@mui/icons-material/Key';
 import { tsigKeyService, TSIGKey, TSIGKeyCreate } from '../services/tsigKeyService';
 import { useAuth } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 
 export default function TSIGKeyManagement() {
   const { user } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const [keys, setKeys] = useState<TSIGKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [formError, setFormError] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<TSIGKey | null>(null);
@@ -93,11 +95,13 @@ export default function TSIGKeyManagement() {
         zones: [],
       });
     }
+    setFormError('');
     setDialogOpen(true);
   };
 
   const handleCloseDialog = () => {
     setDialogOpen(false);
+    setFormError('');
     setEditingKey(null);
     setFormData({
       name: '',
@@ -130,17 +134,16 @@ export default function TSIGKeyManagement() {
 
   const handleSubmit = async () => {
     try {
-      setError('');
-      setSuccess('');
+      setFormError('');
 
       // Validate required fields
       if (!formData.name || !formData.server || !formData.keyName || !formData.algorithm) {
-        setError('Please fill in all required fields');
+        setFormError('Please fill in all required fields');
         return;
       }
 
       if (!editingKey && !formData.keyValue) {
-        setError('Key value is required when creating a new key');
+        setFormError('Key value is required when creating a new key');
         return;
       }
 
@@ -158,17 +161,17 @@ export default function TSIGKeyManagement() {
           updates.keyValue = formData.keyValue;
         }
         await tsigKeyService.updateKey(editingKey.id, updates);
-        setSuccess('Key updated successfully');
+        showSuccess('Key updated successfully');
       } else {
         // Create new key
         await tsigKeyService.createKey(formData);
-        setSuccess('Key created successfully');
+        showSuccess('Key created successfully');
       }
 
       handleCloseDialog();
       loadKeys();
     } catch (err: any) {
-      setError(err.message || 'Failed to save key');
+      showError(err.message || 'Failed to save key');
     }
   };
 
@@ -176,15 +179,13 @@ export default function TSIGKeyManagement() {
     if (!keyToDelete) return;
 
     try {
-      setError('');
-      setSuccess('');
       await tsigKeyService.deleteKey(keyToDelete.id);
-      setSuccess('Key deleted successfully');
+      showSuccess('Key deleted successfully');
       setDeleteDialogOpen(false);
       setKeyToDelete(null);
       loadKeys();
     } catch (err: any) {
-      setError(err.message || 'Failed to delete key');
+      showError(err.message || 'Failed to delete key');
     }
   };
 
@@ -220,12 +221,6 @@ export default function TSIGKeyManagement() {
       {error && (
         <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>
           {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 2 }}>
-          {success}
         </Alert>
       )}
 
@@ -311,6 +306,11 @@ export default function TSIGKeyManagement() {
           {editingKey ? 'Edit TSIG Key' : 'Add TSIG Key'}
         </DialogTitle>
         <DialogContent>
+          {formError && (
+            <Alert severity="error" onClose={() => setFormError('')} sx={{ mt: 1 }}>
+              {formError}
+            </Alert>
+          )}
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
               label="Key Name (Display Name)"
