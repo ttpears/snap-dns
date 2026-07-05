@@ -36,7 +36,6 @@ import { useConfig } from '../context/ConfigContext';
 import { dnsService } from '../services/dnsService';
 import AddDNSRecord from './AddDNSRecord';
 import { usePendingChanges } from '../context/PendingChangesContext';
-import { backupService } from '../services/backupService';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import UndoIcon from '@mui/icons-material/Undo';
@@ -44,7 +43,6 @@ import RedoIcon from '@mui/icons-material/Redo';
 import RecordEditor from './RecordEditor';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useKey } from '../context/KeyContext';
-import PendingChangesDrawer from './PendingChangesDrawer';
 import { DNSRecord, RecordType } from '../types/dns';
 
 // Sourced from the RecordType enum so the type filter stays in sync with the
@@ -140,9 +138,6 @@ function ZoneEditor() {
     pendingChanges,
     setPendingChanges,
     addPendingChange,
-    removePendingChange,
-    clearPendingChanges,
-    showPendingDrawer,
     setShowPendingDrawer
   } = usePendingChanges();
 
@@ -155,11 +150,8 @@ function ZoneEditor() {
   const [records, setRecords] = useState<DNSRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState<boolean>(false);
-  const [filter, setFilter] = useState<string>('');
   const [page, setPage] = useState<number>(0);
   const [rowsPerPage, setRowsPerPage] = useState<number>(config.rowsPerPage || 10);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [searchText, setSearchText] = useState<string>('');
   const [filterType, setFilterType] = useState<string>('ALL');
   const [selectedRecords, setSelectedRecords] = useState<DNSRecord[]>([]);
@@ -168,7 +160,6 @@ function ZoneEditor() {
   const [multilineRecord, setMultilineRecord] = useState<DNSRecord | null>(null);
   const [changeHistory, setChangeHistory] = useState<any[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
-  const [showAddRecord, setShowAddRecord] = useState<boolean>(false);
   const [addRecordDialogOpen, setAddRecordDialogOpen] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -205,13 +196,19 @@ function ZoneEditor() {
         selectedKey &&
         availableZones.includes(selectedZone) &&
         !isInitializing) {
-      loadZoneRecords();
+      // Table-level loading indicator for the initial fetch of a zone;
+      // manual refreshes and post-apply refreshes keep the table visible
+      // and use their own indicators instead.
+      setLoading(true);
+      loadZoneRecords().finally(() => setLoading(false));
     }
   }, [selectedZone, selectedKey, availableZones, isInitializing, loadZoneRecords]);
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      setSelectedRecords(records);
+      // Select only what the current search/filter shows — selecting hidden
+      // records would let a bulk delete queue changes the user never saw.
+      setSelectedRecords(filteredRecords);
     } else {
       setSelectedRecords([]);
     }
@@ -306,14 +303,6 @@ function ZoneEditor() {
     }
   };
 
-  const formatRecordValue = (record: DNSRecord): string => {
-    if (record.type === 'SOA') {
-      const soa = record.value as any;
-      return `${soa.mname} ${soa.rname} ${soa.serial} ${soa.refresh} ${soa.retry} ${soa.expire} ${soa.minimum}`;
-    }
-    return record.value as string;
-  };
-
   const isMultilineRecord = (record: DNSRecord | null): boolean => {
     if (!record) return false;
 
@@ -333,7 +322,7 @@ function ZoneEditor() {
   };
 
   const sortRecords = (records: DNSRecord[]): DNSRecord[] => {
-    return records.sort((a, b) => {
+    return [...records].sort((a, b) => {
       let aValue: any = a[orderBy];
       let bValue: any = b[orderBy];
 
@@ -360,6 +349,12 @@ function ZoneEditor() {
     });
   };
 
+  // A changed search/filter can strand the user on a now-empty page and
+  // leave hidden records selected (which a bulk delete would still act on).
+  useEffect(() => {
+    setPage(0);
+  }, [searchText, filterType]);
+
   const filteredRecords = useMemo(() => {
     const filtered = records.filter(record => {
       const searchLower = searchText.toLowerCase();
@@ -377,6 +372,15 @@ function ZoneEditor() {
 
     return sortRecords(filtered);
   }, [records, searchText, filterType, order, orderBy]);
+
+  // Drop selections that the current filter hides, so bulk actions only
+  // ever operate on records the user can see.
+  useEffect(() => {
+    setSelectedRecords(prev => {
+      const visible = prev.filter(r => filteredRecords.includes(r));
+      return visible.length === prev.length ? prev : visible;
+    });
+  }, [filteredRecords]);
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < changeHistory.length - 1;
@@ -481,6 +485,17 @@ function ZoneEditor() {
 
   return (
     <Paper sx={{ p: 3 }}>
+      {selectedZone && selectedKey && (
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+          <Typography variant="h5" component="h1">{selectedZone}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            key: {selectedKey.name} · server: {selectedKey.server}
+            {records.length > 0 && (filteredRecords.length === records.length
+              ? ` · ${records.length} record${records.length !== 1 ? 's' : ''}`
+              : ` · showing ${filteredRecords.length} of ${records.length} records`)}
+          </Typography>
+        </Box>
+      )}
       <Box sx={{
         display: 'flex',
         gap: 2,
@@ -613,8 +628,8 @@ function ZoneEditor() {
                   <TableCell padding="checkbox">
                     <Checkbox
                       size="small"
-                      indeterminate={selectedRecords.length > 0 && selectedRecords.length < records.length}
-                      checked={records.length > 0 && selectedRecords.length === records.length}
+                      indeterminate={selectedRecords.length > 0 && selectedRecords.length < filteredRecords.length}
+                      checked={filteredRecords.length > 0 && selectedRecords.length === filteredRecords.length}
                       onChange={handleSelectAllClick}
                     />
                   </TableCell>
@@ -658,6 +673,15 @@ function ZoneEditor() {
                 </TableRow>
               </TableHead>
               <TableBody>
+                {filteredRecords.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                      {records.length === 0
+                        ? 'No records in this zone yet. Use "Add Record" to create one.'
+                        : 'No records match the current search or type filter.'}
+                    </TableCell>
+                  </TableRow>
+                )}
                 {filteredRecords
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((record, index) => (
@@ -813,12 +837,6 @@ function ZoneEditor() {
         </Button>
       </Box>
 
-      <PendingChangesDrawer
-        open={showPendingDrawer}
-        onClose={() => setShowPendingDrawer(false)}
-        removePendingChange={removePendingChange}
-        clearPendingChanges={clearPendingChanges}
-      />
     </Paper>
   );
 }

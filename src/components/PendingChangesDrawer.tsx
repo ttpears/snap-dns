@@ -15,7 +15,6 @@ import {
   Stack,
   Collapse,
   Snackbar,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -201,7 +200,7 @@ function PendingChangesDrawer({
     // Send a single notification for all successful changes
     if (appliedChanges.length > 0) {
       try {
-        await notificationService.sendNotification('Multiple Zones', {
+        await notificationService.sendNotification(appliedZones.length === 1 ? appliedZones[0] : 'Multiple Zones', {
           changes: appliedChanges,
           zones: appliedZones,
           timestamp: Date.now(),
@@ -307,7 +306,9 @@ function PendingChangesDrawer({
     <Drawer
       anchor="right"
       open={open}
-      onClose={onClose}
+      // Keep the drawer up while an apply is in flight so its progress and
+      // any per-zone failures stay visible.
+      onClose={applying ? undefined : onClose}
       PaperProps={{
         sx: { width: 400 }
       }}
@@ -317,7 +318,7 @@ function PendingChangesDrawer({
           <Typography variant="h6">
             Pending Changes ({pendingChanges.length})
           </Typography>
-          <IconButton onClick={onClose} size="small" aria-label="Close">
+          <IconButton onClick={onClose} size="small" aria-label="Close" disabled={applying}>
             <CloseIcon />
           </IconButton>
         </Box>

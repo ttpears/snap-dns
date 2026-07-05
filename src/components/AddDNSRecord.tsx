@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import { usePendingChanges } from '../context/PendingChangesContext';
 import { useKey } from '../context/KeyContext';
-import { dnsService } from '../services/dnsService';
 import { useConfig } from '../context/ConfigContext';
 import { DNSValidationService } from '../services/dnsValidationService';
 import { DNSRecordFormatter } from '../services/dnsRecordFormatter';
@@ -58,8 +57,10 @@ const RECORD_TYPES: Record<string, RecordTypeDefinition> = {
     fields: [{
       name: 'value',
       label: 'IPv6 Address',
-      helperText: 'Enter a valid IPv6 address',
-      validate: (value) => /^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i.test(value),
+      helperText: 'Enter a valid IPv6 address (compressed forms like 2001:db8::1 are fine)',
+      // Delegate to the shared validator so compressed (::) and
+      // embedded-IPv4 forms aren't falsely rejected.
+      validate: (value) => DNSValidationService.isValidIPv6(value),
       required: true
     }]
   },
@@ -253,7 +254,7 @@ type ErrorState = string | { severity?: string; message: string; details?: any }
 
 function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
   const { selectedKey, selectedZone } = useKey();
-  const { addPendingChange, setShowPendingDrawer, pendingChanges } = usePendingChanges();
+  const { addPendingChange, pendingChanges } = usePendingChanges();
   const { config } = useConfig();
   const [record, setRecord] = useState<Record<string, any>>({
     name: '',
