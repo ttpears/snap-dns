@@ -2,6 +2,54 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!--
+      Content-Security-Policy (delivered via meta because the app is served as
+      static files by `serve -s build`, which does not set response headers).
+      Directive rationale:
+        default-src 'self'    - only same-origin resources by default.
+        script-src  'self'    - all JS is external, same-origin bundles
+                                (/static/js/*, /ws-fix.js); the CRA build emits
+                                no inline <script>, so no hash/unsafe-inline.
+        style-src   'self' 'unsafe-inline'
+                              - MUI/emotion inject runtime <style> tags and inline
+                                style attributes; without 'unsafe-inline' the UI
+                                renders unstyled. The bundled CSS is same-origin.
+        img-src     'self' data:  - favicons/logos are same-origin; data: covers
+                                MUI's inline data-URI images.
+        font-src    'self'    - fonts are system/self-hosted (no external CDN).
+        connect-src 'self' http: https:
+                              - intentionally broad. SEE CAVEAT BELOW.
+        object-src  'none'    - no plugins/embeds.
+        base-uri    'self'    - lock down <base> to prevent URL hijacking.
+        frame-ancestors 'none'
+                              - anti-clickjacking. NOTE: browsers IGNORE
+                                frame-ancestors (and X-Frame-Options) when set via
+                                <meta>; it only takes effect as an HTTP header.
+                                For real frame protection, also send this header
+                                from your reverse proxy (Traefik/nginx).
+
+      CAVEAT - connect-src is intentionally broad:
+        The frontend talks to the backend via fetch(credentials:'include'). The
+        API base comes from REACT_APP_API_URL at build time, defaulting to
+        {page-protocol}//{page-host}:3002 - a DIFFERENT origin than this page
+        (see src/utils/apiUrl.ts). In the default compose setup the frontend is
+        on :3001 and the backend on :3002 (or a separate FQDN_API behind
+        Traefik), so the API is cross-origin. This origin is deployment-specific
+        and a static meta CSP cannot pin it universally (the container entrypoint
+        only rewrites the .js bundle, and only when REACT_APP_API_URL is set).
+        Rather than ship a CSP that blocks the default backend, connect-src is
+        left broad (http: https:) so any backend topology works out of the box.
+        connect-src is the exfiltration-prevention directive; the XSS-EXECUTION
+        defenses that actually matter - script-src 'self', object-src 'none',
+        base-uri 'self', style-src 'self' 'unsafe-inline' - stay strict, so this
+        still delivers real XSS defense-in-depth. Operators who want exfiltration
+        hardening should tighten connect-src to their exact API origin, e.g.:
+          connect-src 'self' https://api.example.com;
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' http: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
