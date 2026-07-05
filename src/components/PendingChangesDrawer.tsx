@@ -310,7 +310,7 @@ function PendingChangesDrawer({
       // any per-zone failures stay visible.
       onClose={applying ? undefined : onClose}
       PaperProps={{
-        sx: { width: 400 }
+        sx: { width: { xs: '100vw', sm: 400 } }
       }}
     >
       <Box sx={{ p: 2 }}>

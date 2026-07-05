@@ -5,7 +5,12 @@ import { Link, useLocation } from 'react-router-dom';
 import { Add, Settings, Storage, Backup } from '@mui/icons-material';
 import KeySelector from './KeySelector';
 
-function Navigation() {
+interface NavigationProps {
+  // Called after a menu item is clicked, e.g. to close the mobile drawer.
+  onNavigate?: () => void;
+}
+
+function Navigation({ onNavigate }: NavigationProps) {
   const location = useLocation();
 
   const menuItems = [
@@ -38,6 +43,7 @@ function Navigation() {
             key={item.path}
             component={Link}
             to={item.path}
+            onClick={onNavigate}
             selected={location.pathname === item.path}
             sx={{
               color: 'text.primary',

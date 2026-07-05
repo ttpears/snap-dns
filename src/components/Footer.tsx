@@ -8,13 +8,18 @@ function Footer() {
     <Box
       component="footer"
       sx={{
-        position: 'fixed',
+        // Fixed bottom-right on desktop; static below the page content on
+        // small screens so it never overlaps scrolled content.
+        position: { xs: 'static', md: 'fixed' },
         bottom: 0,
         right: 0,
         padding: 2,
         display: 'flex',
         alignItems: 'center',
         gap: 1,
+        width: 'fit-content',
+        ml: { xs: 'auto', md: 0 },
+        mt: { xs: 3, md: 0 },
         backgroundColor: 'background.paper',
         borderTopLeftRadius: 8,
         boxShadow: 1,

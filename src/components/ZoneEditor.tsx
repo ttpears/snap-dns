@@ -498,6 +498,9 @@ function ZoneEditor() {
       )}
       <Box sx={{
         display: 'flex',
+        // Wrap on small screens so the search, type filter, and refresh
+        // controls stack instead of forcing horizontal overflow.
+        flexWrap: { xs: 'wrap', md: 'nowrap' },
         gap: 2,
         mb: 3,
         p: 2,
