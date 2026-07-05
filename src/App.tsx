@@ -4,7 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { ConfigProvider } from './context/ConfigContext';
 import { PendingChangesProvider } from './context/PendingChangesContext';
-import { ZoneProvider } from './context/ZoneContext';
 import { KeyProvider } from './context/KeyContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -37,13 +36,11 @@ function AuthenticatedApp() {
   return (
     <ConfigProvider>
       <KeyProvider>
-        <ZoneProvider>
-          <PendingChangesProvider>
-            <BrowserRouter>
-              <AppContent />
-            </BrowserRouter>
-          </PendingChangesProvider>
-        </ZoneProvider>
+        <PendingChangesProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </PendingChangesProvider>
       </KeyProvider>
     </ConfigProvider>
   );

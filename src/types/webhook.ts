@@ -1,14 +1,6 @@
 // src/types/webhook.ts
 export type WebhookProvider = 'mattermost' | 'slack' | 'discord' | 'teams' | 'generic' | null | undefined;
 
-export interface WebhookConfig {
-  provider: Exclude<WebhookProvider, null | undefined>;
-  url: string;
-  name?: string;
-  icon?: string;
-  channel?: string;
-}
-
 export interface WebhookPayload {
   text: string;
   title?: string;
@@ -23,9 +15,3 @@ export interface WebhookPayload {
   icon_url?: string;
   channel?: string;
 }
-
-export interface WebhookResponse {
-  success: boolean;
-  error?: string;
-  details?: string;
-} 

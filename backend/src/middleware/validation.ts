@@ -124,23 +124,6 @@ export const ChangePasswordSchema = z.object({
 });
 
 /**
- * Webhook schemas
- */
-export const WebhookConfigSchema = z.object({
-  provider: z.enum(['slack', 'discord', 'teams', 'mattermost', 'generic']),
-  url: z.string().url('Invalid webhook URL'),
-  enabled: z.boolean().optional().default(true)
-});
-
-export const WebhookPayloadSchema = z.object({
-  zone: z.string(),
-  action: z.enum(['add', 'delete', 'update']),
-  record: z.any(), // Can be complex, validated elsewhere
-  username: z.string().optional(),
-  timestamp: z.string().optional()
-});
-
-/**
  * Generic validation middleware factory
  * Creates a middleware that validates request body against a Zod schema
  */
@@ -182,78 +165,7 @@ export function validateRequest<T>(schema: z.ZodType<T>) {
   };
 }
 
-/**
- * Validate request params (e.g., zone names, IDs)
- */
-export function validateParams<T>(schema: z.ZodType<T>) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const validated = schema.parse(req.params);
-      req.params = validated as any;
-      next();
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const errors = error.issues.map((err: any) => ({
-          field: err.path.join('.'),
-          message: err.message,
-          code: err.code
-        }));
-
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid request parameters',
-          code: 'VALIDATION_ERROR',
-          details: { errors }
-        });
-      }
-
-      console.error('Parameter validation error:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Internal validation error',
-        code: 'SERVER_ERROR'
-      });
-    }
-  };
-}
-
-/**
- * Validate query parameters
- */
-export function validateQuery<T>(schema: z.ZodType<T>) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const validated = schema.parse(req.query);
-      req.query = validated as any;
-      next();
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const errors = error.issues.map((err: any) => ({
-          field: err.path.join('.'),
-          message: err.message,
-          code: err.code
-        }));
-
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid query parameters',
-          code: 'VALIDATION_ERROR',
-          details: { errors }
-        });
-      }
-
-      console.error('Query validation error:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Internal validation error',
-        code: 'SERVER_ERROR'
-      });
-    }
-  };
-}
-
 // Export commonly used validators
-export const validateDNSRecord = validateRequest(DNSRecordSchema);
 export const validateAddRecord = validateRequest(AddRecordRequestSchema);
 export const validateDeleteRecord = validateRequest(DeleteRecordRequestSchema);
 export const validateUpdateRecord = validateRequest(UpdateRecordRequestSchema);
@@ -263,4 +175,3 @@ export const validateTSIGKeyUpdate = validateRequest(TSIGKeyUpdateSchema);
 export const validateLogin = validateRequest(LoginRequestSchema);
 export const validateUserCreate = validateRequest(UserCreateSchema);
 export const validateChangePassword = validateRequest(ChangePasswordSchema);
-export const validateWebhookConfig = validateRequest(WebhookConfigSchema);

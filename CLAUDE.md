@@ -98,7 +98,6 @@ The frontend is a React application with Material-UI components and follows a co
 - `AuthProvider` - Session authentication state (user, role, login/logout); unauthenticated users see `Login` instead of the app
 - `ConfigProvider` - Application settings (localStorage-backed for TTL/display settings and a legacy `keys` field; webhook config is loaded from and saved to the backend `/api/webhook-config`)
 - `KeyProvider` - TSIG keys fetched from the backend (`/api/tsig-keys`); only the current key/zone selection is persisted to localStorage
-- `ZoneProvider` - Mounted in App.tsx but has no consumers (`useZone` is unused — effectively dead code)
 - `PendingChangesProvider` - Tracks queued DNS record changes (flat list; undo/redo lives in ZoneEditor, not the context)
 
 **Key Services (src/services/):**
@@ -130,7 +129,7 @@ The backend is an Express TypeScript application that executes DNS operations:
 - Initializes user, TSIG key, backup, webhook-config, and SSO-config services at startup; all persist JSON under `data/`
 
 **Middleware (backend/src/middleware/):**
-- `auth.ts` - `requireAuth`, `requireRole`, `requireKeyAccess`, `requireWriteAccess` (roles: admin/editor/viewer)
+- `auth.ts` - `requireAuth`, `requireRole`, `requireWriteAccess` (roles: admin/editor/viewer)
 - `rateLimiter.ts` - express-rate-limit instances (general API, DNS query/modify, key management, webhook, login)
 - `validation.ts` - Zod request schemas (DNS records, login, change-password, TSIG key create/update)
 
@@ -234,7 +233,7 @@ The application handles special formatting for:
 
 2. ~~**TSIG Keys Transmitted in HTTP Headers**~~ — **RESOLVED**: the frontend sends no key material (src/services/dnsService.ts `createHeaders()`); requests authenticate with the session cookie and the backend resolves the zone's TSIG key from its encrypted server-side store (backend/src/routes/zoneRoutes.ts). Vestigial `x-dns-*` entries remain in the CORS `allowedHeaders` list (backend/src/server.ts) and could be removed.
 
-3. ~~**No Authentication/Authorization System**~~ — **RESOLVED**: session-based auth (`express-session`, file store, httpOnly cookies) with local bcrypt users and Microsoft Entra ID SSO; roles (admin/editor/viewer) enforced via `requireAuth`/`requireRole`/`requireKeyAccess`/`requireWriteAccess` (backend/src/middleware/auth.ts); per-user key and zone allowlists; persistent audit trail. Note: the legacy `/api/keys` stub route is still mounted without auth (it is a no-op).
+3. ~~**No Authentication/Authorization System**~~ — **RESOLVED**: session-based auth (`express-session`, file store, httpOnly cookies) with local bcrypt users and Microsoft Entra ID SSO; roles (admin/editor/viewer) enforced via `requireAuth`/`requireRole`/`requireWriteAccess` (backend/src/middleware/auth.ts); per-user key and zone allowlists; persistent audit trail. Note: the legacy `/api/keys` stub route is still mounted without auth (it is a no-op).
 
 4. ~~**Webhook URLs in localStorage**~~ — **RESOLVED**: webhook config is stored server-side (`data/webhook-configs.json`) behind the authenticated `/api/webhook-config` routes; `ConfigContext` strips webhook fields from localStorage.
 
