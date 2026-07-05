@@ -8,24 +8,12 @@ import { auditService, AuditEventType } from '../services/auditService';
 import { UserRole } from '../types/auth';
 import { getClientIp } from '../helpers/ipHelpers';
 import { regenerateSession } from '../helpers/session';
+import { putState, consumeState, SSOStateError } from '../services/ssoStateStore';
 
 const router = Router();
 
 // Frontend base URL for post-SSO redirects.
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
-
-// Store for CSRF state tokens (in production, use Redis)
-const stateStore = new Map<string, { timestamp: number; redirectUri: string }>();
-
-// Clean up old state tokens every 5 minutes
-setInterval(() => {
-  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-  for (const [state, data] of stateStore.entries()) {
-    if (data.timestamp < fiveMinutesAgo) {
-      stateStore.delete(state);
-    }
-  }
-}, 5 * 60 * 1000);
 
 /**
  * GET /api/auth/sso/signin
@@ -43,17 +31,22 @@ router.get('/signin', async (req: Request, res: Response) => {
 
     const redirectUri = ssoConfig.redirectUri || `${req.protocol}://${req.get('host')}/api/auth/sso/callback`;
 
-    // Generate CSRF state token
+    // Generate a CSRF state token and a replay-defending nonce, and stash both
+    // on the browser session (survives restarts / multi-instance; scoped to the
+    // session rather than a process-global map).
     const state = crypto.randomBytes(32).toString('hex');
-    stateStore.set(state, {
+    const nonce = crypto.randomBytes(32).toString('hex');
+    putState(req.session, {
+      state,
+      nonce,
+      redirectUri,
       timestamp: Date.now(),
-      redirectUri: redirectUri
     });
 
     console.log(`SSO sign-in initiated, redirect URI: ${redirectUri}`);
 
-    // Get authorization URL from MSAL
-    const authUrl = await msalService.getAuthCodeUrl(state, redirectUri);
+    // Get authorization URL from MSAL (nonce is embedded in the returned id_token)
+    const authUrl = await msalService.getAuthCodeUrl(state, redirectUri, nonce);
 
     // Redirect user to Microsoft login
     res.redirect(authUrl);
@@ -85,20 +78,22 @@ const handleCallback = async (req: Request, res: Response) => {
       return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
     }
 
-    // Validate state token (CSRF protection)
-    if (!state || !stateStore.has(state)) {
-      console.error('Invalid or missing state token');
+    // Validate and consume the state token (CSRF protection + single-use). The
+    // pending value is scoped to this browser session and burned on first use.
+    let stateData;
+    try {
+      stateData = consumeState(req.session, state);
+    } catch (err) {
+      const code = err instanceof SSOStateError ? err.code : 'UNKNOWN';
+      console.error(`Invalid SSO state token (${code})`);
       await auditService.log(AuditEventType.UNAUTHORIZED_ACCESS, {
         username: 'unknown',
         success: false,
         ipAddress: getClientIp(req),
-        error: 'Invalid state token',
+        error: `Invalid state token: ${code}`,
       });
       return res.redirect(`${frontendUrl}/login?error=invalid_state`);
     }
-
-    const stateData = stateStore.get(state)!;
-    stateStore.delete(state);
 
     if (!code) {
       console.error('No authorization code received');
@@ -109,9 +104,18 @@ const handleCallback = async (req: Request, res: Response) => {
     console.log('Exchanging authorization code for tokens...');
     const tokenResponse = await msalService.acquireTokenByCode(code, stateData.redirectUri);
 
-    // Decode and validate ID token
-    const claims = msalService.decodeIdToken(tokenResponse.idToken!);
-    console.log('User authenticated:', claims.preferred_username || claims.email);
+    // Use MSAL's validated id_token claims, asserting issuer/audience/expiry and
+    // the nonce we issued at /signin before trusting them to create a session.
+    const claims = await msalService.getValidatedIdTokenClaims(tokenResponse, stateData.nonce);
+
+    // A stable subject (oid) and a resolvable username are required to identify
+    // the user; a token without them is not usable for provisioning.
+    const resolvedUsername = claims.preferred_username || claims.email || claims.upn;
+    if (!claims.oid || !resolvedUsername) {
+      console.error('ID token missing required identity claims (oid/username)');
+      return res.redirect(`${frontendUrl}/login?error=invalid_token`);
+    }
+    console.log('User authenticated:', resolvedUsername);
 
     // Provision or update user (JIT provisioning)
     const userId = `entra_${claims.oid}`;
@@ -123,7 +127,7 @@ const handleCallback = async (req: Request, res: Response) => {
       console.log(`Existing SSO user logged in: ${user.username}`);
     } else {
       // Create new user (JIT provisioning)
-      const username = claims.preferred_username || claims.email || claims.upn;
+      const username = resolvedUsername;
       const email = claims.email || claims.preferred_username;
 
       // Determine role from claims (app roles or default to viewer)
