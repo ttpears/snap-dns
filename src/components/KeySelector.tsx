@@ -149,9 +149,11 @@ function KeySelector() {
             ))}
         </Select>
         <FormHelperText>
-          {!selectedKey
-            ? 'Select a zone and a matching key is chosen automatically'
-            : 'Select a zone to manage'}
+          {validSelectedZone
+            ? `Managing ${validSelectedZone}`
+            : !selectedKey
+              ? 'Select a zone and a matching key is chosen automatically'
+              : 'Select a zone to manage'}
         </FormHelperText>
       </FormControl>
 

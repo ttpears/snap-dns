@@ -186,14 +186,18 @@ const AuditLog: React.FC = () => {
         <Typography variant="h5">Audit Logs</Typography>
         <Box>
           <Tooltip title="Refresh logs">
-            <IconButton onClick={loadLogs} disabled={loading}>
-              <RefreshIcon />
-            </IconButton>
+            <span>
+              <IconButton onClick={loadLogs} disabled={loading}>
+                <RefreshIcon />
+              </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title="Export as CSV">
-            <IconButton onClick={handleExportCSV} disabled={filteredEntries.length === 0}>
-              <DownloadIcon />
-            </IconButton>
+            <span>
+              <IconButton onClick={handleExportCSV} disabled={filteredEntries.length === 0}>
+                <DownloadIcon />
+              </IconButton>
+            </span>
           </Tooltip>
           <Button
             variant="outlined"
