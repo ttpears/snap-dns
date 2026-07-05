@@ -92,47 +92,71 @@ Production compose (`docker-compose.prod.yml`) uses `${IMAGE_TAG:-latest}` — s
 
 The frontend is a React application with Material-UI components and follows a context-based state management pattern:
 
-**Context Providers (Nested in App.jsx):**
-- `ConfigProvider` - Manages DNS keys, webhooks, and application settings (localStorage-backed)
-- `KeyProvider` - TSIG key management and zone assignments
-- `ZoneProvider` - Current zone selection and zone operations
-- `PendingChangesProvider` - Tracks DNS record changes with undo/redo support
+**Context Providers (Nested in App.tsx):**
 - `ThemeProvider` - Dark/light mode theming
+- `NotificationProvider` - Snackbar UI notifications
+- `AuthProvider` - Session authentication state (user, role, login/logout); unauthenticated users see `Login` instead of the app
+- `ConfigProvider` - Application settings (localStorage-backed for TTL/display settings and a legacy `keys` field; webhook config is loaded from and saved to the backend `/api/webhook-config`)
+- `KeyProvider` - TSIG keys fetched from the backend (`/api/tsig-keys`); only the current key/zone selection is persisted to localStorage
+- `ZoneProvider` - Mounted in App.tsx but has no consumers (`useZone` is unused — effectively dead code)
+- `PendingChangesProvider` - Tracks queued DNS record changes (flat list; no undo/redo)
 
 **Key Services (src/services/):**
-- `dnsService.ts` - Frontend HTTP client for DNS operations (calls backend API)
-- `backupService.ts` - Snapshot creation, comparison, and restore operations
+- `dnsService.ts` - Frontend HTTP client for DNS operations (session-cookie auth; includes `applyBatch` for atomic per-zone bulk apply)
+- `authService.ts` - Login/logout/session/change-password API client
+- `tsigKeyService.ts` - TSIG key management API client (`/api/tsig-keys`)
+- `backupService.ts` - API client for server-side snapshots (`/api/backups`): create, compare, restore
+- `auditService.ts` / `userService.ts` - Audit log and user management API clients (admin)
 - `notificationService.ts` - Multi-provider webhook notifications (Slack, Discord, Teams, Mattermost)
 - `dnsValidationService.ts` - Client-side record validation
 - `dnsRecordFormatter.ts` - Record formatting and parsing utilities
 
 **Main Components:**
-- `AppContent` - Main layout with drawer navigation
-- `Settings` - Configuration management UI (keys, webhooks, settings)
-- Zone management components (located throughout the codebase)
+- `AppContent` - Main layout and routes: `/zones` (ZoneEditor), `/snapshots` (Snapshots), `/settings` (Settings)
+- `Login` - Username/password and SSO sign-in
+- `ZoneEditor` - Zone record table plus add/edit record forms (`AddDNSRecord`, `RecordEditor`)
+- `Snapshots` - Server-side backup create/compare/restore UI
+- `Settings` - Tabbed UI: General, Keys (`TSIGKeyManagement`), Users (`UserManagement`), SSO (`SSOConfiguration`), Audit Logs (`AuditLog`, admin-only)
 
 ### Backend Structure
 
 The backend is an Express TypeScript application that executes DNS operations:
 
 **Entry Point:** `backend/src/server.ts`
+- Session middleware (`express-session` with a file store under `data/sessions`, httpOnly cookies)
 - CORS configuration with environment-specific allowed origins
-- Middleware: logging, JSON parsing (10mb limit), DNS message parsing
-- Routes mounted at `/api/zones`, `/api/keys`, `/api/webhook`
+- Middleware: logging, JSON parsing (10mb limit), DNS message parsing, global API rate limiting
+- Routes mounted at `/api/auth`, `/api/auth/sso`, `/api/tsig-keys`, `/api/zones`, `/api/keys` (legacy no-op stub), `/api/webhook`, `/api/backups`, `/api/webhook-config`, `/api/sso-config`, `/api/audit`
+- Initializes user, TSIG key, backup, webhook-config, and SSO-config services at startup; all persist JSON under `data/`
+
+**Middleware (backend/src/middleware/):**
+- `auth.ts` - `requireAuth`, `requireRole`, `requireKeyAccess`, `requireWriteAccess` (roles: admin/editor/viewer)
+- `rateLimiter.ts` - express-rate-limit instances (general API, DNS query/modify, key management, webhook, login)
+- `validation.ts` - Zod request schemas (DNS records, login, change-password, TSIG key create/update)
 
 **Services (backend/src/services/):**
 - `dnsService.ts` - Executes `nsupdate` and `dig` commands via child_process
   - `fetchZoneRecords()` - Uses `dig AXFR` to fetch zone records
-  - `addRecord()`/`deleteRecord()` - Creates temporary nsupdate files and executes them
+  - `addRecord()`/`deleteRecord()`/`updateRecord()`/`applyBatch()` - Create temporary nsupdate files and execute them (batch = one atomic transaction per zone)
   - Record normalization and deduplication logic
-- `keyService.ts` - TSIG key management
+- `tsigKeyService.ts` - Server-side TSIG key storage, AES-256-CBC encrypted at rest (`data/tsig-keys.json`)
+- `userService.ts` - Local user accounts with bcrypt password hashes (`data/users.json`)
+- `backupService.ts` - Server-side zone backups (`data/backups/`, capped per zone)
+- `auditService.ts` - Persistent audit log (JSON lines appended to `data/audit.log`)
+- `validationService.ts` / `dnsSafety.ts` / `dnsPresentation.ts` - Server-side record validation, name/injection guards, display formatting
+- `webhookConfigService.ts` / `ssoConfigService.ts` / `msalService.ts` - Server-side webhook config, SSO config, and Microsoft Entra ID (MSAL) integration
 - `webhookService.ts` - Webhook notification dispatch
-- `notificationService.ts` - Multi-provider webhook formatting
+- `keyService.ts` - Legacy stub (no-op; superseded by `tsigKeyService.ts`)
 
 **Routes:**
-- `zoneRoutes.ts` - GET `/api/zones/:zone`, POST/DELETE `/api/zones/:zone/records`
-- `keyRoutes.ts` - Key management endpoints
-- `webhookRoutes.ts` - Webhook testing and configuration
+- `zoneRoutes.ts` - GET `/api/zones/:zone`, POST/DELETE/PATCH `/api/zones/:zone/records`, POST `/api/zones/:zone/records/batch` — all require auth and are rate limited; TSIG keys are resolved server-side per zone
+- `authRoutes.ts` / `ssoAuthRoutes.ts` - Login, logout, session, change-password; admin-only user CRUD; Entra ID SSO flow
+- `tsigKeyRoutes.ts` - TSIG key CRUD (rate limited; delete is admin-only)
+- `backupRoutes.ts` - Server-side zone backup CRUD
+- `webhookConfigRoutes.ts` / `ssoConfigRoutes.ts` - Server-side webhook and SSO configuration (SSO config admin-only)
+- `auditRoutes.ts` - Audit log queries (admin-only)
+- `webhookRoutes.ts` - Webhook testing
+- `keyRoutes.ts` - Legacy no-op stub
 
 ### Type System
 
@@ -143,17 +167,18 @@ The project uses shared TypeScript types between frontend and backend:
 - `config.ts` - Application configuration interfaces
 - `keys.ts` - TSIG key configuration
 - `webhook.ts` - Webhook provider types
+- Frontend-only: `audit.ts`; backend-only: `auth.ts`, `sso.ts`
 
 **Important:** When modifying types, ensure changes are synchronized between frontend and backend type definitions.
 
 ### DNS Operations Flow
 
-1. User selects zone and modifies records in the UI
-2. Changes are tracked in `PendingChangesContext` (with undo/redo)
-3. When applied, frontend `dnsService` sends HTTP requests with TSIG credentials in headers
-4. Backend `dnsService` creates temporary nsupdate command files
-5. Backend executes `nsupdate` with TSIG authentication
-6. Webhooks are triggered for change notifications
+1. User logs in (local account or SSO); the session cookie authenticates all subsequent requests
+2. User selects zone and modifies records in the UI
+3. Changes are tracked in `PendingChangesContext` (flat queue; individual changes can be removed)
+4. When applied (after a confirmation dialog), frontend `dnsService.applyBatch()` sends one batch request per zone — no TSIG material is sent; the backend resolves the zone's TSIG key from its encrypted server-side store
+5. Backend validates every record, creates a temporary nsupdate command file, and executes `nsupdate` as a single atomic transaction per zone
+6. The change is written to the audit log and webhooks are triggered
 7. Zone records are refreshed via `dig AXFR`
 
 ### Record Type Handling
@@ -168,9 +193,9 @@ The application handles special formatting for:
 ### Configuration and State
 
 **Frontend Configuration (localStorage: 'dns_manager_config'):**
-- TSIG keys with zone assignments
-- Webhook URLs and provider types
 - Default TTL and display settings
+- Legacy `keys` field (superseded by server-side TSIG keys, but still read as a fallback and writable via the Settings import flow)
+- Webhook config is no longer stored here — it lives server-side (`/api/webhook-config`)
 
 **Backend Configuration (Environment Variables):**
 - `BACKEND_PORT` - Server port (default: 3002)
@@ -179,6 +204,11 @@ The application handles special formatting for:
 - `NODE_ENV` - Environment mode (development allows all CORS)
 - `MAX_REQUEST_SIZE` - Request size limit (default: 10mb)
 - `TEMP_DIR` - Temporary file directory (default: /tmp/snap-dns)
+- `SESSION_SECRET` - Session cookie signing secret
+- `TSIG_ENCRYPTION_KEY` - Key used to encrypt stored TSIG secrets at rest
+
+**Backend Persistent State (`data/` directory):**
+- `sessions/`, `users.json`, `tsig-keys.json`, `backups/`, `audit.log`, `webhook-configs.json`, `sso-config.json`
 
 **Frontend Environment Variables:**
 - `REACT_APP_API_URL` - Backend API URL
@@ -187,43 +217,26 @@ The application handles special formatting for:
 
 ## ⚠️ Problematic Design Decisions
 
-**WARNING**: This application has significant security and architectural issues that make it unsuitable for production use without major refactoring.
+**WARNING**: Earlier versions of this application had significant security and architectural issues. Many have since been resolved (struck-through items below); the remaining open items should be addressed before production use.
 
-The following design issues should be addressed before production use:
-
-### Summary of Critical Issues
-- **Security**: TSIG credentials stored in browser localStorage and transmitted in HTTP headers
-- **Authentication**: No user authentication or authorization system
-- **Data Integrity**: Non-atomic DNS updates risk data loss
-- **Validation**: Backend trusts frontend validation completely
-- **Code Organization**: Duplicate type definitions between frontend and backend (shared-types package exists but is not wired up)
+### Summary of Open Issues
+- **Security**: A legacy localStorage `keys` field and Settings import path can still hold TSIG key material (see #1); logging has not been fully audited for sensitive data
+- **Code Organization**: Duplicate type definitions between frontend and backend (no shared-types package exists)
+- **Operational**: Dev/test CORS allows all origins; whole zones are deduplicated in memory
 
 ### 🔴 Critical Security Issues
 
-1. **TSIG Keys Stored in localStorage** (src/context/ConfigContext.tsx:24, ConfigContext.js:33,43)
-   - TSIG keys are stored in browser localStorage, which is accessible via JavaScript
-   - localStorage is not encrypted and survives XSS attacks
-   - **Impact**: Anyone with XSS access can steal DNS credentials
-   - **Fix**: Use server-side session storage with HTTP-only cookies, or encrypted storage
+1. **Legacy TSIG Keys in localStorage** (src/context/KeyContext.tsx:65, src/components/Settings.tsx:356-372)
+   - Primary key storage is now server-side and encrypted (`tsigKeyService`), and the UI no longer stores key material by default
+   - BUT: `config.keys` in localStorage is still read as a fallback by `KeyContext`, and the Settings config-import flow can still write TSIG key material (and legacy `dnsBackups`) into localStorage
+   - **Impact**: Key material can still end up XSS-readable via the legacy path
+   - **Fix**: Remove the `keys` field from frontend config, drop the fallback, and migrate the import flow to `/api/tsig-keys`
 
-2. **TSIG Keys Transmitted in HTTP Headers** (src/services/dnsService.ts:58-69, backend/src/routes/zoneRoutes.ts:44-48)
-   - Full TSIG keys (keyValue) sent in plaintext HTTP headers on every request
-   - Keys may be logged in various places
-   - **Impact**: Keys can be intercepted via network sniffing, proxy logs, or server logs
-   - **Fix**: Use session-based authentication, encrypt keys at rest, never log key values
+2. ~~**TSIG Keys Transmitted in HTTP Headers**~~ — **RESOLVED**: the frontend sends no key material (src/services/dnsService.ts `createHeaders()`); requests authenticate with the session cookie and the backend resolves the zone's TSIG key from its encrypted server-side store (backend/src/routes/zoneRoutes.ts). Vestigial `x-dns-*` entries remain in the CORS `allowedHeaders` list (backend/src/server.ts) and could be removed.
 
-3. **No Authentication/Authorization System**
-   - Backend has no user authentication (backend/src/server.ts)
-   - Anyone who can reach the backend API can perform DNS operations
-   - No audit trail of who made which changes
-   - **Impact**: No access control, no accountability
-   - **Fix**: Implement proper authentication (OAuth, SAML, etc.) and RBAC
+3. ~~**No Authentication/Authorization System**~~ — **RESOLVED**: session-based auth (`express-session`, file store, httpOnly cookies) with local bcrypt users and Microsoft Entra ID SSO; roles (admin/editor/viewer) enforced via `requireAuth`/`requireRole`/`requireKeyAccess`/`requireWriteAccess` (backend/src/middleware/auth.ts); per-user key and zone allowlists; persistent audit trail. Note: the legacy `/api/keys` stub route is still mounted without auth (it is a no-op).
 
-4. **Webhook URLs in localStorage** (multiple locations)
-   - Internal webhook URLs stored in browser
-   - Could expose internal infrastructure topology
-   - **Impact**: Information disclosure
-   - **Fix**: Store webhook configs server-side
+4. ~~**Webhook URLs in localStorage**~~ — **RESOLVED**: webhook config is stored server-side (`data/webhook-configs.json`) behind the authenticated `/api/webhook-config` routes; `ConfigContext` strips webhook fields from localStorage.
 
 ### 🟠 High Priority Issues
 
@@ -243,32 +256,21 @@ The following design issues should be addressed before production use:
 
 ### 🟡 Medium Priority Issues
 
-10. **No Rate Limiting**
-    - No rate limiting on DNS operations
-    - **Impact**: Abuse potential, DoS attacks
-    - **Fix**: Add express-rate-limit middleware
+10. ~~**No Rate Limiting**~~ — **RESOLVED**: `express-rate-limit` middleware (backend/src/middleware/rateLimiter.ts) — a global API limiter plus dedicated DNS query/modify, key-management, webhook, and login limiters applied per route.
 
-11. **Hardcoded Temporary File Path** (backend/src/services/dnsService.ts:12)
-    - `/tmp/snap-dns` is hardcoded
-    - No check if directory exists
-    - **Impact**: Fails in environments without /tmp, potential permission issues
-    - **Fix**: Use config.tempDir consistently, ensure directory exists
+11. ~~**Hardcoded Temporary File Path**~~ — **RESOLVED**: `dnsService` uses `config.tempDir` (`TEMP_DIR`, default `/tmp/snap-dns`) and creates the directory recursively before use (backend/src/services/dnsService.ts:53-66).
 
-12. **In-Memory Zone Deduplication** (backend/src/services/dnsService.ts:113)
+12. **In-Memory Zone Deduplication** (backend/src/services/dnsService.ts:348)
     - Large zones loaded entirely into memory via Map
     - **Impact**: Memory exhaustion for very large zones
     - **Fix**: Stream processing or pagination
 
-13. **CORS Allow-All in Development** (backend/src/server.ts:38-40)
-    - Development mode accepts requests from any origin
+13. **CORS Allow-All in Development** (backend/src/server.ts:56-61)
+    - Development and test modes accept requests from any origin
     - **Impact**: Development environments can be attacked
     - **Fix**: Use specific allowlist even in development
 
-14. **No Audit Logging**
-    - No persistent record of who changed what DNS records
-    - Console.log only (ephemeral)
-    - **Impact**: No forensics capability, compliance issues
-    - **Fix**: Implement structured logging to persistent storage
+14. ~~**No Audit Logging**~~ — **RESOLVED**: `auditService` appends structured JSON entries to `data/audit.log`; queryable via the admin-only `/api/audit` routes and the `AuditLog` UI in Settings.
 
 15. ~~**Mixed JavaScript/TypeScript**~~ — **RESOLVED**: All frontend files migrated to TypeScript. Only `setupProxy.js` remains as JS (CRA requirement).
 
@@ -278,22 +280,13 @@ The following design issues should be addressed before production use:
     - **Impact**: Information leakage
     - **Fix**: Audit all logging, redact all sensitive data
 
-17. **No Request Validation Middleware**
-    - No request schema validation (e.g., Joi, Zod)
-    - Manual validation in each route
-    - **Impact**: Inconsistent validation, maintenance burden
-    - **Fix**: Add request validation middleware
+17. ~~**No Request Validation Middleware**~~ — **RESOLVED**: Zod schemas in `backend/src/middleware/validation.ts` (DNS records, login, change-password, TSIG key create/update) applied on the relevant routes, alongside `validationService` record validation.
 
-18. **Backups Stored in localStorage** (src/services/backupService.ts)
-    - DNS zone backups stored in browser localStorage
-    - 5-10MB localStorage limit can be exceeded
-    - Lost on cache clear
-    - **Impact**: Unreliable backup system
-    - **Fix**: Store backups server-side or allow export to files
+18. ~~**Backups Stored in localStorage**~~ — **RESOLVED**: backups are stored server-side (`data/backups/`, capped per zone) via the authenticated `/api/backups` routes; the frontend `backupService` is a pure API client and the Snapshots UI handles create/compare/restore. Note: the legacy Settings import flow can still write an old-style `dnsBackups` blob to localStorage (see #1).
 
 ## Development Guidelines
 
-### Code Style (.cursorrules)
+### Code Style
 
 - All code files must start with path/filename as a one-line comment
 - Comments should describe purpose and effect when necessary
@@ -318,21 +311,18 @@ The following design issues should be addressed before production use:
 
 ### Security Considerations
 
-1. **TSIG Key Handling**: Keys are stored in localStorage (frontend) and passed via headers to backend. Never log full key values (use '[REDACTED]').
+1. **TSIG Key Handling**: Keys are stored server-side, encrypted at rest (`tsigKeyService`), and are never sent by the frontend; requests authenticate via the session cookie. Never log full key values (use '[REDACTED]').
 
 2. **Input Validation**: All DNS records go through validation in both frontend and backend. Special attention to:
    - SQL injection-like patterns in TXT records
    - Invalid domain names
    - Malformed record data
 
-3. **CORS**: Backend validates origins in production mode. Development mode allows all origins.
+3. **CORS**: Backend validates origins in production mode. Development and test modes allow all origins.
 
 ### Error Handling
 
-The backend uses a custom `DNSError` class with error codes:
-- `DUPLICATE_RECORD` - Record already exists
-- `SERVER_ERROR` - Communication failure
-- Validation errors include detailed field-level feedback
+Zone routes return structured error codes from an `ErrorCodes` map (backend/src/routes/zoneRoutes.ts): `DUPLICATE_RECORD`, `INVALID_RECORD`, `ZONE_NOT_FOUND`, `RECORD_NOT_FOUND`, `MISSING_CONFIG`, `PERMISSION_DENIED`, `SERVER_ERROR`, `VALIDATION_ERROR`, `NETWORK_ERROR`. The frontend wraps failures in a `DNSError` class (src/services/dnsService.ts). Validation errors include detailed field-level feedback.
 
 ### Testing DNS Operations
 
@@ -362,4 +352,4 @@ When modifying DNS operations:
 
 ### Working with Pending Changes
 
-The pending changes system uses a stack-based undo/redo mechanism. Changes are only sent to the backend when "Apply Changes" is clicked. The context maintains change history and supports bulk operations.
+Pending changes are a flat queue in `PendingChangesContext` (no undo/redo); each change gets a unique id and can be removed individually. Changes are only sent to the backend when "Apply Changes" is confirmed in the drawer's confirmation dialog — grouped by zone and applied via `dnsService.applyBatch()`, one atomic nsupdate transaction per zone.
