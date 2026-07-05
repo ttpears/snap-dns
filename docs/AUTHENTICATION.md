@@ -262,7 +262,7 @@ NODE_ENV=development
 - Use strong, unique passwords (minimum 8 characters)
 - Change default admin password immediately
 - Use HTTPS in production
-- Set a strong SESSION_SECRET (use `openssl rand -base64 32`)
+- Set a strong SESSION_SECRET and TSIG_ENCRYPTION_KEY (each: `openssl rand -base64 32`); keep TSIG_ENCRYPTION_KEY stable or stored keys become unreadable
 - Regularly audit user accounts and permissions
 - Monitor failed login attempts
 

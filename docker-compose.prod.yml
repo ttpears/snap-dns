@@ -1,7 +1,7 @@
 # docker-compose.prod.yml
 # Production stack. Configure once, then run.
 #
-#   cp .env.production.example .env      # set SESSION_SECRET + public URLs
+#   cp .env.production.example .env      # set SESSION_SECRET, TSIG_ENCRYPTION_KEY + public URLs
 #
 # Run with pre-built images from ghcr.io (fastest):
 #   docker compose -f docker-compose.prod.yml up -d
@@ -69,6 +69,11 @@ services:
       # Required — the stack refuses to start without it.
       # Generate with: openssl rand -base64 32
       - "SESSION_SECRET=${SESSION_SECRET:?required - copy .env.production.example to .env and set it}"
+      # Required — encrypts TSIG keys at rest; the backend refuses to start
+      # without it in production. Keep this value STABLE: it is scrypt-derived
+      # with a fixed salt, so changing it makes already-stored keys unreadable.
+      # Generate with: openssl rand -base64 32
+      - "TSIG_ENCRYPTION_KEY=${TSIG_ENCRYPTION_KEY:?required - copy .env.production.example to .env and set it}"
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001}
       - MAX_REQUEST_SIZE=${MAX_REQUEST_SIZE:-10mb}
       - MAX_ZONE_RECORDS=${MAX_ZONE_RECORDS:-10000}

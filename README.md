@@ -71,7 +71,8 @@ The production stack is two containers (frontend + backend). Configure once, the
 ```bash
 cp .env.production.example .env
 # Edit .env and set at least:
-#   SESSION_SECRET   — generate with:  openssl rand -base64 32
+#   SESSION_SECRET      — generate with:  openssl rand -base64 32
+#   TSIG_ENCRYPTION_KEY — generate with:  openssl rand -base64 32  (keep it stable)
 #   REACT_APP_API_URL / ALLOWED_ORIGINS — how the app is reached (see comments in the file)
 ```
 
@@ -88,7 +89,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 **3. Access** the UI at <http://localhost:3001> (or your `FRONTEND_PORT`).
 First login is `admin` / `changeme123` — **change it immediately** in Settings.
 
-> The stack refuses to start if `SESSION_SECRET` is unset and tells you exactly what to do.
+> The stack refuses to start if `SESSION_SECRET` or `TSIG_ENCRYPTION_KEY` is unset and tells you exactly what to do.
 > Pin a released version by setting `IMAGE_TAG` in `.env` (e.g. `IMAGE_TAG=2.1.0`); defaults to `latest`.
 
 **Behind a reverse proxy (HTTPS, recommended):** set `REACT_APP_API_URL` and `ALLOWED_ORIGINS`
