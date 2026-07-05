@@ -43,6 +43,7 @@ import RedoIcon from '@mui/icons-material/Redo';
 import RecordEditor from './RecordEditor';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useKey } from '../context/KeyContext';
+import { Link as RouterLink } from 'react-router-dom';
 import { DNSRecord, RecordType } from '../types/dns';
 
 // Sourced from the RecordType enum so the type filter stays in sync with the
@@ -144,7 +145,8 @@ function ZoneEditor() {
   const {
     selectedKey,
     selectedZone,
-    availableZones = []
+    availableZones = [],
+    availableKeys = []
   } = useKey();
 
   const [records, setRecords] = useState<DNSRecord[]>([]);
@@ -482,6 +484,28 @@ function ZoneEditor() {
       rowsPerPage: newRowsPerPage
     });
   };
+
+  // First-run empty state: with no TSIG keys configured there is nothing the
+  // zone editor can do, so point the user at Settings instead of showing a
+  // disabled toolbar and empty table.
+  if (availableKeys.length === 0) {
+    return (
+      <Paper sx={{ p: 3 }}>
+        <Box sx={{ textAlign: 'center', py: 6 }}>
+          <Typography variant="h6" gutterBottom>
+            No TSIG keys configured
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Snap DNS uses TSIG keys to authenticate with your DNS servers.
+            Add a key and assign it to your zones to start managing records.
+          </Typography>
+          <Button variant="contained" component={RouterLink} to="/settings">
+            Add a TSIG key to get started
+          </Button>
+        </Box>
+      </Paper>
+    );
+  }
 
   return (
     <Paper sx={{ p: 3 }}>

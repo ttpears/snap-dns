@@ -1,49 +1,25 @@
 // src/components/AppContent.tsx
-import React, { useEffect, useRef } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './Layout';
-import AddDNSRecord from './AddDNSRecord';
 import ZoneEditor from './ZoneEditor';
 import Settings from './Settings';
 import Snapshots from './Snapshots';
-import { useKey } from '../context/KeyContext';
 
+// Navigation is always user-initiated. An earlier auto-redirect ("jump to
+// /zones when a zone first becomes selected on /settings") misfired whenever
+// the zone passed through null — key switches on the Settings page and
+// localStorage restores after a refresh both bounced the user out of
+// Settings — so it was removed rather than patched.
 function AppContent() {
-  const { selectedKey, selectedZone } = useKey();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const isManualNavigation = useRef(false);
-
-  // Auto-navigate to zone editor when a zone is selected from settings
-  useEffect(() => {
-    if (selectedZone && selectedKey && location.pathname === '/settings' && !isManualNavigation.current) {
-      navigate('/zones');
-    }
-    isManualNavigation.current = false;
-  }, [selectedZone, selectedKey, navigate, location.pathname]);
-
-  // Track manual navigations to prevent auto-redirect from overriding them
-  useEffect(() => {
-    const handleBeforeNavigate = () => {
-      isManualNavigation.current = true;
-    };
-
-    document.addEventListener('click', handleBeforeNavigate, true);
-    document.addEventListener('keydown', handleBeforeNavigate, true);
-
-    return () => {
-      document.removeEventListener('click', handleBeforeNavigate, true);
-      document.removeEventListener('keydown', handleBeforeNavigate, true);
-    };
-  }, []);
-
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<AddDNSRecord />} />
+        <Route path="/" element={<Navigate to="/zones" replace />} />
         <Route path="/zones" element={<ZoneEditor />} />
         <Route path="/snapshots" element={<Snapshots />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="/zones" replace />} />
       </Routes>
     </Layout>
   );

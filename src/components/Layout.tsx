@@ -95,8 +95,6 @@ function Layout({ children }: { children: React.ReactNode }) {
 
   const getPageTitle = () => {
     switch (location.pathname) {
-      case '/':
-        return 'Add DNS Record';
       case '/zones':
         return 'Zone Editor';
       case '/snapshots':

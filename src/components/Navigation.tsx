@@ -2,7 +2,7 @@
 import React from 'react';
 import { List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography } from '@mui/material';
 import { Link, useLocation } from 'react-router-dom';
-import { Add, Settings, Storage, Backup } from '@mui/icons-material';
+import { Settings, Storage, Backup } from '@mui/icons-material';
 import KeySelector from './KeySelector';
 
 interface NavigationProps {
@@ -14,7 +14,6 @@ function Navigation({ onNavigate }: NavigationProps) {
   const location = useLocation();
 
   const menuItems = [
-    { text: 'Add DNS Record', icon: <Add />, path: '/' },
     { text: 'Zone Editor', icon: <Storage />, path: '/zones' },
     { text: 'Snapshots', icon: <Backup />, path: '/snapshots' },
     { text: 'Settings', icon: <Settings />, path: '/settings' },
