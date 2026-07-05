@@ -99,7 +99,7 @@ The frontend is a React application with Material-UI components and follows a co
 - `ConfigProvider` - Application settings (localStorage-backed for TTL/display settings and a legacy `keys` field; webhook config is loaded from and saved to the backend `/api/webhook-config`)
 - `KeyProvider` - TSIG keys fetched from the backend (`/api/tsig-keys`); only the current key/zone selection is persisted to localStorage
 - `ZoneProvider` - Mounted in App.tsx but has no consumers (`useZone` is unused — effectively dead code)
-- `PendingChangesProvider` - Tracks queued DNS record changes (flat list; no undo/redo)
+- `PendingChangesProvider` - Tracks queued DNS record changes (flat list; undo/redo lives in ZoneEditor, not the context)
 
 **Key Services (src/services/):**
 - `dnsService.ts` - Frontend HTTP client for DNS operations (session-cookie auth; includes `applyBatch` for atomic per-zone bulk apply)
@@ -352,4 +352,4 @@ When modifying DNS operations:
 
 ### Working with Pending Changes
 
-Pending changes are a flat queue in `PendingChangesContext` (no undo/redo); each change gets a unique id and can be removed individually. Changes are only sent to the backend when "Apply Changes" is confirmed in the drawer's confirmation dialog — grouped by zone and applied via `dnsService.applyBatch()`, one atomic nsupdate transaction per zone.
+Pending changes are a flat queue in `PendingChangesContext`; each change gets a unique id and can be removed individually. Undo/redo is implemented in ZoneEditor over snapshots of that queue, and applied change ids are purged from every history entry so undo can never resurrect a committed change. Changes are only sent to the backend when "Apply Changes" is confirmed in the drawer's confirmation dialog — grouped by zone and applied via `dnsService.applyBatch()`, one atomic nsupdate transaction per zone.
