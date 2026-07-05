@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import { DNSValidationService } from '../services/dnsValidationService';
 import { DNSRecordFormatter } from '../services/dnsRecordFormatter';
-import { VALUE_FIELD_HINTS } from '../services/recordTypeHints';
+import { getValueFieldHint } from '../services/recordTypeHints';
 import { DNSRecord } from '../types/dns';
 import { detectTxtSubtype, TxtSubtype } from '../services/validators/detectTxtSubtype';
 import SpfEditor from './editors/SpfEditor';
@@ -372,7 +372,7 @@ function RecordEditor({ record, onSave, onCancel, isCopy = false }: RecordEditor
               label="Value"
               value={editedRecord.value as string}
               onChange={(e) => handleChange('value', e.target.value)}
-              helperText={VALUE_FIELD_HINTS[record.type]}
+              helperText={getValueFieldHint(record.type)}
             />
           </Grid>
         )}

@@ -20,7 +20,7 @@ import { useConfig } from '../context/ConfigContext';
 import { DNSValidationService } from '../services/dnsValidationService';
 import { DNSRecordFormatter } from '../services/dnsRecordFormatter';
 import { detectTxtSubtype, TxtSubtype } from '../services/validators/detectTxtSubtype';
-import { VALUE_FIELD_HINTS, GENERIC_VALUE_TYPES } from '../services/recordTypeHints';
+import { VALUE_FIELD_HINTS, GENERIC_VALUE_TYPES, RFC3597_VALUE_HINT } from '../services/recordTypeHints';
 import SpfEditor from './editors/SpfEditor';
 import DkimEditor from './editors/DkimEditor';
 import DmarcEditor from './editors/DmarcEditor';
@@ -229,6 +229,29 @@ for (const type of GENERIC_VALUE_TYPES) {
   };
 }
 
+// RFC 3597 unknown types: the user supplies a numeric RR type plus generic
+// "\# <length> <hex>" RDATA. 'UNKNOWN' is a picker pseudo-entry only —
+// getRecordForSubmission converts it to the real TYPE<number> token.
+const UNKNOWN_TYPE = 'UNKNOWN';
+const UNKNOWN_TYPE_LABEL = 'Unknown type (RFC 3597)';
+RECORD_TYPES[UNKNOWN_TYPE] = {
+  fields: [
+    {
+      name: 'typeNumber',
+      label: 'Type Number',
+      type: 'number',
+      helperText: 'Numeric RR type 1-65535; the record is created as TYPE<number> (e.g. 65534 becomes TYPE65534)',
+      required: true
+    },
+    {
+      name: 'value',
+      label: 'RDATA (RFC 3597)',
+      helperText: RFC3597_VALUE_HINT,
+      required: true
+    }
+  ]
+};
+
 const mapErrorToField = (error: string): string => {
   const lower = (error || '').toLowerCase();
   if (lower.includes('ttl')) return 'ttl';
@@ -269,7 +292,8 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
     tag: 'issue',
     algorithm: 1,
     fptype: 1,
-    fingerprint: ''
+    fingerprint: '',
+    typeNumber: ''
   });
   const [error, setError] = useState<ErrorState>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
@@ -422,6 +446,29 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
         setFieldErrors(errMap);
         return false;
       }
+    } else if (record.type === UNKNOWN_TYPE) {
+      // Validate the record exactly as it will be submitted (TYPE<number>),
+      // so the client-side unknown-type branch mirrors the backend.
+      const typeNumber = parseInt(record.typeNumber, 10);
+      if (!/^\d+$/.test(String(record.typeNumber ?? '').trim()) || typeNumber < 1 || typeNumber > 65535) {
+        const msg = 'Type number must be an integer between 1 and 65535';
+        setFieldErrors({ typeNumber: msg });
+        setError(msg);
+        return false;
+      }
+      const tempRecord = { ...record, type: `TYPE${typeNumber}` };
+      const validation = DNSValidationService.validateRecord(tempRecord, selectedZone);
+      setValidationWarnings(validation.warnings || []);
+      if (!validation.isValid) {
+        const errMap = validation.errors.reduce((acc: Record<string, string | null>, error: string) => {
+          const field = mapErrorToField(error);
+          acc[field] = error;
+          return acc;
+        }, {});
+        setValidationErrors(errMap);
+        setFieldErrors(errMap);
+        return false;
+      }
     } else {
       const validation = DNSValidationService.validateRecord(record, selectedZone);
       setValidationWarnings(validation.warnings || []);
@@ -478,6 +525,13 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
         return {
           ...baseRecord,
           value: `${record.algorithm} ${record.fptype} ${record.fingerprint}`
+        };
+      case UNKNOWN_TYPE:
+        // Resolve the picker pseudo-type to the real RFC 3597 token.
+        return {
+          ...baseRecord,
+          type: `TYPE${parseInt(record.typeNumber, 10)}`,
+          value: record.value
         };
       default:
         return {
@@ -543,7 +597,8 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
         tag: 'issue',
         algorithm: 1,
         fptype: 1,
-        fingerprint: ''
+        fingerprint: '',
+        typeNumber: ''
       });
 
       if (onClose) {
@@ -609,7 +664,9 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
               SelectDisplayProps={{ id: 'record-type-select' } as React.HTMLAttributes<HTMLDivElement>}
             >
               {Object.keys(RECORD_TYPES).map((type) => (
-                <MenuItem key={type} value={type}>{type}</MenuItem>
+                <MenuItem key={type} value={type}>
+                  {type === UNKNOWN_TYPE ? UNKNOWN_TYPE_LABEL : type}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>

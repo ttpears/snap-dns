@@ -34,6 +34,8 @@ export enum RecordType {
 // Base DNS record interface
 export interface DNSRecord {
   name: string;
+  // A RecordType mnemonic (A, MX, ...) or an RFC 3597 unknown-type token
+  // ("TYPE<1-65535>", whose value uses the generic "\# <length> <hex>" form).
   type: string;
   value: string | object;
   ttl: number;

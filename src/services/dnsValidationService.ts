@@ -4,6 +4,7 @@ import { detectTxtSubtype } from './validators/detectTxtSubtype';
 import { validateSpf } from './validators/spfValidator';
 import { validateDkim } from './validators/dkimValidator';
 import { validateDmarc } from './validators/dmarcValidator';
+import { isUnknownRecordType, looksLikeUnknownRecordType, validateRfc3597Rdata } from './validators/rfc3597';
 
 interface ValidationResult {
   isValid: boolean;
@@ -29,6 +30,18 @@ class DNSValidationService {
       errors.push('TTL is required');
     } else if (record.ttl < 0 || record.ttl > 2147483647) {
       errors.push('TTL must be between 0 and 2147483647');
+    }
+
+    // RFC 3597 unknown types (TYPE1..TYPE65535) carry generic
+    // "\# <length> <hex>" RDATA; mirror the backend's unknown-type branch so
+    // the form rejects exactly what the server would.
+    if (looksLikeUnknownRecordType(record.type)) {
+      if (!isUnknownRecordType(record.type)) {
+        errors.push('Invalid record type: TYPE number must be between 1 and 65535 (RFC 3597)');
+      } else {
+        errors.push(...validateRfc3597Rdata(record.value));
+      }
+      return { isValid: errors.length === 0, errors, warnings };
     }
 
     // Validate value based on record type

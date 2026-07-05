@@ -5,6 +5,7 @@ import { detectTxtSubtype } from './validators/detectTxtSubtype';
 import { validateSpf } from './validators/spfValidator';
 import { validateDkim } from './validators/dkimValidator';
 import { validateDmarc } from './validators/dmarcValidator';
+import { isUnknownRecordType, looksLikeUnknownRecordType, validateRfc3597Rdata } from './validators/rfc3597';
 
 interface ValidationResult {
   isValid: boolean;
@@ -68,6 +69,18 @@ class ValidationService {
    * Validate record based on type
    */
   private validateRecordType(record: any, errors: string[], warnings: string[]): void {
+    // RFC 3597 unknown types (TYPE1..TYPE65535) carry generic
+    // "\# <length> <hex>" RDATA; nothing else is valid for them. Handled
+    // before the named-type switch as a self-contained branch.
+    if (looksLikeUnknownRecordType(record.type)) {
+      if (!isUnknownRecordType(record.type)) {
+        errors.push('Invalid record type: TYPE number must be between 1 and 65535 (RFC 3597)');
+      } else {
+        errors.push(...validateRfc3597Rdata(record.value));
+      }
+      return;
+    }
+
     switch (record.type) {
       case 'A':
         if (!this.isValidIPv4(record.value)) {
