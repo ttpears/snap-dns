@@ -7,6 +7,7 @@ import { userService } from '../services/userService';
 import { auditService, AuditEventType } from '../services/auditService';
 import { UserRole } from '../types/auth';
 import { getClientIp } from '../helpers/ipHelpers';
+import { regenerateSession } from '../helpers/session';
 
 const router = Router();
 
@@ -163,6 +164,11 @@ const handleCallback = async (req: Request, res: Response) => {
         },
       });
     }
+
+    // Regenerate the session id before populating authenticated fields so the
+    // pre-auth session id is discarded (session fixation mitigation). The
+    // post-login redirect below is preserved.
+    await regenerateSession(req.session);
 
     // Create session
     req.session.userId = user.id;

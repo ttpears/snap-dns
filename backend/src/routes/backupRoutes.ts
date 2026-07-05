@@ -1,6 +1,6 @@
 // backend/src/routes/backupRoutes.ts
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireWriteAccess } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/auth';
 import { backupService } from '../services/backupService';
 
@@ -101,7 +101,9 @@ router.get('/zone/:zone/:backupId', requireAuth, async (req: Request, res: Respo
  * POST /api/backups/zone/:zone
  * Create a new backup for a zone
  */
-router.post('/zone/:zone', requireAuth, async (req: Request, res: Response) => {
+// Creating a backup writes a server-side file, so it is a write operation:
+// viewers (read-only) must not be able to reach it.
+router.post('/zone/:zone', requireAuth, requireWriteAccess, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;

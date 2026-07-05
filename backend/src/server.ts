@@ -24,6 +24,7 @@ import webhookConfigRoutes from './routes/webhookConfigRoutes';
 import ssoConfigRoutes from './routes/ssoConfigRoutes';
 import auditRoutes from './routes/auditRoutes';
 import { config } from './config';
+import { resolveSessionSecret } from './config/secrets';
 import { readFileSync } from 'fs';
 
 // Application version, read from package.json (present next to dist/ at runtime).
@@ -90,7 +91,9 @@ const corsOptions = {
 // Session middleware - must be before routes
 app.use(session({
   store: sessionStore,
-  secret: process.env.SESSION_SECRET || 'change-this-secret-in-production',
+  // Fail fast in production if SESSION_SECRET is unset (see config/secrets.ts):
+  // a source-public fallback secret would allow session forgery.
+  secret: resolveSessionSecret(),
   resave: false,
   saveUninitialized: false,
   name: 'snap-dns.sid',
