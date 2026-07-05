@@ -10,6 +10,8 @@ export interface User {
   role: 'admin' | 'editor' | 'viewer';
   email?: string;
   allowedKeyIds: string[];
+  // When true, the user must change their password before using the app.
+  mustChangePassword?: boolean;
 }
 
 export interface LoginResponse {

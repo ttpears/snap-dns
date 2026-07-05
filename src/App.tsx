@@ -10,9 +10,10 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import AppContent from './components/AppContent';
 import Login from './components/Login';
+import ForcedPasswordChange from './components/ForcedPasswordChange';
 
 function AuthenticatedApp() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
 
   if (isLoading) {
     return (
@@ -31,6 +32,11 @@ function AuthenticatedApp() {
 
   if (!isAuthenticated) {
     return <Login />;
+  }
+
+  // Block all app access until a forced password change is completed.
+  if (mustChangePassword) {
+    return <ForcedPasswordChange />;
   }
 
   return (
