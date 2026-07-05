@@ -37,8 +37,8 @@ import SSOConfiguration from './SSOConfiguration';
 import AuditLog from './AuditLog';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { Config, ensureValidConfig, WebhookProvider } from '../types/config';
-import { Key } from '../types/keys';
+import { ensureValidConfig, WebhookProvider } from '../types/config';
+import { tsigKeyService, TSIGKey } from '../services/tsigKeyService';
 
 // Webhook provider options with display names and descriptions
 const WEBHOOK_PROVIDERS: Array<{
@@ -78,20 +78,25 @@ const WEBHOOK_PROVIDERS: Array<{
   }
 ];
 
-// Add this interface for imported data
+// Shape of import files. Key entries cover both legacy exports (which
+// embedded the TSIG secret as `secret`/`keyValue`) and current exports
+// (metadata only - matched to server-side keys by name on import).
 interface ImportData {
   dns_manager_config: {
     zones?: string[];
     keys?: Array<{
-      id: string;
+      id?: string;
       name: string;
-      algorithm: string;
-      secret: string;
-      server: string;
-      zones: string[];
+      algorithm?: string;
+      secret?: string;
+      keyValue?: string;
+      keyName?: string;
+      server?: string;
+      zones?: string[];
       created?: number;
     }>;
     defaultTTL?: number;
+    rowsPerPage?: number;
     webhookUrl?: string | null;
     webhookProvider?: WebhookProvider;
   };
@@ -161,6 +166,23 @@ function Settings() {
   const [selectedKeyId, setSelectedKeyId] = useState('');
   const [importType, setImportType] = useState<'full' | 'zones' | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [serverKeys, setServerKeys] = useState<TSIGKey[]>([]);
+
+  // Key metadata comes from the server-side store; localStorage holds no
+  // key material. An API failure just leaves the list empty.
+  const refreshServerKeys = React.useCallback(async () => {
+    try {
+      const keys = await tsigKeyService.listKeys();
+      setServerKeys(keys);
+    } catch (error) {
+      console.error('Failed to load keys:', error);
+      setServerKeys([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshServerKeys();
+  }, [refreshServerKeys]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
@@ -223,38 +245,46 @@ function Settings() {
     setExportDialogOpen(true);
   };
 
-  const handleExportWithOptions = () => {
+  const handleExportWithOptions = async () => {
     try {
-      const currentConfig = JSON.parse(localStorage.getItem('dns_manager_config') || '{}');
+      // Key data lives server-side; only metadata is ever exported. TSIG
+      // secrets never leave the backend, so exports are safe to share.
+      const keys = await tsigKeyService.listKeys();
       const exportData: any = {};
-      
+
       if (exportZonesOnly) {
         // Export just the zones list
         const zones = new Set<string>();
-        currentConfig.keys?.forEach((key: Key) => {
-          key.zones?.forEach((zone: string) => zones.add(zone));
+        keys.forEach((key) => {
+          key.zones?.forEach((zone) => zones.add(zone));
         });
-        
+
         exportData.dns_manager_config = {
           zones: Array.from(zones)
         };
       } else {
-        // Export full or partial config based on selections
-        exportData.dns_manager_config = { ...currentConfig };
-        
-        if (!exportKeys) {
-          // Remove key data but keep zones
-          exportData.dns_manager_config.keys = currentConfig.keys?.map((key: Key) => ({
+        exportData.dns_manager_config = {};
+
+        if (exportKeys) {
+          // Metadata only (no keyValue); re-import matches these entries to
+          // server-side keys by name and merges their zone lists.
+          exportData.keyExportNote =
+            'TSIG key entries contain metadata only (no secrets); import matches them to server-side keys by name';
+          exportData.dns_manager_config.keys = keys.map((key) => ({
             id: key.id,
             name: key.name,
-            zones: key.zones
+            server: key.server,
+            keyName: key.keyName,
+            algorithm: key.algorithm,
+            zones: key.zones || []
           }));
         }
-        
-        if (!exportSettings) {
-          delete exportData.dns_manager_config.defaultTTL;
-          delete exportData.dns_manager_config.webhookUrl;
-          delete exportData.dns_manager_config.webhookProvider;
+
+        if (exportSettings) {
+          exportData.dns_manager_config.defaultTTL = config.defaultTTL;
+          exportData.dns_manager_config.rowsPerPage = config.rowsPerPage;
+          exportData.dns_manager_config.webhookUrl = config.webhookUrl;
+          exportData.dns_manager_config.webhookProvider = config.webhookProvider;
         }
       }
 
@@ -327,47 +357,84 @@ function Settings() {
       }
 
       if (importType === 'zones') {
-        // Handle zones-only import
-        const currentConfig = ensureValidConfig(
-          JSON.parse(localStorage.getItem('dns_manager_config') || '{}')
-        );
-        const keyToUpdate = currentConfig.keys.find((k: Key) => k.id === selectedKeyId);
-        
-        if (!keyToUpdate) {
+        // Zones-only import: merge the imported zones into the selected
+        // server-side key via the API. Nothing touches localStorage.
+        const targetKey = serverKeys.find((k) => k.id === selectedKeyId);
+
+        if (!targetKey) {
           throw new Error('Selected key not found');
         }
 
-        // Merge existing zones with imported zones
         const newZones = Array.from(new Set([
-          ...(keyToUpdate.zones || []),
+          ...(targetKey.zones || []),
           ...(importedData.dns_manager_config.zones || [])
         ]));
 
-        // Update the key's zones while preserving server and other fields
-        keyToUpdate.zones = newZones;
-
-        // Update config
-        await updateConfig(ensureValidConfig(currentConfig));
+        await tsigKeyService.updateKey(targetKey.id, { zones: newZones });
+        await refreshServerKeys();
         showSuccess('Zones imported successfully');
       } else {
-        // Handle full backup import
-        const currentConfig = JSON.parse(localStorage.getItem('dns_manager_config') || '{}');
-        
-        // Ensure imported keys have server field
-        const importedKeys = importedData.dns_manager_config.keys?.map(key => ({
-          ...key,
-          server: key.server || currentConfig.keys?.find((k: Key) => k.id === key.id)?.server || '',
+        // Full backup import: keys are routed through the backend API and
+        // never written to localStorage. Entries matching a server-side key
+        // (by id or name) get their zone lists merged; unmatched entries are
+        // created only when the file contains their secret (legacy exports
+        // did); otherwise they are skipped and reported.
+        const existingKeys = await tsigKeyService.listKeys();
+        const importedKeys = importedData.dns_manager_config.keys || [];
+        const updated: string[] = [];
+        const created: string[] = [];
+        const skipped: string[] = [];
+
+        for (const entry of importedKeys) {
+          const label = entry.name || entry.keyName || entry.id || 'unnamed key';
+          try {
+            const match = existingKeys.find(
+              (k) => (entry.id && k.id === entry.id) || (entry.name && k.name === entry.name)
+            );
+
+            if (match) {
+              const mergedZones = Array.from(new Set([
+                ...(match.zones || []),
+                ...(entry.zones || [])
+              ]));
+              if (mergedZones.length !== (match.zones || []).length) {
+                await tsigKeyService.updateKey(match.id, { zones: mergedZones });
+                updated.push(match.name);
+              }
+            } else {
+              const secret = entry.keyValue || entry.secret;
+              if (!secret) {
+                skipped.push(`${label} (no secret in file and no matching server key)`);
+                continue;
+              }
+              await tsigKeyService.createKey({
+                name: entry.name,
+                server: entry.server || '',
+                keyName: entry.keyName || entry.name,
+                keyValue: secret,
+                algorithm: entry.algorithm || 'hmac-sha256',
+                zones: entry.zones || []
+              });
+              created.push(entry.name);
+            }
+          } catch (keyError) {
+            skipped.push(`${label} (${keyError instanceof Error ? keyError.message : 'unknown error'})`);
+          }
+        }
+
+        if (importedKeys.length > 0) {
+          await refreshServerKeys();
+        }
+
+        // Apply imported application settings (never key material).
+        const imported = importedData.dns_manager_config;
+        await updateConfig(ensureValidConfig({
+          ...config,
+          defaultTTL: imported.defaultTTL ?? config.defaultTTL,
+          rowsPerPage: imported.rowsPerPage ?? config.rowsPerPage,
+          webhookUrl: imported.webhookUrl ?? config.webhookUrl,
+          webhookProvider: imported.webhookProvider ?? config.webhookProvider
         }));
-
-        // Merge configurations, ensuring server field is preserved
-        const newConfig = ensureValidConfig({
-          ...currentConfig,
-          ...importedData.dns_manager_config,
-          keys: importedKeys,
-          webhookProvider: importedData.dns_manager_config.webhookProvider || null
-        });
-
-        await updateConfig(newConfig);
 
         // Snapshots now live server-side; legacy dnsBackups entries in old
         // export files are not written to localStorage (nothing reads it).
@@ -375,7 +442,14 @@ function Settings() {
           showInfo(`${importedData.dnsBackups.length} legacy snapshot entr${importedData.dnsBackups.length === 1 ? 'y was' : 'ies were'} ignored - use Snapshots > Import Snapshot to import individual snapshots`);
         }
 
-        showSuccess('Configuration imported successfully');
+        const summaryParts = [
+          updated.length ? `${updated.length} key${updated.length === 1 ? '' : 's'} updated` : null,
+          created.length ? `${created.length} key${created.length === 1 ? '' : 's'} created` : null
+        ].filter(Boolean);
+        showSuccess(`Configuration imported successfully${summaryParts.length ? ` (${summaryParts.join(', ')})` : ''}`);
+        if (skipped.length) {
+          showInfo(`Skipped ${skipped.length} key entr${skipped.length === 1 ? 'y' : 'ies'}: ${skipped.join('; ')}`);
+        }
       }
 
       setImportDialogOpen(false);
@@ -602,7 +676,7 @@ function Settings() {
                       onChange={(e) => setExportKeys(e.target.checked)}
                     />
                   }
-                  label="Include TSIG keys"
+                  label="Include TSIG key metadata (names, servers, zones - never secrets)"
                 />
                 <FormControlLabel
                   control={
@@ -656,7 +730,7 @@ function Settings() {
                     }}
                     label="Select Key"
                   >
-                    {config.keys?.map((key: Key) => (
+                    {serverKeys.map((key) => (
                       <MenuItem key={key.id} value={key.id}>
                         {key.name}
                       </MenuItem>

@@ -175,9 +175,9 @@ function ZoneEditor() {
   const [order, setOrder] = useState<SortOrder>('asc');
 
   useEffect(() => {
-    const hasData = (config.keys?.length > 0 || availableZones.length > 0);
+    const hasData = (availableKeys.length > 0 || availableZones.length > 0);
     setIsInitializing(!hasData);
-  }, [config.keys, availableZones]);
+  }, [availableKeys, availableZones]);
 
   const loadZoneRecords = useCallback(async () => {
     if (!selectedZone || !selectedKey) return;

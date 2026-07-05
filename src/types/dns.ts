@@ -1,5 +1,4 @@
 // src/types/dns.ts
-import { KeyConfig } from '../config';
 
 // Record type enum
 export enum RecordType {
@@ -81,14 +80,6 @@ export interface DNSOperationResult {
   success: boolean;
   message: string;
   error?: string;
-}
-
-export interface ZoneConfig {
-  server: string;
-  keyName: string;
-  keyValue: string;
-  algorithm: string;
-  id: string;
 }
 
 export interface ZoneOperationResult {

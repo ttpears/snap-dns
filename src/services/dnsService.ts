@@ -1,10 +1,10 @@
 // src/services/dnsService.ts
 // Frontend DNS service - keys are now stored server-side!
 
-import { ZoneConfig, ZoneOperationResult } from '../types/dns';
+import { ZoneOperationResult } from '../types/dns';
 import { getApiUrl } from '../utils/apiUrl';
 
-export type { ZoneConfig, ZoneOperationResult };
+export type { ZoneOperationResult };
 
 interface SRVRecord {
   priority: number;
