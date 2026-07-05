@@ -252,8 +252,9 @@ class WebhookService {
     try {
       const formattedPayload = this.formatPayload(config.provider, payload);
 
+      // Webhook URLs embed secret tokens (Slack/Discord/Teams/Mattermost) - never log them.
       console.log('Sending webhook request:', {
-        url: config.url,
+        url: '[REDACTED]',
         provider: config.provider,
         payload: formattedPayload
       });
