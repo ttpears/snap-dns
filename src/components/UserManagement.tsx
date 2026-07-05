@@ -265,8 +265,8 @@ function UserManagement() {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px" role="status">
+        <CircularProgress aria-label="Loading" />
       </Box>
     );
   }

@@ -159,6 +159,7 @@ export default function Login() {
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
               disabled={isLoading || !username || !password}
+              aria-label={isLoading ? 'Signing in' : undefined}
             >
               {isLoading ? <CircularProgress size={24} /> : 'Sign In'}
             </Button>

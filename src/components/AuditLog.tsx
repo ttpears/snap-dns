@@ -187,14 +187,14 @@ const AuditLog: React.FC = () => {
         <Box>
           <Tooltip title="Refresh logs">
             <span>
-              <IconButton onClick={loadLogs} disabled={loading}>
+              <IconButton onClick={loadLogs} disabled={loading} aria-label="Refresh logs">
                 <RefreshIcon />
               </IconButton>
             </span>
           </Tooltip>
           <Tooltip title="Export as CSV">
             <span>
-              <IconButton onClick={handleExportCSV} disabled={filteredEntries.length === 0}>
+              <IconButton onClick={handleExportCSV} disabled={filteredEntries.length === 0} aria-label="Export as CSV">
                 <DownloadIcon />
               </IconButton>
             </span>
@@ -310,8 +310,8 @@ const AuditLog: React.FC = () => {
 
       {/* Loading state */}
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-          <CircularProgress />
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }} role="status">
+          <CircularProgress aria-label="Loading" />
         </Box>
       ) : (
         <>
