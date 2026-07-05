@@ -3,8 +3,7 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
-
-const AUDIT_LOG_FILE = path.join(process.cwd(), 'data', 'audit.log');
+import { AuditLogConfig, resolveAuditLogConfig } from '../config/auditLog';
 
 export enum AuditEventType {
   // Authentication events
@@ -60,6 +59,15 @@ export interface AuditEntry {
 
 class AuditService {
   private writeQueue: Promise<void> = Promise.resolve();
+  private readonly filePath: string;
+  private readonly maxSizeBytes: number;
+  private readonly maxFiles: number;
+
+  constructor(cfg: AuditLogConfig = resolveAuditLogConfig()) {
+    this.filePath = cfg.filePath;
+    this.maxSizeBytes = cfg.maxSizeBytes;
+    this.maxFiles = cfg.maxFiles;
+  }
 
   /**
    * Log an audit event
@@ -97,15 +105,30 @@ class AuditService {
   }
 
   /**
-   * Write a single audit entry to file
+   * Write a single audit entry to file.
+   *
+   * Called sequentially through the write queue (see log()), so the
+   * check-and-rotate below never races another writer. When the active file
+   * plus the incoming line would exceed the size cap, the rotation ring is
+   * shifted first and the entry is then appended to a fresh, empty file. The
+   * append itself is a single atomic appendFile call, so an entry is never
+   * split or lost.
    */
   private async writeEntry(entry: AuditEntry): Promise<void> {
     try {
       // Ensure directory exists
-      await fs.mkdir(path.dirname(AUDIT_LOG_FILE), { recursive: true });
+      await fs.mkdir(path.dirname(this.filePath), { recursive: true });
 
-      // Append to log file (one JSON object per line for easy parsing)
-      await fs.appendFile(AUDIT_LOG_FILE, JSON.stringify(entry) + '\n', 'utf-8');
+      // One JSON object per line for easy parsing
+      const line = JSON.stringify(entry) + '\n';
+      const lineBytes = Buffer.byteLength(line, 'utf-8');
+
+      // Rotate before appending so the active file stays under the cap and the
+      // entry lands in a fresh file rather than pushing an oversized one.
+      await this.rotateIfNeeded(lineBytes);
+
+      // Append is a single atomic call -- the entry is written whole or not at all.
+      await fs.appendFile(this.filePath, line, 'utf-8');
     } catch (error) {
       console.error('Failed to write audit log:', error);
       // Don't throw - audit logging shouldn't break the app
@@ -113,7 +136,59 @@ class AuditService {
   }
 
   /**
-   * Query audit logs (basic implementation)
+   * Rotate the log ring if appending `incomingBytes` would push the active file
+   * past the size cap. Shifts audit.log.(N-1) -> audit.log.N (dropping the
+   * oldest), then audit.log -> audit.log.1, leaving audit.log absent so the
+   * caller appends to a fresh file. No-op on first run (no file yet).
+   */
+  private async rotateIfNeeded(incomingBytes: number): Promise<void> {
+    let currentSize: number;
+    try {
+      currentSize = (await fs.stat(this.filePath)).size;
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        return; // First run: nothing to rotate.
+      }
+      throw error;
+    }
+
+    // Nothing to rotate if empty, or if the entry still fits under the cap.
+    if (currentSize === 0 || currentSize + incomingBytes <= this.maxSizeBytes) {
+      return;
+    }
+
+    // Shift the ring from oldest to newest. Renaming .(i) -> .(i+1) overwrites
+    // the destination, so the file at .maxFiles is dropped, keeping at most
+    // maxFiles rotated files.
+    for (let i = this.maxFiles - 1; i >= 1; i--) {
+      await this.safeRename(`${this.filePath}.${i}`, `${this.filePath}.${i + 1}`);
+    }
+    await this.safeRename(this.filePath, `${this.filePath}.1`);
+  }
+
+  /**
+   * Rename that tolerates a missing source (a rotated slot that does not exist
+   * yet). Any other error propagates to writeEntry's catch.
+   */
+  private async safeRename(from: string, to: string): Promise<void> {
+    try {
+      await fs.rename(from, to);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Query audit logs, returning matching entries newest-first.
+   *
+   * Rotation means the most recent entries can span the active file plus one or
+   * more rotated files (audit.log.1, audit.log.2, ...). The files are strictly
+   * ordered by recency (active newest, then .1, .2, ...), so this reads them
+   * newest-first and stops as soon as the requested limit is satisfied -- small
+   * limits never touch older rotated files.
    */
   async query(filters?: {
     eventType?: AuditEventType;
@@ -122,40 +197,84 @@ class AuditService {
     endDate?: Date;
     limit?: number;
   }): Promise<AuditEntry[]> {
-    try {
-      const content = await fs.readFile(AUDIT_LOG_FILE, 'utf-8');
-      let entries = content
-        .split('\n')
-        .filter(line => line.trim())
-        .map(line => JSON.parse(line) as AuditEntry);
+    const limit = filters?.limit;
+    const collected: AuditEntry[] = []; // Accumulated newest-first.
 
-      // Apply filters
-      if (filters) {
-        if (filters.eventType) {
-          entries = entries.filter(e => e.eventType === filters.eventType);
-        }
-        if (filters.userId) {
-          entries = entries.filter(e => e.userId === filters.userId);
-        }
-        if (filters.startDate) {
-          entries = entries.filter(e => new Date(e.timestamp) >= filters.startDate!);
-        }
-        if (filters.endDate) {
-          entries = entries.filter(e => new Date(e.timestamp) <= filters.endDate!);
-        }
-        if (filters.limit) {
-          entries = entries.slice(-filters.limit);
-        }
+    // Newest file first: active log, then rotated files .1 .. .maxFiles.
+    for (const filePath of this.orderedFilePaths()) {
+      const fileEntries = await this.readFilteredEntries(filePath, filters);
+      // Lines are appended oldest-first within a file; reverse to newest-first.
+      for (let i = fileEntries.length - 1; i >= 0; i--) {
+        collected.push(fileEntries[i]);
       }
+      if (limit && limit > 0 && collected.length >= limit) {
+        break; // Have enough newest entries; older files can't add newer ones.
+      }
+    }
 
-      return entries.reverse(); // Most recent first
+    if (limit && limit > 0 && collected.length > limit) {
+      return collected.slice(0, limit);
+    }
+    return collected;
+  }
+
+  /**
+   * File paths ordered newest-first: the active log followed by rotated files
+   * audit.log.1 .. audit.log.maxFiles.
+   */
+  private orderedFilePaths(): string[] {
+    const paths = [this.filePath];
+    for (let i = 1; i <= this.maxFiles; i++) {
+      paths.push(`${this.filePath}.${i}`);
+    }
+    return paths;
+  }
+
+  /**
+   * Read one log file and return its entries (oldest-first, as stored) after
+   * applying the given filters. Returns [] if the file does not exist.
+   */
+  private async readFilteredEntries(
+    filePath: string,
+    filters?: {
+      eventType?: AuditEventType;
+      userId?: string;
+      startDate?: Date;
+      endDate?: Date;
+    }
+  ): Promise<AuditEntry[]> {
+    let content: string;
+    try {
+      content = await fs.readFile(filePath, 'utf-8');
     } catch (error: any) {
       if (error.code === 'ENOENT') {
-        return []; // No log file yet
+        return []; // Rotated slot not present (or no log yet).
       }
-      console.error('Failed to query audit logs:', error);
+      console.error('Failed to read audit log file:', error);
       throw error;
     }
+
+    let entries = content
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => JSON.parse(line) as AuditEntry);
+
+    if (filters) {
+      if (filters.eventType) {
+        entries = entries.filter(e => e.eventType === filters.eventType);
+      }
+      if (filters.userId) {
+        entries = entries.filter(e => e.userId === filters.userId);
+      }
+      if (filters.startDate) {
+        entries = entries.filter(e => new Date(e.timestamp) >= filters.startDate!);
+      }
+      if (filters.endDate) {
+        entries = entries.filter(e => new Date(e.timestamp) <= filters.endDate!);
+      }
+    }
+
+    return entries;
   }
 
   /**
@@ -215,4 +334,5 @@ class AuditService {
   }
 }
 
+export { AuditService };
 export const auditService = new AuditService();
