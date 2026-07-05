@@ -250,7 +250,7 @@ interface AddDNSRecordProps {
   onClose?: () => void;
 }
 
-type ErrorState = string | { severity?: string; message: string; details?: any } | null;
+type ErrorState = string | { severity?: string; message: string } | null;
 
 function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
   const { selectedKey, selectedZone } = useKey();
@@ -714,19 +714,6 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
         <Alert
           severity={(typeof error === 'object' && error !== null ? error.severity : undefined) as any || 'error'}
           sx={{ mt: 2 }}
-          action={
-            typeof error === 'object' && error !== null && error.details ? (
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => {
-                  console.info('Error details:', (error as { severity?: string; message: string; details?: any }).details);
-                }}
-              >
-                Details
-              </Button>
-            ) : undefined
-          }
         >
           {typeof error === 'string' ? error : error.message}
         </Alert>
