@@ -58,8 +58,10 @@ const RECORD_TYPES: Record<string, RecordTypeDefinition> = {
     fields: [{
       name: 'value',
       label: 'IPv6 Address',
-      helperText: 'Enter a valid IPv6 address',
-      validate: (value) => /^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i.test(value),
+      helperText: 'Enter a valid IPv6 address (compressed forms like 2001:db8::1 are fine)',
+      // Delegate to the shared validator so compressed (::) and
+      // embedded-IPv4 forms aren't falsely rejected.
+      validate: (value) => DNSValidationService.isValidIPv6(value),
       required: true
     }]
   },

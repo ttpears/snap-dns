@@ -211,7 +211,9 @@ function ZoneEditor() {
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      setSelectedRecords(records);
+      // Select only what the current search/filter shows — selecting hidden
+      // records would let a bulk delete queue changes the user never saw.
+      setSelectedRecords(filteredRecords);
     } else {
       setSelectedRecords([]);
     }
@@ -481,6 +483,17 @@ function ZoneEditor() {
 
   return (
     <Paper sx={{ p: 3 }}>
+      {selectedZone && selectedKey && (
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+          <Typography variant="h5" component="h1">{selectedZone}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            key: {selectedKey.name} · server: {selectedKey.server}
+            {records.length > 0 && (filteredRecords.length === records.length
+              ? ` · ${records.length} record${records.length !== 1 ? 's' : ''}`
+              : ` · showing ${filteredRecords.length} of ${records.length} records`)}
+          </Typography>
+        </Box>
+      )}
       <Box sx={{
         display: 'flex',
         gap: 2,
@@ -613,8 +626,8 @@ function ZoneEditor() {
                   <TableCell padding="checkbox">
                     <Checkbox
                       size="small"
-                      indeterminate={selectedRecords.length > 0 && selectedRecords.length < records.length}
-                      checked={records.length > 0 && selectedRecords.length === records.length}
+                      indeterminate={selectedRecords.length > 0 && selectedRecords.length < filteredRecords.length}
+                      checked={filteredRecords.length > 0 && selectedRecords.length === filteredRecords.length}
                       onChange={handleSelectAllClick}
                     />
                   </TableCell>
@@ -658,6 +671,15 @@ function ZoneEditor() {
                 </TableRow>
               </TableHead>
               <TableBody>
+                {filteredRecords.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                      {records.length === 0
+                        ? 'No records in this zone yet. Use "Add Record" to create one.'
+                        : 'No records match the current search or type filter.'}
+                    </TableCell>
+                  </TableRow>
+                )}
                 {filteredRecords
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((record, index) => (
