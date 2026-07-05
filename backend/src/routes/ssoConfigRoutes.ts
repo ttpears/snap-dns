@@ -1,6 +1,6 @@
 // backend/src/routes/ssoConfigRoutes.ts
 import { Router, Request, Response } from 'express';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth, requireRole, requirePasswordCurrent } from '../middleware/auth';
 import { UserRole } from '../types/auth';
 import { ssoConfigService } from '../services/ssoConfigService';
 import { SSOConfig, SSOProvider } from '../types/sso';
@@ -46,7 +46,7 @@ router.get('/', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, r
  * PUT /api/sso-config
  * Update SSO configuration (admin only)
  */
-router.put('/', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+router.put('/', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const updates: Partial<SSOConfig> = req.body;
 
@@ -108,7 +108,7 @@ router.put('/', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, r
  * POST /api/sso-config/test
  * Test SSO configuration (admin only)
  */
-router.post('/test', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+router.post('/test', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const config = await ssoConfigService.getFullConfig();
 

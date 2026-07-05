@@ -4,13 +4,23 @@ import { rateLimit } from 'express-rate-limit';
 import { isRateLimitEnabled } from '../config/securityToggles';
 import { userService } from '../services/userService';
 import { auditService, AuditEventType } from '../services/auditService';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth, requireRole, requirePasswordCurrent } from '../middleware/auth';
 import { LoginCredentials, UserCreateData, UserRole, AuthenticatedRequest } from '../types/auth';
 import { validateLogin, validateUserCreate, validateChangePassword } from '../middleware/validation';
 import { getClientIp } from '../helpers/ipHelpers';
 import { regenerateSession } from '../helpers/session';
 
 const router = Router();
+
+/**
+ * An admin resetting a password via PATCH /users/:userId/password may reset any
+ * OTHER user's password without knowing it, but resetting their OWN password
+ * through this endpoint must require the current password (mirroring the
+ * self-service /change-password endpoint). Extracted for unit testing.
+ */
+export function selfPasswordResetRequiresCurrent(targetUserId: string, actingUserId: string): boolean {
+  return targetUserId === actingUserId;
+}
 
 // Rate limiting for login attempts
 const loginLimiter = rateLimit({
@@ -77,6 +87,7 @@ router.post('/login', loginLimiter, validateLogin, async (req: Request, res: Res
     req.session.role = user.role;
     req.session.allowedKeyIds = user.allowedKeyIds;
     req.session.allowedZones = user.allowedZones || [];
+    req.session.mustChangePassword = user.mustChangePassword ?? false;
 
     // Log successful login
     await auditService.logAuth(
@@ -98,6 +109,7 @@ router.post('/login', loginLimiter, validateLogin, async (req: Request, res: Res
         email: user.email,
         allowedKeyIds: user.allowedKeyIds,
         allowedZones: user.allowedZones || [],
+        mustChangePassword: user.mustChangePassword ?? false,
       }
     });
   } catch (error) {
@@ -164,6 +176,7 @@ router.get('/session', (req: Request, res: Response) => {
       role: req.session.role,
       allowedKeyIds: req.session.allowedKeyIds,
       allowedZones: req.session.allowedZones || [],
+      mustChangePassword: req.session.mustChangePassword ?? false,
     }
   });
 });
@@ -212,8 +225,11 @@ router.post('/change-password', requireAuth, validateChangePassword, async (req:
       });
     }
 
-    // Update password
+    // Update password. The user chose this password themselves, so clear any
+    // forced-change flag (updatePassword defaults mustChangePassword to false)
+    // and mirror that into the session so /session reflects it immediately.
     await userService.updatePassword(user.id, newPassword);
+    req.session.mustChangePassword = false;
 
     // Log password change
     await auditService.log(AuditEventType.PASSWORD_CHANGE, {
@@ -242,7 +258,7 @@ router.post('/change-password', requireAuth, validateChangePassword, async (req:
  * POST /api/auth/users
  * Create a new user (admin only)
  */
-router.post('/users', requireAuth, requireRole(UserRole.ADMIN), validateUserCreate, async (req: Request, res: Response) => {
+router.post('/users', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), validateUserCreate, async (req: Request, res: Response) => {
   try {
     const userData: UserCreateData = req.body;
 
@@ -326,7 +342,7 @@ router.get('/users', requireAuth, requireRole(UserRole.ADMIN), async (req: Reque
  * DELETE /api/auth/users/:userId
  * Delete a user (admin only)
  */
-router.delete('/users/:userId', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+router.delete('/users/:userId', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const authReq = req as AuthenticatedRequest;
@@ -385,7 +401,7 @@ router.delete('/users/:userId', requireAuth, requireRole(UserRole.ADMIN), async 
  * PATCH /api/auth/users/:userId/role
  * Update user role (admin only)
  */
-router.patch('/users/:userId/role', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+router.patch('/users/:userId/role', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const { role } = req.body;
@@ -462,7 +478,7 @@ router.patch('/users/:userId/role', requireAuth, requireRole(UserRole.ADMIN), as
  * PATCH /api/auth/users/:userId/keys
  * Update user's allowed key IDs (admin only)
  */
-router.patch('/users/:userId/keys', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+router.patch('/users/:userId/keys', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const { keyIds } = req.body;
@@ -529,7 +545,7 @@ router.patch('/users/:userId/keys', requireAuth, requireRole(UserRole.ADMIN), as
  * PATCH /api/auth/users/:userId/zones
  * Update user's allowed zone names (admin only)
  */
-router.patch('/users/:userId/zones', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+router.patch('/users/:userId/zones', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const { zones } = req.body;
@@ -605,10 +621,20 @@ router.patch('/users/:userId/zones', requireAuth, requireRole(UserRole.ADMIN), a
  * PATCH /api/auth/users/:userId/password
  * Reset user password (admin only)
  */
-router.patch('/users/:userId/password', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+router.patch('/users/:userId/password', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const { newPassword } = req.body;
+    const { newPassword, currentPassword } = req.body;
+    const authReq = req as AuthenticatedRequest;
+    const actingUser = authReq.user;
+
+    if (!actingUser) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+        code: 'NOT_AUTHENTICATED'
+      });
+    }
 
     if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({
@@ -628,7 +654,36 @@ router.patch('/users/:userId/password', requireAuth, requireRole(UserRole.ADMIN)
       });
     }
 
-    await userService.updatePassword(userId, newPassword);
+    // Resetting your OWN password through this admin endpoint requires the
+    // current password, just like /change-password. Resetting ANOTHER user's
+    // password does not (that is the intended admin reset flow).
+    const isSelfReset = selfPasswordResetRequiresCurrent(userId, actingUser.userId);
+    if (isSelfReset) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          success: false,
+          error: 'Current password is required to reset your own password',
+          code: 'MISSING_CURRENT_PASSWORD'
+        });
+      }
+
+      const authenticated = await userService.authenticate(user.username, currentPassword);
+      if (!authenticated) {
+        return res.status(401).json({
+          success: false,
+          error: 'Current password is incorrect',
+          code: 'INVALID_PASSWORD'
+        });
+      }
+    }
+
+    // Self-reset: the user chose this password, so clear the forced-change flag.
+    // Admin resetting another user: force that user to rotate the admin-set
+    // password on first use.
+    await userService.updatePassword(userId, newPassword, !isSelfReset);
+    if (isSelfReset) {
+      req.session.mustChangePassword = false;
+    }
 
     // Log password reset
     await auditService.log(AuditEventType.PASSWORD_RESET, {

@@ -6,18 +6,24 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  // True while the authenticated user still owes a forced password change.
+  mustChangePassword: boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
+  // Clears the forced-change flag locally after a successful change.
+  clearMustChangePassword: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+  mustChangePassword: false,
   login: async () => ({ success: false }),
   logout: async () => {},
   checkSession: async () => {},
+  clearMustChangePassword: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -75,15 +81,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const clearMustChangePassword = useCallback(() => {
+    setUser((prev) => (prev ? { ...prev, mustChangePassword: false } : prev));
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
         user,
         isAuthenticated: user !== null,
         isLoading,
+        mustChangePassword: user?.mustChangePassword === true,
         login,
         logout,
         checkSession,
+        clearMustChangePassword,
       }}
     >
       {children}

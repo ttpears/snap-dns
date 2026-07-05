@@ -1,6 +1,6 @@
 // backend/src/routes/tsigKeyRoutes.ts
 import { Router, Request, Response } from 'express';
-import { requireAuth, requireRole, requireWriteAccess } from '../middleware/auth';
+import { requireAuth, requireRole, requireWriteAccess, requirePasswordCurrent } from '../middleware/auth';
 import { AuthenticatedRequest, UserRole } from '../types/auth';
 import { tsigKeyService, TSIGKeyCreate } from '../services/tsigKeyService';
 import { keyManagementLimiter } from '../middleware/rateLimiter';
@@ -43,7 +43,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
  * POST /api/tsig-keys
  * Create a new TSIG key (admin or editor only)
  */
-router.post('/', requireAuth, requireWriteAccess, validateTSIGKeyCreate, async (req: Request, res: Response) => {
+router.post('/', requireAuth, requirePasswordCurrent, requireWriteAccess, validateTSIGKeyCreate, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;
@@ -134,7 +134,7 @@ router.get('/:keyId', requireAuth, async (req: Request, res: Response) => {
  * PUT /api/tsig-keys/:keyId
  * Update a TSIG key (admin or editor only)
  */
-router.put('/:keyId', requireAuth, requireWriteAccess, validateTSIGKeyUpdate, async (req: Request, res: Response) => {
+router.put('/:keyId', requireAuth, requirePasswordCurrent, requireWriteAccess, validateTSIGKeyUpdate, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;
@@ -189,7 +189,7 @@ router.put('/:keyId', requireAuth, requireWriteAccess, validateTSIGKeyUpdate, as
  * DELETE /api/tsig-keys/:keyId
  * Delete a TSIG key (admin only)
  */
-router.delete('/:keyId', requireAuth, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+router.delete('/:keyId', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;
