@@ -15,8 +15,7 @@ interface ConfigContextType {
 const defaultConfig: Config = {
   defaultTTL: 3600,
   webhookUrl: null,
-  webhookProvider: null,
-  keys: []
+  webhookProvider: null
 };
 
 const ConfigContext = createContext<ConfigContextType>({
@@ -36,6 +35,13 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
         // Remove webhook config from localStorage (now stored server-side)
         delete parsed.webhookUrl;
         delete parsed.webhookProvider;
+        // One-time scrub: legacy TSIG key entries could contain secret
+        // material. Keys live server-side now, so remove them from
+        // localStorage permanently.
+        if ('keys' in parsed) {
+          delete parsed.keys;
+          localStorage.setItem('dns_manager_config', JSON.stringify(parsed));
+        }
         return ensureValidConfig({ ...defaultConfig, ...parsed });
       }
       return defaultConfig;

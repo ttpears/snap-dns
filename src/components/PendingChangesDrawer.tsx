@@ -75,7 +75,8 @@ function PendingChangesDrawer({
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [backendKeys, setBackendKeys] = useState<TSIGKey[]>([]);
 
-  // Load keys from backend API
+  // Load key metadata from the backend API. No local fallback: keys live
+  // server-side only, so an API failure just leaves the list empty.
   useEffect(() => {
     const loadKeys = async () => {
       try {
@@ -83,13 +84,12 @@ function PendingChangesDrawer({
         setBackendKeys(keys);
       } catch (error) {
         console.error('Failed to load keys:', error);
-        // Fall back to config keys if backend fails
-        setBackendKeys((config.keys || []) as unknown as TSIGKey[]);
+        setBackendKeys([]);
       }
     };
 
     loadKeys();
-  }, [config.keys]);
+  }, []);
 
   useEffect(() => {
     setExpandedItems({});

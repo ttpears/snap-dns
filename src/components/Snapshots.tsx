@@ -332,6 +332,8 @@ function Snapshots() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
   const [backupToDelete, setBackupToDelete] = useState<any>(null);
 
+  // Load key metadata from the backend API. No local fallback: keys live
+  // server-side only, so an API failure just leaves the list empty.
   useEffect(() => {
     const loadKeys = async () => {
       try {
@@ -339,12 +341,12 @@ function Snapshots() {
         setBackendKeys(keys);
       } catch (error) {
         console.error('Failed to load keys:', error);
-        setBackendKeys(config.keys as any[] || []);
+        setBackendKeys([]);
       }
     };
 
     loadKeys();
-  }, [config.keys]);
+  }, []);
 
   const availableZones = useMemo(() => {
     const zones = new Set<string>();

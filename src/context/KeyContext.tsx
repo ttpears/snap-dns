@@ -1,18 +1,16 @@
 // src/context/KeyContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useConfig } from './ConfigContext';
 import { tsigKeyService, TSIGKey } from '../services/tsigKeyService';
 import { useAuth } from './AuthContext';
 
+// Key metadata only - secret material never leaves the backend.
 export interface AvailableKey {
   id: string;
   name: string;
   server: string;
   keyName: string;
-  secret: string;
   algorithm: string;
   zones: string[];
-  type: string;
 }
 
 interface KeyContextType {
@@ -25,6 +23,9 @@ interface KeyContextType {
   // zones should read selectedKey.zones directly.
   availableZones: string[];
   availableKeys: AvailableKey[];
+  // True until the first backend key fetch settles; consumers should show a
+  // loading state rather than a "no keys" empty state while this is true.
+  keysLoading: boolean;
 }
 
 const KeyContext = createContext<KeyContextType | undefined>(undefined);
@@ -32,12 +33,12 @@ const KeyContext = createContext<KeyContextType | undefined>(undefined);
 const STORAGE_KEY = 'dns_manager_selections';
 
 export function KeyProvider({ children }: { children: React.ReactNode }) {
-  const { config } = useConfig();
   const { isAuthenticated } = useAuth();
   const [selectedKey, setSelectedKey] = useState<AvailableKey | null>(null);
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [backendKeys, setBackendKeys] = useState<TSIGKey[]>([]);
+  const [keysLoading, setKeysLoading] = useState(true);
 
   // Fetch keys from backend when authenticated
   useEffect(() => {
@@ -49,6 +50,8 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
           console.error('Failed to fetch keys from backend:', error);
           setBackendKeys([]);
+        } finally {
+          setKeysLoading(false);
         }
       } else {
         setBackendKeys([]);
@@ -62,26 +65,22 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
   // across all keys (key-agnostic) so zone-first selection can list everything.
   const availableZones = React.useMemo(() => {
     const zones = new Set<string>();
-    const keysToUse: any[] = backendKeys.length > 0 ? backendKeys : (config.keys || []);
-    keysToUse.forEach((key: any) => {
+    backendKeys.forEach((key: TSIGKey) => {
       key.zones?.forEach((zone: string) => zones.add(zone));
     });
     return Array.from(zones);
-  }, [backendKeys, config.keys]);
+  }, [backendKeys]);
 
   const availableKeys: AvailableKey[] = React.useMemo(() => {
-    const keysToUse: any[] = backendKeys.length > 0 ? backendKeys : (config.keys || []);
-    return keysToUse.map((key: any) => ({
+    return backendKeys.map((key: TSIGKey) => ({
       id: key.id,
       name: key.name,
       server: key.server,
       keyName: key.keyName || key.name,
-      secret: key.keyValue || key.secret || 'server-side',
       algorithm: key.algorithm,
-      zones: key.zones || [],
-      type: key.type || 'internal'
+      zones: key.zones || []
     }));
-  }, [backendKeys, config.keys]);
+  }, [backendKeys]);
 
   // Load saved selections on mount - wait for availableKeys to be populated
   useEffect(() => {
@@ -178,7 +177,8 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
       selectKey,
       selectZone,
       availableZones,
-      availableKeys
+      availableKeys,
+      keysLoading
     }}>
       {children}
     </KeyContext.Provider>

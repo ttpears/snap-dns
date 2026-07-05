@@ -66,14 +66,6 @@ export interface PendingChange {
 // Input shape for queueing a change — id is assigned by the context.
 export type NewPendingChange = Omit<PendingChange, 'id'> & { id?: string };
 
-export interface ZoneConfig {
-  server: string;
-  keyName: string;
-  keyValue: string;
-  algorithm: string;
-  id: string;
-}
-
 export interface ZoneOperationResult {
   success: boolean;
   message?: string;

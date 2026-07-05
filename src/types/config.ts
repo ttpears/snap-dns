@@ -1,9 +1,7 @@
 // src/types/config.ts
 import type { WebhookProvider } from './webhook';
-import { Key } from './keys';
 
 export interface Config {
-  keys: Key[];
   defaultTTL?: number;
   webhookUrl?: string | null;
   webhookProvider?: WebhookProvider;
@@ -12,7 +10,6 @@ export interface Config {
 
 export function ensureValidConfig(config: Partial<Config>): Config {
   return {
-    keys: config.keys || [],
     defaultTTL: config.defaultTTL || 3600,
     webhookUrl: config.webhookUrl || null,
     webhookProvider: config.webhookProvider || null,
@@ -21,4 +18,4 @@ export function ensureValidConfig(config: Partial<Config>): Config {
 }
 
 // Re-export for convenience
-export type { WebhookProvider }; 
+export type { WebhookProvider };
