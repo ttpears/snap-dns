@@ -135,7 +135,6 @@ function KeySelector() {
           value={validSelectedZone}
           onChange={(e) => selectZone(e.target.value || null)}
           label="Select Zone"
-          disabled={!selectedKey}
           SelectDisplayProps={{ id: 'zone-select' } as React.HTMLAttributes<HTMLDivElement>}
         >
           <MenuItem value="">
@@ -150,7 +149,9 @@ function KeySelector() {
             ))}
         </Select>
         <FormHelperText>
-          {!selectedKey ? 'Select a key first' : 'Select a zone to manage'}
+          {!selectedKey
+            ? 'Select a zone and a matching key is chosen automatically'
+            : 'Select a zone to manage'}
         </FormHelperText>
       </FormControl>
 

@@ -20,6 +20,9 @@ interface KeyContextType {
   selectedZone: string | null;
   selectKey: (key: AvailableKey | null) => void;
   selectZone: (zone: string | null) => void;
+  // availableZones is ALWAYS the union of zones across all keys, regardless of
+  // whether a key is selected. Consumers that need only the selected key's
+  // zones should read selectedKey.zones directly.
   availableZones: string[];
   availableKeys: AvailableKey[];
 }
@@ -55,7 +58,8 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
     fetchKeys();
   }, [isAuthenticated]);
 
-  // Calculate available keys and zones
+  // Calculate available keys and zones. availableZones is the union of zones
+  // across all keys (key-agnostic) so zone-first selection can list everything.
   const availableZones = React.useMemo(() => {
     const zones = new Set<string>();
     const keysToUse: any[] = backendKeys.length > 0 ? backendKeys : (config.keys || []);
@@ -79,11 +83,6 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [backendKeys, config.keys]);
 
-  const availableZonesForKey = React.useMemo(() => {
-    if (!selectedKey) return availableZones;
-    return selectedKey.zones || [];
-  }, [selectedKey, availableZones]);
-
   // Load saved selections on mount - wait for availableKeys to be populated
   useEffect(() => {
     if (!initialized && availableKeys.length > 0) {
@@ -97,6 +96,12 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
             if (saved.zone && savedKey.zones?.includes(saved.zone)) {
               setSelectedZone(saved.zone);
             }
+          }
+        } else if (saved.zone) {
+          // Zone-only selection (zone-first flow with the key deselected)
+          const zoneStillExists = availableKeys.some(k => k.zones?.includes(saved.zone));
+          if (zoneStillExists) {
+            setSelectedZone(saved.zone);
           }
         }
       } catch (error) {
@@ -129,11 +134,11 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
     }
   }, [availableKeys, selectedKey, selectedZone, initialized]);
 
-  // Save selections to localStorage
+  // Save selections to localStorage; shape stays { keyId, zone }
   const saveSelections = (key: AvailableKey | null, zone: string | null) => {
-    if (key) {
+    if (key || zone) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        keyId: key.id,
+        keyId: key ? key.id : null,
         zone: zone
       }));
     } else {
@@ -141,24 +146,29 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Selection transition rules:
+  // - selectKey(key): the current zone is KEPT when the new key serves it;
+  //   it is cleared only when the new key does not serve it. Deselecting the
+  //   key (null) keeps the zone (zone-first state).
+  // - selectZone(zone): the current key is KEPT when it serves the zone;
+  //   otherwise the first available key serving the zone is auto-selected.
+  //   Deselecting the zone (null) keeps the key.
   const selectKey = (key: AvailableKey | null) => {
+    const keepZone = !key || !selectedZone || key.zones?.includes(selectedZone);
+    const nextZone = keepZone ? selectedZone : null;
     setSelectedKey(key);
-    if (key && selectedZone && !key.zones?.includes(selectedZone)) {
-      setSelectedZone(null);
-      saveSelections(key, null);
-    } else {
-      saveSelections(key, selectedZone);
-    }
+    setSelectedZone(nextZone);
+    saveSelections(key, nextZone);
   };
 
   const selectZone = (zone: string | null) => {
+    const keepKey = !zone || (selectedKey?.zones?.includes(zone) ?? false);
+    const nextKey = keepKey
+      ? selectedKey
+      : availableKeys.find(k => k.zones?.includes(zone!)) || null;
+    setSelectedKey(nextKey);
     setSelectedZone(zone);
-    if (zone && selectedKey && !selectedKey.zones?.includes(zone)) {
-      setSelectedKey(null);
-      saveSelections(null, zone);
-    } else {
-      saveSelections(selectedKey, zone);
-    }
+    saveSelections(nextKey, zone);
   };
 
   return (
