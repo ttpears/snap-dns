@@ -275,7 +275,6 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
   const [ptrPreview, setPtrPreview] = useState('');
   const [txtSubtype, setTxtSubtype] = useState<TxtSubtype | null>(null);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
@@ -492,7 +491,6 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
-    setSuccess(null);
 
     try {
       if (!validateFields()) {
@@ -716,12 +714,6 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
           sx={{ mt: 2 }}
         >
           {typeof error === 'string' ? error : error.message}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mt: 2 }}>
-          {success}
         </Alert>
       )}
 

@@ -26,6 +26,16 @@ jest.mock('../../context/PendingChangesContext', () => ({
   })
 }));
 
+jest.mock('../../context/NotificationContext', () => ({
+  useNotification: () => ({
+    showNotification: jest.fn(),
+    showSuccess: jest.fn(),
+    showError: jest.fn(),
+    showInfo: jest.fn(),
+    showWarning: jest.fn()
+  })
+}));
+
 const mockUseKey = jest.fn();
 jest.mock('../../context/KeyContext', () => ({
   useKey: () => mockUseKey()

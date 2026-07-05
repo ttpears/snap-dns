@@ -36,6 +36,7 @@ import UserManagement from './UserManagement';
 import SSOConfiguration from './SSOConfiguration';
 import AuditLog from './AuditLog';
 import { useAuth } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 import { Config, ensureValidConfig, WebhookProvider } from '../types/config';
 import { Key } from '../types/keys';
 import { backupService } from '../services/backupService';
@@ -143,6 +144,7 @@ function a11yProps(index: number) {
 function Settings() {
   const { config, updateConfig } = useConfig();
   const { user } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const [currentTab, setCurrentTab] = useState(0);
   const [defaultTTL, setDefaultTTL] = useState(config.defaultTTL);
   const [webhookUrl, setWebhookUrl] = useState(config.webhookUrl || '');
@@ -150,8 +152,6 @@ function Settings() {
     config.webhookProvider || 'mattermost'
   );
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportKeys, setExportKeys] = useState(false);
@@ -161,6 +161,7 @@ function Settings() {
   const [importedData, setImportedData] = useState<ImportData | null>(null);
   const [selectedKeyId, setSelectedKeyId] = useState('');
   const [importType, setImportType] = useState<'full' | 'zones' | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [exportBackups, setExportBackups] = useState(true);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -169,8 +170,7 @@ function Settings() {
 
   const handleSave = async () => {
     setSaving(true);
-    setError(null);
-    
+
     try {
       const updatedConfig = {
         ...config,
@@ -181,10 +181,10 @@ function Settings() {
       
       await updateConfig(updatedConfig);
       notificationService.setWebhookConfig(webhookUrl, webhookProvider);
-      setSuccess('Settings saved successfully');
+      showSuccess('Settings saved successfully');
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(`Failed to save settings: ${errorMessage}`);
+      showError(`Failed to save settings: ${errorMessage}`);
     } finally {
       setSaving(false);
     }
@@ -192,13 +192,12 @@ function Settings() {
 
   const handleTestWebhook = async () => {
     setTesting(true);
-    setError(null);
     try {
       await notificationService.testWebhook();
-      setSuccess('Test notification sent successfully!');
+      showSuccess('Test notification sent successfully!');
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(`Failed to send test notification: ${errorMessage}`);
+      showError(`Failed to send test notification: ${errorMessage}`);
     } finally {
       setTesting(false);
     }
@@ -283,9 +282,9 @@ function Settings() {
       document.body.removeChild(a);
 
       setExportDialogOpen(false);
-      setSuccess('Configuration exported successfully');
+      showSuccess('Configuration exported successfully');
     } catch (error) {
-      setError(`Failed to export configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(`Failed to export configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -310,15 +309,24 @@ function Settings() {
 
         setImportType(isZonesOnly ? 'zones' : 'full');
         setImportedData(data);
+        setImportError(null);
         setImportDialogOpen(true);
       } catch (error) {
-        setError(`Failed to read import file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        showError(`Failed to read import file: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     };
     reader.readAsText(file);
   };
 
   const handleImportConfirm = async () => {
+    // Dialog-level form validation: a zones-only import needs a target key
+    // before anything can run, so surface this inline rather than as a toast.
+    if (importType === 'zones' && !selectedKeyId) {
+      setImportError('Please select a key to associate with the imported zones');
+      return;
+    }
+    setImportError(null);
+
     try {
       if (!importedData?.dns_manager_config) {
         throw new Error('Invalid import data');
@@ -326,10 +334,6 @@ function Settings() {
 
       if (importType === 'zones') {
         // Handle zones-only import
-        if (!selectedKeyId) {
-          throw new Error('Please select a key to associate with the imported zones');
-        }
-
         const currentConfig = ensureValidConfig(
           JSON.parse(localStorage.getItem('dns_manager_config') || '{}')
         );
@@ -350,7 +354,7 @@ function Settings() {
 
         // Update config
         await updateConfig(ensureValidConfig(currentConfig));
-        setSuccess('Zones imported successfully');
+        showSuccess('Zones imported successfully');
       } else {
         // Handle full backup import
         const currentConfig = JSON.parse(localStorage.getItem('dns_manager_config') || '{}');
@@ -380,14 +384,14 @@ function Settings() {
           localStorage.setItem('dnsBackups', JSON.stringify(backups));
         }
 
-        setSuccess('Configuration and backups imported successfully');
+        showSuccess('Configuration and backups imported successfully');
       }
 
       setImportDialogOpen(false);
       setImportedData(null);
       setSelectedKeyId('');
     } catch (error) {
-      setError(`Failed to import configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(`Failed to import configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -486,18 +490,6 @@ function Settings() {
             </Select>
             <FormHelperText>Default number of records to show per page in tables</FormHelperText>
           </FormControl>
-
-          {success && (
-            <Alert severity="success" onClose={() => setSuccess(null)}>
-              {success}
-            </Alert>
-          )}
-
-          {error && (
-            <Alert severity="error" onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
 
           <Stack direction="row" spacing={2}>
             <Button
@@ -655,10 +647,18 @@ function Settings() {
       {/* Import Dialog */}
       <Dialog
         open={importDialogOpen}
-        onClose={() => setImportDialogOpen(false)}
+        onClose={() => {
+          setImportDialogOpen(false);
+          setImportError(null);
+        }}
       >
         <DialogTitle>Import Configuration</DialogTitle>
         <DialogContent>
+          {importError && (
+            <Alert severity="error" onClose={() => setImportError(null)} sx={{ mb: 2 }}>
+              {importError}
+            </Alert>
+          )}
           <DialogContentText>
             {importType === 'zones' ? (
               <>
@@ -669,7 +669,10 @@ function Settings() {
                   <InputLabel>Select Key</InputLabel>
                   <Select
                     value={selectedKeyId}
-                    onChange={(e) => setSelectedKeyId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedKeyId(e.target.value);
+                      setImportError(null);
+                    }}
                     label="Select Key"
                   >
                     {config.keys?.map((key: Key) => (
@@ -686,7 +689,14 @@ function Settings() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setImportDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setImportDialogOpen(false);
+              setImportError(null);
+            }}
+          >
+            Cancel
+          </Button>
           <Button onClick={handleImportConfirm} variant="contained">
             Import
           </Button>
