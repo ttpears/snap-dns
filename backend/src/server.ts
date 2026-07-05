@@ -25,6 +25,7 @@ import ssoConfigRoutes from './routes/ssoConfigRoutes';
 import auditRoutes from './routes/auditRoutes';
 import { config } from './config';
 import { resolveSessionSecret } from './config/secrets';
+import { isCookieSecure } from './config/securityToggles';
 import { readFileSync } from 'fs';
 
 // Application version, read from package.json (present next to dist/ at runtime).
@@ -99,7 +100,10 @@ app.use(session({
   name: 'snap-dns.sid',
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    // Secure (HTTPS-only) by default; opt out with COOKIE_SECURE=false for local
+    // HTTP dev. A Secure cookie is NOT sent over plain HTTP, so leaving this ON
+    // while serving over http:// makes the session appear not to persist.
+    secure: isCookieSecure(),
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }

@@ -53,6 +53,11 @@ services:
       - NODE_ENV=development
       - BACKEND_HOST=0.0.0.0
       - BACKEND_PORT=3002
+      # Local dev is served over plain HTTP: a Secure cookie would never be sent
+      # by the browser, so opt out explicitly. Security controls default to ON.
+      - COOKIE_SECURE=false
+      # Don't throttle local dev (many rapid requests during development).
+      - RATE_LIMIT_ENABLED=false
     command: npm run dev
     cap_add:
       - NET_RAW

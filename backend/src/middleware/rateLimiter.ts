@@ -2,9 +2,12 @@
 // Rate limiting middleware for DNS operations and API endpoints
 
 import { rateLimit } from 'express-rate-limit';
+import { isRateLimitEnabled } from '../config/securityToggles';
 
-// Skip rate limiting in test/development environments
-const isTestOrDev = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
+// Rate limiting is ON by default (secure) and only skipped when explicitly
+// disabled via RATE_LIMIT_ENABLED=false -- not based on NODE_ENV. See
+// config/securityToggles.ts for the rationale.
+const rateLimitDisabled = !isRateLimitEnabled();
 
 /**
  * Rate limiter for DNS zone queries (GET operations)
@@ -20,9 +23,9 @@ export const dnsQueryLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting in test/dev environments
+  // Skip only when rate limiting is explicitly disabled (default: enabled)
   skip: (_req) => {
-    return isTestOrDev;
+    return rateLimitDisabled;
   }
 });
 
@@ -40,9 +43,9 @@ export const dnsModifyLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting in test/dev environments
+  // Skip only when rate limiting is explicitly disabled (default: enabled)
   skip: (_req) => {
-    return isTestOrDev;
+    return rateLimitDisabled;
   },
   // Use user ID as key for authenticated requests
   keyGenerator: (req) => {
@@ -69,9 +72,9 @@ export const keyManagementLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting in test/dev environments
+  // Skip only when rate limiting is explicitly disabled (default: enabled)
   skip: (_req) => {
-    return isTestOrDev;
+    return rateLimitDisabled;
   },
   keyGenerator: (req) => {
     if (req.session?.userId) {
@@ -95,9 +98,9 @@ export const webhookLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting in test/dev environments
+  // Skip only when rate limiting is explicitly disabled (default: enabled)
   skip: (_req) => {
-    return isTestOrDev;
+    return rateLimitDisabled;
   },
   keyGenerator: (req) => {
     if (req.session?.userId) {
@@ -121,8 +124,8 @@ export const generalApiLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting in test/dev environments
+  // Skip only when rate limiting is explicitly disabled (default: enabled)
   skip: (_req) => {
-    return isTestOrDev;
+    return rateLimitDisabled;
   }
 });
