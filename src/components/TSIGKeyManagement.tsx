@@ -194,8 +194,8 @@ export default function TSIGKeyManagement() {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" p={3}>
-        <CircularProgress />
+      <Box display="flex" justifyContent="center" p={3} role="status">
+        <CircularProgress aria-label="Loading" />
       </Box>
     );
   }
@@ -375,6 +375,7 @@ export default function TSIGKeyManagement() {
               <Box display="flex" gap={1} mb={1}>
                 <TextField
                   size="small"
+                  aria-label="Add zone"
                   placeholder="example.com"
                   value={zoneInput}
                   onChange={(e) => setZoneInput(e.target.value)}

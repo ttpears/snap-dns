@@ -571,8 +571,8 @@ function ZoneEditor() {
   if (keysLoading) {
     return (
       <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }} role="status">
+          <CircularProgress aria-label="Loading" />
         </Box>
       </Paper>
     );
@@ -630,6 +630,7 @@ function ZoneEditor() {
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchInput(e.target.value)}
           placeholder="Search records..."
           size="small"
+          inputProps={{ 'aria-label': 'Search records' }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -645,6 +646,7 @@ function ZoneEditor() {
             onChange={(e) => setFilterType(e.target.value as string)}
             size="small"
             displayEmpty
+            aria-label="Filter by record type"
             SelectDisplayProps={{ id: 'record-type-filter' } as React.HTMLAttributes<HTMLDivElement>}
           >
             <MenuItem value="ALL">All Record Types</MenuItem>
@@ -660,6 +662,7 @@ function ZoneEditor() {
               onClick={loadZoneRecords}
               disabled={!selectedZone || !selectedKey || refreshing}
               size="small"
+              aria-label="Refresh Records"
             >
               {refreshing ? (
                 <CircularProgress size={20} />
@@ -696,7 +699,7 @@ function ZoneEditor() {
       )}
 
       {loading ? (
-        <CircularProgress />
+        <CircularProgress aria-label="Loading" />
       ) : (
         <>
           <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
@@ -751,7 +754,7 @@ function ZoneEditor() {
                       onChange={handleSelectAllClick}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sortDirection={orderBy === 'name' ? order : false}>
                     <TableSortLabel
                       active={orderBy === 'name'}
                       direction={orderBy === 'name' ? order : 'asc'}
@@ -760,7 +763,7 @@ function ZoneEditor() {
                       Name
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sortDirection={orderBy === 'type' ? order : false}>
                     <TableSortLabel
                       active={orderBy === 'type'}
                       direction={orderBy === 'type' ? order : 'asc'}
@@ -769,7 +772,7 @@ function ZoneEditor() {
                       Type
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sortDirection={orderBy === 'value' ? order : false}>
                     <TableSortLabel
                       active={orderBy === 'value'}
                       direction={orderBy === 'value' ? order : 'asc'}
@@ -778,7 +781,7 @@ function ZoneEditor() {
                       Value
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                  <TableCell sortDirection={orderBy === 'ttl' ? order : false} sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                     <TableSortLabel
                       active={orderBy === 'ttl'}
                       direction={orderBy === 'ttl' ? order : 'asc'}

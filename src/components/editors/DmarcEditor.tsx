@@ -106,8 +106,10 @@ export default function DmarcEditor({ value, onChange }: DmarcEditorProps) {
         </Grid>
         <Grid item xs={12} md={4}>
           <FormControl fullWidth size="small">
-            <InputLabel>Policy (p)</InputLabel>
+            <InputLabel id="dmarc-p-label">Policy (p)</InputLabel>
             <Select
+              labelId="dmarc-p-label"
+              id="dmarc-p"
               value={tags.p}
               onChange={(e) => update({ ...tags, p: e.target.value })}
               label="Policy (p)"
@@ -120,8 +122,10 @@ export default function DmarcEditor({ value, onChange }: DmarcEditorProps) {
         </Grid>
         <Grid item xs={12} md={4}>
           <FormControl fullWidth size="small">
-            <InputLabel>Subdomain Policy (sp)</InputLabel>
+            <InputLabel id="dmarc-sp-label">Subdomain Policy (sp)</InputLabel>
             <Select
+              labelId="dmarc-sp-label"
+              id="dmarc-sp"
               value={tags.sp}
               onChange={(e) => update({ ...tags, sp: e.target.value })}
               label="Subdomain Policy (sp)"
@@ -156,7 +160,7 @@ export default function DmarcEditor({ value, onChange }: DmarcEditorProps) {
           />
         </Grid>
         <Grid item xs={12} md={4}>
-          <Typography variant="body2" color="textSecondary" gutterBottom>
+          <Typography id="dmarc-pct-label" variant="body2" color="textSecondary" gutterBottom>
             Percentage (pct): {tags.pct}%
           </Typography>
           <Slider
@@ -166,12 +170,16 @@ export default function DmarcEditor({ value, onChange }: DmarcEditorProps) {
             max={100}
             step={1}
             valueLabelDisplay="auto"
+            aria-label="Percentage (pct)"
+            aria-labelledby="dmarc-pct-label"
           />
         </Grid>
         <Grid item xs={12} md={4}>
           <FormControl fullWidth size="small">
-            <InputLabel>DKIM Alignment (adkim)</InputLabel>
+            <InputLabel id="dmarc-adkim-label">DKIM Alignment (adkim)</InputLabel>
             <Select
+              labelId="dmarc-adkim-label"
+              id="dmarc-adkim"
               value={tags.adkim}
               onChange={(e) => update({ ...tags, adkim: e.target.value })}
               label="DKIM Alignment (adkim)"
@@ -184,8 +192,10 @@ export default function DmarcEditor({ value, onChange }: DmarcEditorProps) {
         </Grid>
         <Grid item xs={12} md={4}>
           <FormControl fullWidth size="small">
-            <InputLabel>SPF Alignment (aspf)</InputLabel>
+            <InputLabel id="dmarc-aspf-label">SPF Alignment (aspf)</InputLabel>
             <Select
+              labelId="dmarc-aspf-label"
+              id="dmarc-aspf"
               value={tags.aspf}
               onChange={(e) => update({ ...tags, aspf: e.target.value })}
               label="SPF Alignment (aspf)"

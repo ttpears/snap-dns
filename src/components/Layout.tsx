@@ -1,9 +1,9 @@
 // src/components/Layout.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, IconButton, Divider, Button, Menu, MenuItem, Chip,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert,
-  CircularProgress, Drawer,
+  CircularProgress, Drawer, Link,
 } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 import {
@@ -106,6 +106,12 @@ function Layout({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Keep the document title in sync with the current route (WCAG SC 2.4.2).
+  const pageTitle = getPageTitle();
+  useEffect(() => {
+    document.title = pageTitle ? `${pageTitle} - Snap DNS` : 'Snap DNS';
+  }, [pageTitle]);
+
   return (
     <Box sx={{
       display: 'flex',
@@ -113,6 +119,26 @@ function Layout({ children }: { children: React.ReactNode }) {
       bgcolor: 'background.default',
       color: 'text.primary'
     }}>
+      {/* Skip link: visually hidden until focused, lets keyboard users jump
+          straight to the main content (WCAG SC 2.4.1). */}
+      <Link
+        href="#main-content"
+        sx={{
+          position: 'absolute',
+          left: -9999,
+          top: 8,
+          zIndex: (theme) => theme.zIndex.tooltip + 1,
+          p: 1,
+          borderRadius: 1,
+          bgcolor: 'background.paper',
+          color: 'text.primary',
+          '&:focus': {
+            left: 8,
+          },
+        }}
+      >
+        Skip to main content
+      </Link>
       {/* Mobile navigation: temporary drawer toggled by the hamburger button */}
       <Drawer
         variant="temporary"
@@ -141,7 +167,10 @@ function Layout({ children }: { children: React.ReactNode }) {
       >
         <Navigation />
       </Box>
-      <Box sx={{
+      <Box
+        component="main"
+        id="main-content"
+        sx={{
         flexGrow: 1,
         minWidth: 0,
         ml: { xs: 0, md: '240px' },
@@ -166,8 +195,8 @@ function Layout({ children }: { children: React.ReactNode }) {
             >
               <MenuIcon />
             </IconButton>
-            <Typography variant="h6">
-              {getPageTitle()}
+            <Typography variant="h5" component="h1">
+              {pageTitle}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
@@ -179,7 +208,11 @@ function Layout({ children }: { children: React.ReactNode }) {
             >
               Pending Changes ({pendingChanges.length})
             </Button>
-            <IconButton onClick={toggleDarkMode} color="inherit">
+            <IconButton
+              onClick={toggleDarkMode}
+              color="inherit"
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
               {darkMode ? <Brightness7 /> : <Brightness4 />}
             </IconButton>
             {user && (
@@ -190,6 +223,8 @@ function Layout({ children }: { children: React.ReactNode }) {
                   onClick={handleUserMenuOpen}
                   clickable
                   size="small"
+                  aria-haspopup="true"
+                  aria-expanded={Boolean(anchorEl)}
                 />
                 <Menu
                   anchorEl={anchorEl}

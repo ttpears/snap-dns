@@ -161,8 +161,8 @@ function SSOConfiguration() {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" py={4}>
-        <CircularProgress />
+      <Box display="flex" justifyContent="center" py={4} role="status">
+        <CircularProgress aria-label="Loading" />
       </Box>
     );
   }

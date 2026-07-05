@@ -10,7 +10,6 @@ import {
   FormControl,
   InputLabel,
   Typography,
-  FormHelperText,
   Grid,
   CircularProgress
 } from '@mui/material';
@@ -656,8 +655,10 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
 
         <Grid item xs={12} sm={6}>
           <FormControl fullWidth>
-            <InputLabel>Record Type</InputLabel>
+            <InputLabel id="record-type-label">Record Type</InputLabel>
             <Select
+              labelId="record-type-label"
+              id="record-type"
               value={record.type}
               onChange={(e) => handleFieldChange('type', e.target.value)}
               label="Record Type"
@@ -679,24 +680,25 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
           return (
             <Grid item xs={12} sm={field.type === 'number' ? 6 : 12} key={field.name}>
               {field.select ? (
-                <FormControl fullWidth error={!!fieldErrors[field.name]}>
-                  <InputLabel>{field.label}</InputLabel>
-                  <Select
-                    value={(record as any)[field.name] || ''}
-                    onChange={(e) => handleFieldChange(field.name, e.target.value)}
-                    label={field.label}
-                  >
-                    {(field.options || []).map((option) => (
-                      <MenuItem
-                        key={typeof option === 'object' ? option.value : option}
-                        value={typeof option === 'object' ? option.value : option}
-                      >
-                        {typeof option === 'object' ? option.label : option}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {field.helperText && <FormHelperText>{fieldErrors[field.name] || field.helperText}</FormHelperText>}
-                </FormControl>
+                <TextField
+                  select
+                  fullWidth
+                  id={`add-record-${field.name}`}
+                  label={field.label}
+                  value={(record as any)[field.name] || ''}
+                  onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                  error={!!fieldErrors[field.name]}
+                  helperText={field.helperText ? (fieldErrors[field.name] || field.helperText) : undefined}
+                >
+                  {(field.options || []).map((option) => (
+                    <MenuItem
+                      key={typeof option === 'object' ? option.value : option}
+                      value={typeof option === 'object' ? option.value : option}
+                    >
+                      {typeof option === 'object' ? option.label : option}
+                    </MenuItem>
+                  ))}
+                </TextField>
               ) : (
                 <TextField
                   fullWidth
@@ -780,6 +782,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
           variant="contained"
           color="primary"
           disabled={submitting}
+          aria-label={submitting ? 'Adding record' : undefined}
         >
           {submitting ? (
             <CircularProgress size={24} color="inherit" />

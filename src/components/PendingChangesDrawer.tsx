@@ -29,7 +29,9 @@ import {
   RestoreFromTrash as RestoreIcon,
   DragIndicator,
   KeyboardArrowDown as ExpandMoreIcon,
-  KeyboardArrowUp as ExpandLessIcon
+  KeyboardArrowUp as ExpandLessIcon,
+  ArrowUpward as MoveUpIcon,
+  ArrowDownward as MoveDownIcon
 } from '@mui/icons-material';
 import { dnsService, type BatchChange } from '../services/dnsService';
 import { notificationService } from '../services/notificationService';
@@ -116,6 +118,15 @@ function PendingChangesDrawer({
 
   const handleDragEnd = () => {
     setDraggingIndex(null);
+  };
+
+  // Keyboard-accessible alternative to drag-to-reorder (WCAG SC 2.1.1).
+  const moveChange = (from: number, to: number) => {
+    if (to < 0 || to >= pendingChanges.length) return;
+    const items = Array.from(pendingChanges);
+    const [moved] = items.splice(from, 1);
+    items.splice(to, 0, moved);
+    setPendingChanges(items);
   };
 
   // Group changes by zone; used by both the confirmation dialog and apply
@@ -352,9 +363,32 @@ function PendingChangesDrawer({
                   },
                   pr: 6
                 }}
-                onClick={() => toggleExpanded(change.id)}
               >
                 <DragIndicator sx={{ mr: 1, cursor: 'grab', flexShrink: 0 }} />
+                <Stack sx={{ mr: 1, flexShrink: 0 }}>
+                  <IconButton
+                    size="small"
+                    aria-label="Move up"
+                    disabled={index === 0 || applying}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveChange(index, index - 1);
+                    }}
+                  >
+                    <MoveUpIcon fontSize="inherit" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    aria-label="Move down"
+                    disabled={index === pendingChanges.length - 1 || applying}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveChange(index, index + 1);
+                    }}
+                  >
+                    <MoveDownIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
                 <ListItemText
                   sx={{ 
                     mr: 1,
@@ -377,6 +411,8 @@ function PendingChangesDrawer({
                       <Typography component="span" noWrap>{getChangeDescription(change)}</Typography>
                       <IconButton
                         size="small"
+                        aria-label={expandedItems[change.id] ? 'Collapse details' : 'Expand details'}
+                        aria-expanded={Boolean(expandedItems[change.id])}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleExpanded(change.id);
@@ -484,6 +520,7 @@ function PendingChangesDrawer({
               onClick={() => setConfirmOpen(true)}
               disabled={applying}
               fullWidth
+              aria-label={applying ? 'Applying changes' : undefined}
             >
               {applying ? (
                 <CircularProgress size={24} color="inherit" />

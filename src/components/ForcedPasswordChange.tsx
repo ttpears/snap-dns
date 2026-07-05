@@ -131,6 +131,7 @@ export default function ForcedPasswordChange() {
               variant="contained"
               sx={{ mt: 3, mb: 1 }}
               disabled={submitting || !currentPassword || !newPassword || !confirmPassword}
+              aria-label={submitting ? 'Changing password' : undefined}
             >
               {submitting ? <CircularProgress size={24} /> : 'Change Password'}
             </Button>

@@ -488,8 +488,10 @@ function Settings() {
 
             <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <FormControl>
-            <InputLabel>Default TTL</InputLabel>
+            <InputLabel id="default-ttl-label">Default TTL</InputLabel>
             <Select
+              labelId="default-ttl-label"
+              id="default-ttl"
               value={defaultTTL}
               onChange={(e) => setDefaultTTL(Number(e.target.value))}
               label="Default TTL"
@@ -502,8 +504,10 @@ function Settings() {
           </FormControl>
 
           <FormControl>
-            <InputLabel>Notification Provider</InputLabel>
+            <InputLabel id="notification-provider-label">Notification Provider</InputLabel>
             <Select
+              labelId="notification-provider-label"
+              id="notification-provider"
               value={webhookProvider}
               onChange={(e) => setWebhookProvider(e.target.value as WebhookProvider)}
               label="Notification Provider"
@@ -536,8 +540,10 @@ function Settings() {
           />
 
           <FormControl>
-            <InputLabel>Default Rows Per Page</InputLabel>
+            <InputLabel id="rows-per-page-label">Default Rows Per Page</InputLabel>
             <Select
+              labelId="rows-per-page-label"
+              id="rows-per-page"
               value={config.rowsPerPage || 10}
               onChange={(e) => {
                 updateConfig({
@@ -721,8 +727,10 @@ function Settings() {
                   Select a key to associate with the imported zones:
                 </Typography>
                 <FormControl fullWidth sx={{ mt: 2 }}>
-                  <InputLabel>Select Key</InputLabel>
+                  <InputLabel id="import-select-key-label">Select Key</InputLabel>
                   <Select
+                    labelId="import-select-key-label"
+                    id="import-select-key"
                     value={selectedKeyId}
                     onChange={(e) => {
                       setSelectedKeyId(e.target.value);
