@@ -15,7 +15,12 @@ import {
   Stack,
   Collapse,
   Snackbar,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -43,6 +48,13 @@ interface PendingChangesDrawerProps {
   clearPendingChanges: () => void;
 }
 
+// Per-zone outcome of an apply attempt, shown when a zone's batch fails
+interface ZoneApplyFailure {
+  zone: string;
+  message: string;
+  changeCount: number;
+}
+
 function PendingChangesDrawer({
   open,
   onClose,
@@ -57,7 +69,8 @@ function PendingChangesDrawer({
   const { config } = useConfig();
   const { showSuccess, showError } = useNotification();
   const [applying, setApplying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [applyFailures, setApplyFailures] = useState<ZoneApplyFailure[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [applyWarnings, setApplyWarnings] = useState<string[]>([]);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
@@ -106,110 +119,123 @@ function PendingChangesDrawer({
     setDraggingIndex(null);
   };
 
-  const handleApplyChanges = async () => {
-    setApplying(true);
-    setError(null);
-
-    try {
-      // Group changes by zone
-      const changesByZone = pendingChanges.reduce((acc: Record<string, PendingChange[]>, change) => {
-        if (!acc[change.zone]) {
-          acc[change.zone] = [];
-        }
-        acc[change.zone].push(change);
-        return acc;
-      }, {});
-
-      // Track all successful changes for notification
-      const allSuccessfulChanges: PendingChange[] = [];
-      const affectedZones: string[] = [];
-      const allWarnings: string[] = [];
-
-      // Apply changes zone by zone
-      for (const [zone, changes] of Object.entries(changesByZone) as [string, PendingChange[]][]) {
-        try {
-          // Create automatic snapshot before applying changes
-          try {
-            const currentRecords = await dnsService.fetchZoneRecords(zone);
-            const firstChange = changes[0];
-            const keyConfig = backendKeys.find(k => k.id === firstChange.keyId);
-
-            await backupService.createBackup(zone, currentRecords, {
-              type: 'auto',
-              description: `Automatic snapshot before applying ${changes.length} change${changes.length !== 1 ? 's' : ''}`,
-              server: keyConfig?.server || 'unknown',
-              config: config as any
-            });
-            console.log(`Auto-snapshot created for zone ${zone}`);
-          } catch (backupError) {
-            console.warn(`Failed to create auto-snapshot for zone ${zone}:`, backupError);
-            // Don't fail the entire operation if snapshot creation fails
-          }
-
-          // Apply all of this zone's changes as one atomic transaction, so a
-          // failure can't leave the zone half-updated.
-          const batchChanges: BatchChange[] = changes.map((change) => {
-            switch ((change as any).type) {
-              case 'ADD':
-                return { op: 'add', record: change.record! as any };
-              case 'RESTORE':
-                return { op: 'add', record: { ...(change.record! as any), ttl: change.record!.ttl || 3600 } };
-              case 'DELETE':
-                return { op: 'delete', record: change.record! as any };
-              case 'MODIFY':
-                return { op: 'update', oldRecord: change.originalRecord! as any, newRecord: change.newRecord! as any };
-              default:
-                throw new Error(`Unknown change type: ${(change as any).type}`);
-            }
-          });
-
-          const batchResult = await dnsService.applyBatch(zone, batchChanges);
-          if (batchResult?.warnings?.length) allWarnings.push(...batchResult.warnings);
-          allSuccessfulChanges.push(...changes);
-
-          // Add zone to affected zones
-          if (!affectedZones.includes(zone)) {
-            affectedZones.push(zone);
-          }
-
-          // Dispatch event to notify components that changes were applied
-          window.dispatchEvent(new CustomEvent('dnsChangesApplied', {
-            detail: { zones: [zone] }
-          }));
-        } catch (error) {
-          console.error(`Failed to process changes for zone ${zone}:`, error);
-          throw error;
-        }
-      }
-
-      // Send a single notification for all successful changes
-      if (allSuccessfulChanges.length > 0) {
-        try {
-          await notificationService.sendNotification('Multiple Zones', {
-            changes: allSuccessfulChanges,
-            zones: affectedZones,
-            timestamp: Date.now(),
-            totalChanges: allSuccessfulChanges.length
-          });
-        } catch (notifyError) {
-          console.warn('Failed to send notification:', notifyError);
-        }
-      }
-
-      clearPendingChanges();
-      showSuccess(`Successfully applied ${allSuccessfulChanges.length} change${allSuccessfulChanges.length !== 1 ? 's' : ''} to ${affectedZones.length} zone${affectedZones.length !== 1 ? 's' : ''}`);
-      if (allWarnings.length > 0) {
-        setApplyWarnings(allWarnings);
-      }
-      onClose();
-    } catch (error) {
-      console.error('Failed to apply changes:', error);
-      const errorMessage = `Failed to apply changes: ${(error as Error).message}`;
-      setError(errorMessage);
-      showError(errorMessage);
-    } finally {
-      setApplying(false);
+  // Group changes by zone; used by both the confirmation dialog and apply
+  const changesByZone = pendingChanges.reduce((acc: Record<string, PendingChange[]>, change) => {
+    if (!acc[change.zone]) {
+      acc[change.zone] = [];
     }
+    acc[change.zone].push(change);
+    return acc;
+  }, {});
+
+  const handleApplyChanges = async () => {
+    setConfirmOpen(false);
+    setApplying(true);
+    setApplyFailures([]);
+
+    // Each zone applies as one atomic transaction; zones are independent, so
+    // a failure in one zone doesn't stop the others. Track per-zone outcomes
+    // so applied changes can be removed from the queue even on partial failure.
+    const appliedChanges: PendingChange[] = [];
+    const appliedZones: string[] = [];
+    const failures: ZoneApplyFailure[] = [];
+    const allWarnings: string[] = [];
+
+    for (const [zone, changes] of Object.entries(changesByZone) as [string, PendingChange[]][]) {
+      try {
+        // Create automatic snapshot before applying changes
+        try {
+          const currentRecords = await dnsService.fetchZoneRecords(zone);
+          const firstChange = changes[0];
+          const keyConfig = backendKeys.find(k => k.id === firstChange.keyId);
+
+          await backupService.createBackup(zone, currentRecords, {
+            type: 'auto',
+            description: `Automatic snapshot before applying ${changes.length} change${changes.length !== 1 ? 's' : ''}`,
+            server: keyConfig?.server || 'unknown',
+            config: config as any
+          });
+        } catch (backupError) {
+          console.warn(`Failed to create auto-snapshot for zone ${zone}:`, backupError);
+          // Don't fail the entire operation if snapshot creation fails
+        }
+
+        // Apply all of this zone's changes as one atomic transaction, so a
+        // failure can't leave the zone half-updated.
+        const batchChanges: BatchChange[] = changes.map((change) => {
+          switch (change.type) {
+            case 'ADD':
+              return { op: 'add', record: change.record! as any };
+            case 'RESTORE':
+              return { op: 'add', record: { ...(change.record! as any), ttl: change.record!.ttl || 3600 } };
+            case 'DELETE':
+              return { op: 'delete', record: change.record! as any };
+            case 'MODIFY':
+              return { op: 'update', oldRecord: change.originalRecord! as any, newRecord: change.newRecord! as any };
+            default:
+              throw new Error(`Unknown change type: ${(change as any).type}`);
+          }
+        });
+
+        const batchResult = await dnsService.applyBatch(zone, batchChanges);
+        if (batchResult?.warnings?.length) allWarnings.push(...batchResult.warnings);
+        appliedChanges.push(...changes);
+        appliedZones.push(zone);
+
+        // Dispatch event to notify components that changes were applied.
+        // changeIds lets listeners purge the committed changes from any
+        // local state (e.g. the undo/redo history) so they can't come back.
+        window.dispatchEvent(new CustomEvent('dnsChangesApplied', {
+          detail: { zones: [zone], changeIds: changes.map(c => c.id) }
+        }));
+      } catch (error) {
+        console.error(`Failed to process changes for zone ${zone}:`, error);
+        failures.push({
+          zone,
+          message: (error as Error).message,
+          changeCount: changes.length
+        });
+      }
+    }
+
+    // Send a single notification for all successful changes
+    if (appliedChanges.length > 0) {
+      try {
+        await notificationService.sendNotification('Multiple Zones', {
+          changes: appliedChanges,
+          zones: appliedZones,
+          timestamp: Date.now(),
+          totalChanges: appliedChanges.length
+        });
+      } catch (notifyError) {
+        console.warn('Failed to send notification:', notifyError);
+      }
+    }
+
+    // Remove applied changes from the queue even when other zones failed, so
+    // a re-apply can never double-apply committed changes.
+    if (appliedChanges.length > 0) {
+      const appliedIds = new Set(appliedChanges.map(c => c.id));
+      setPendingChanges(prev => prev.filter(c => !appliedIds.has(c.id)));
+    }
+
+    if (allWarnings.length > 0) {
+      setApplyWarnings(allWarnings);
+    }
+
+    if (failures.length === 0) {
+      showSuccess(`Successfully applied ${appliedChanges.length} change${appliedChanges.length !== 1 ? 's' : ''} to ${appliedZones.length} zone${appliedZones.length !== 1 ? 's' : ''}`);
+      setShowPendingDrawer(false);
+      onClose();
+    } else {
+      if (appliedChanges.length > 0) {
+        showSuccess(`Applied ${appliedChanges.length} change${appliedChanges.length !== 1 ? 's' : ''} to ${appliedZones.length} zone${appliedZones.length !== 1 ? 's' : ''}`);
+      }
+      setApplyFailures(failures);
+      showError(`Failed to apply changes to ${failures.length} zone${failures.length !== 1 ? 's' : ''}`);
+    }
+
+    setApplying(false);
   };
 
   const getChangeDescription = (change: PendingChange): string => {
@@ -296,15 +322,22 @@ function PendingChangesDrawer({
           </IconButton>
         </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
+        {applyFailures.length > 0 && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setApplyFailures([])}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+              Some zones failed to apply. Their changes are still pending below.
+            </Typography>
+            {applyFailures.map(failure => (
+              <Typography variant="body2" key={failure.zone}>
+                {failure.zone} ({failure.changeCount} change{failure.changeCount !== 1 ? 's' : ''}): {failure.message}
+              </Typography>
+            ))}
           </Alert>
         )}
 
         <List>
           {pendingChanges.map((change, index) => (
-            <React.Fragment key={(change as any).id || `change-${index}`}>
+            <React.Fragment key={change.id}>
               <ListItem
                 draggable
                 onDragStart={(e) => handleDragStart(e, index)}
@@ -318,7 +351,7 @@ function PendingChangesDrawer({
                   },
                   pr: 6
                 }}
-                onClick={() => toggleExpanded((change as any).id || `temp-${index}`)}
+                onClick={() => toggleExpanded(change.id)}
               >
                 <DragIndicator sx={{ mr: 1, cursor: 'grab', flexShrink: 0 }} />
                 <ListItemText
@@ -345,10 +378,10 @@ function PendingChangesDrawer({
                         size="small"
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleExpanded((change as any).id || `temp-${index}`);
+                          toggleExpanded(change.id);
                         }}
                       >
-                        {expandedItems[(change as any).id || `temp-${index}`] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        {expandedItems[change.id] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                       </IconButton>
                     </Stack>
                   }
@@ -380,7 +413,7 @@ function PendingChangesDrawer({
                   aria-label="delete"
                   onClick={(e) => {
                     e.stopPropagation();
-                    removePendingChange((change as any).id);
+                    removePendingChange(change.id);
                   }}
                   disabled={applying}
                   sx={{
@@ -392,7 +425,7 @@ function PendingChangesDrawer({
                 </IconButton>
               </ListItem>
               <Collapse
-                in={Boolean(expandedItems[(change as any).id || `temp-${index}`])}
+                in={Boolean(expandedItems[change.id])}
                 timeout="auto" 
                 unmountOnExit
               >
@@ -447,7 +480,7 @@ function PendingChangesDrawer({
             <Button
               variant="contained"
               color="primary"
-              onClick={handleApplyChanges}
+              onClick={() => setConfirmOpen(true)}
               disabled={applying}
               fullWidth
             >
@@ -468,6 +501,27 @@ function PendingChangesDrawer({
           </Box>
         )}
       </Box>
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+        <DialogTitle>Apply changes to live DNS?</DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            {Object.entries(changesByZone).map(([zone, changes]) => (
+              <Typography variant="body2" key={zone}>
+                {zone}: {changes.length} change{changes.length !== 1 ? 's' : ''}
+              </Typography>
+            ))}
+            <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
+              An automatic snapshot of each zone is taken before applying.
+            </Typography>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="primary" onClick={handleApplyChanges} autoFocus>
+            Apply {pendingChanges.length} change{pendingChanges.length !== 1 ? 's' : ''}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Snackbar
         open={applyWarnings.length > 0}
         autoHideDuration={10000}

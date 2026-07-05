@@ -43,7 +43,10 @@ export interface DNSRecord {
 
 // Pending change interface for tracking modifications
 export interface PendingChange {
-  type: 'ADD' | 'MODIFY' | 'DELETE';
+  // Unique id stamped by PendingChangesContext.addPendingChange; required so
+  // individual changes can be removed without affecting others.
+  id: string;
+  type: 'ADD' | 'MODIFY' | 'DELETE' | 'RESTORE';
   zone: string;
   keyId: string;
   record?: DNSRecord;
@@ -53,7 +56,16 @@ export interface PendingChange {
   recordType?: RecordType;
   value?: string;
   ttl?: number;
+  // Provenance for changes queued from a snapshot restore
+  source?: {
+    type: string;
+    id: string | number;
+    timestamp: number;
+  };
 }
+
+// Input shape for queueing a change — id is assigned by the context.
+export type NewPendingChange = Omit<PendingChange, 'id'> & { id?: string };
 
 // Validation result interface
 export interface ValidationResult {

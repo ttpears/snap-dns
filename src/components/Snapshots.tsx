@@ -758,7 +758,6 @@ function Snapshots() {
 
           if (partialMatch) {
             changes.push({
-              id: Date.now() + Math.random(),
               type: 'MODIFY',
               zone: selectedBackup.zone,
               keyId: keyForZone.id,
@@ -772,7 +771,6 @@ function Snapshots() {
             });
           } else {
             changes.push({
-              id: Date.now() + Math.random(),
               type: 'ADD',
               zone: selectedBackup.zone,
               keyId: keyForZone.id,
@@ -798,7 +796,6 @@ function Snapshots() {
 
         if (!inSnapshot) {
           changes.push({
-            id: Date.now() + Math.random(),
             type: 'DELETE',
             zone: selectedBackup.zone,
             keyId: keyForZone.id,

@@ -238,7 +238,6 @@ function ZoneEditor() {
   const handleDeleteRecord = async (record: DNSRecord) => {
     try {
       const change = {
-        id: Date.now(),
         type: 'DELETE' as const,
         zone: selectedZone!,
         keyId: selectedKey!.id,
@@ -262,7 +261,6 @@ function ZoneEditor() {
 
       deletable.forEach(record => {
         const change = {
-          id: Date.now() + Math.random(),
           type: 'DELETE' as const,
           zone: selectedZone!,
           keyId: selectedKey!.id,
@@ -290,7 +288,6 @@ function ZoneEditor() {
   const handleEditSave = async (updatedRecord: DNSRecord) => {
     try {
       const change = {
-        id: Date.now(),
         type: 'MODIFY' as const,
         zone: selectedZone!,
         keyId: selectedKey!.id,
@@ -419,12 +416,22 @@ function ZoneEditor() {
 
   useEffect(() => {
     const handleChangesApplied = (event: Event) => {
-      const { zones } = (event as CustomEvent<{ zones: string[] }>).detail;
+      const { zones, changeIds } = (event as CustomEvent<{ zones: string[]; changeIds?: string[] }>).detail;
+
+      // Purge the committed changes from every undo/redo history entry so
+      // no undo/redo path can resurrect them into the pending queue and
+      // risk a double-apply. Ids are unique, so this is safe regardless of
+      // timing relative to the drawer's own queue pruning.
+      if (changeIds?.length) {
+        const appliedIds = new Set(changeIds);
+        setChangeHistory(prev => prev.map(entry => entry.filter((c: any) => !appliedIds.has(c.id))));
+      }
 
       if (selectedZone && zones.includes(selectedZone)) {
+        // The event fires after the backend transaction completed, so the
+        // zone can be re-fetched immediately.
         setIsRefreshing(true);
-
-        setTimeout(async () => {
+        (async () => {
           try {
             await loadZoneRecords();
           } catch (error) {
@@ -433,7 +440,7 @@ function ZoneEditor() {
           } finally {
             setIsRefreshing(false);
           }
-        }, 2000);
+        })();
       }
     };
 

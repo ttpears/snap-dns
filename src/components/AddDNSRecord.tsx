@@ -522,7 +522,7 @@ function AddDNSRecord({ zone, onSuccess, onClose }: AddDNSRecordProps) {
         return;
       }
 
-      const change: import('../types/dns').PendingChange = {
+      const change: import('../types/dns').NewPendingChange = {
         type: 'ADD',
         zone: selectedZone ?? '',
         keyId: selectedKey!.id,
