@@ -7,6 +7,14 @@ import { User, UserCreateData, UserResponse, UserRole } from '../types/auth';
 const SALT_ROUNDS = 12;
 const USERS_FILE = path.join(process.cwd(), 'data', 'users.json');
 
+// Precomputed bcrypt hash used only to keep authenticate() timing constant when
+// the supplied username does not exist. Comparing a wrong-username attempt
+// against this dummy hash makes it cost roughly the same as a known-username /
+// wrong-password attempt, so an attacker cannot enumerate valid usernames via
+// response timing. Computed once at module load (not per request) at the same
+// cost factor the app uses for real password hashes.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('snap-dns-timing-safety-dummy', SALT_ROUNDS);
+
 class UserService {
   private users: Map<string, User> = new Map();
   private initialized = false;
@@ -164,12 +172,15 @@ class UserService {
       u => u.username.toLowerCase() === username.toLowerCase()
     );
 
-    if (!user) {
-      return null;
-    }
+    // Always perform a bcrypt comparison, even when the username is unknown, so
+    // that an unknown username costs roughly the same as a known username with a
+    // wrong password (constant-time with respect to user existence). This
+    // prevents username enumeration via login response timing. For an unknown
+    // user we compare against a fixed dummy hash and always fail.
+    const passwordHash = user ? user.passwordHash : DUMMY_PASSWORD_HASH;
+    const isValid = await bcrypt.compare(password, passwordHash);
 
-    const isValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isValid) {
+    if (!user || !isValid) {
       return null;
     }
 
