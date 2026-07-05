@@ -164,6 +164,20 @@ class ValidationService {
         }
         break;
 
+      case 'DNSKEY':
+      case 'CDNSKEY':
+        this.validateDNSKEY(record.type, record.value, errors, warnings);
+        break;
+
+      case 'NAPTR':
+        this.validateNAPTR(record.value, errors, warnings);
+        break;
+
+      case 'SVCB':
+      case 'HTTPS':
+        this.validateSVCB(record.type, record.value, errors, warnings);
+        break;
+
       case 'SOA':
         // SOA validation is complex, validate basic structure
         if (typeof record.value === 'object') {
@@ -289,6 +303,165 @@ class ValidationService {
       this.isValidUint8(parts[1]) &&
       this.isValidUint8(parts[2]) &&
       /^[0-9a-fA-F]+$/.test(cert);
+  }
+
+  // IANA-registered SVCB/HTTPS SvcParamKeys (RFC 9460 §14.3 + dohpath from
+  // RFC 9461). Unregistered keyNNNNN forms are always allowed; other unknown
+  // keys are a warning, not an error — the registry is extensible.
+  private static readonly SVCB_KNOWN_PARAMS = new Set([
+    'mandatory', 'alpn', 'no-default-alpn', 'port', 'ipv4hint', 'ech', 'ipv6hint', 'dohpath',
+  ]);
+
+  // DNSKEY/CDNSKEY (RFC 4034 §2): flags(uint16) protocol(must be 3)
+  // algorithm(uint8) public-key(base64, whitespace tolerated between groups).
+  private validateDNSKEY(type: string, value: string, errors: string[], warnings: string[]): void {
+    const usage = `Invalid ${type} record format (should be: flags protocol algorithm public-key-base64)`;
+    if (typeof value !== 'string') {
+      errors.push(usage);
+      return;
+    }
+    const parts = value.trim().split(/\s+/);
+    if (parts.length < 4) {
+      errors.push(usage);
+      return;
+    }
+    const [flags, protocol, algorithm] = parts;
+    if (!this.isValidUint16(flags)) {
+      errors.push(`${type} flags must be an integer between 0 and 65535`);
+    } else if (![0, 256, 257].includes(parseInt(flags, 10))) {
+      // Only bit 7 (Zone Key) and bit 15 (SEP) are assigned (RFC 4034 §2.1.1).
+      warnings.push(`${type} flags is normally 0, 256 (ZSK) or 257 (KSK); got ${flags}`);
+    }
+    if (!/^\d+$/.test(protocol) || parseInt(protocol, 10) !== 3) {
+      errors.push(`${type} protocol must be 3 (RFC 4034 §2.1.2)`);
+    }
+    if (!this.isValidUint8(algorithm)) {
+      errors.push(`${type} algorithm must be an integer between 0 and 255`);
+    }
+    // Base64 may be split into whitespace-separated groups in presentation
+    // format; validate the concatenated charset (padding only at the end).
+    const publicKey = parts.slice(3).join('');
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(publicKey)) {
+      errors.push(`${type} public key must be non-empty base64`);
+    }
+  }
+
+  // NAPTR (RFC 3403 §4.1): order(uint16) preference(uint16) "flags" "service"
+  // "regexp" replacement. The three middle fields must be quoted; replacement
+  // is a domain name or ".". Regexp and replacement are mutually exclusive,
+  // but that is a warning only — servers accept records carrying both.
+  private validateNAPTR(value: string, errors: string[], warnings: string[]): void {
+    const usage = 'Invalid NAPTR record format (should be: order preference "flags" "service" "regexp" replacement)';
+    if (typeof value !== 'string') {
+      errors.push(usage);
+      return;
+    }
+    const match = value.trim().match(/^(\S+)\s+(\S+)\s+"([^"]*)"\s+"([^"]*)"\s+"([^"]*)"\s+(\S+)$/);
+    if (!match) {
+      errors.push(usage);
+      return;
+    }
+    const [, order, preference, flags, , regexp, replacement] = match;
+    if (!this.isValidUint16(order)) {
+      errors.push('NAPTR order must be an integer between 0 and 65535');
+    }
+    if (!this.isValidUint16(preference)) {
+      errors.push('NAPTR preference must be an integer between 0 and 65535');
+    }
+    if (!/^[A-Za-z0-9]*$/.test(flags)) {
+      errors.push('NAPTR flags must contain only letters and digits (RFC 3403 §4.1)');
+    }
+    if (replacement !== '.' && !this.isValidHostname(replacement)) {
+      errors.push('NAPTR replacement must be a domain name or "."');
+    }
+    if (regexp !== '' && replacement !== '.') {
+      warnings.push('NAPTR regexp and replacement are mutually exclusive (RFC 3403 §4.1): use "." as the replacement when a regexp is set');
+    }
+  }
+
+  // SVCB/HTTPS (RFC 9460 §2.1): priority(uint16) target(domain name or ".")
+  // [SvcParams]. Params are key=value or bare-key tokens; known keys get
+  // value-shape checks, keyNNNNN forms are allowed, other unknown keys warn.
+  private validateSVCB(type: string, value: string, errors: string[], warnings: string[]): void {
+    const usage = `Invalid ${type} record format (should be: priority target [key=value ...])`;
+    if (typeof value !== 'string') {
+      errors.push(usage);
+      return;
+    }
+    const parts = value.trim().split(/\s+/);
+    if (parts.length < 2) {
+      errors.push(usage);
+      return;
+    }
+    const [priority, target] = parts;
+    if (!this.isValidUint16(priority)) {
+      errors.push(`${type} priority must be an integer between 0 and 65535`);
+    }
+    if (target !== '.' && !this.isValidHostname(target)) {
+      errors.push(`${type} target must be a domain name or "."`);
+    }
+    const params = parts.slice(2);
+    if (params.length > 0 && parseInt(priority, 10) === 0) {
+      warnings.push(`${type} priority 0 is AliasMode: SvcParams are ignored (RFC 9460 §2.4.2)`);
+    }
+    const seen = new Set<string>();
+    for (const token of params) {
+      // SvcParamKeys are lower-case alphanumerics and hyphens (RFC 9460 §2.1).
+      const m = token.match(/^([a-z0-9-]+)(?:=(.*))?$/);
+      if (!m) {
+        errors.push(`${type} SvcParam "${token}" is malformed (expected key or key=value)`);
+        continue;
+      }
+      const key = m[1];
+      const hasValue = m[2] !== undefined;
+      let val = m[2] ?? '';
+      // Presentation format allows quoting the value (alpn="h2,h3").
+      if (val.length >= 2 && val.startsWith('"') && val.endsWith('"')) {
+        val = val.slice(1, -1);
+      }
+      if (seen.has(key)) {
+        errors.push(`${type} SvcParam "${key}" appears more than once (RFC 9460 §2.2)`);
+      }
+      seen.add(key);
+      if (/^key\d+$/.test(key)) {
+        if (parseInt(key.slice(3), 10) > 65535) {
+          errors.push(`${type} SvcParam key number must be 0-65535: "${key}"`);
+        }
+        continue;
+      }
+      if (!ValidationService.SVCB_KNOWN_PARAMS.has(key)) {
+        warnings.push(`Unrecognised ${type} SvcParam "${key}" (not an IANA-registered key)`);
+        continue;
+      }
+      switch (key) {
+        case 'no-default-alpn':
+          if (hasValue) {
+            errors.push(`${type} no-default-alpn must not have a value (RFC 9460 §7.1.1)`);
+          }
+          break;
+        case 'port':
+          if (!this.isValidUint16(val)) {
+            errors.push(`${type} port must be an integer between 0 and 65535`);
+          }
+          break;
+        case 'ipv4hint':
+          if (val === '' || !val.split(',').every(ip => this.isValidIPv4(ip))) {
+            errors.push(`${type} ipv4hint must be a comma-separated list of IPv4 addresses`);
+          }
+          break;
+        case 'ipv6hint':
+          if (val === '' || !val.split(',').every(ip => this.isValidIPv6(ip))) {
+            errors.push(`${type} ipv6hint must be a comma-separated list of IPv6 addresses`);
+          }
+          break;
+        default:
+          // alpn, mandatory, ech, dohpath all require a non-empty value.
+          if (!hasValue || val === '') {
+            errors.push(`${type} ${key} requires a value`);
+          }
+          break;
+      }
+    }
   }
 
   /**
