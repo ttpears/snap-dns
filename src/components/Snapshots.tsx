@@ -327,6 +327,8 @@ function Snapshots() {
   const [importDialogOpen, setImportDialogOpen] = useState<boolean>(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState<boolean>(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
+  const [backupToDelete, setBackupToDelete] = useState<any>(null);
 
   useEffect(() => {
     const loadKeys = async () => {
@@ -441,17 +443,25 @@ function Snapshots() {
     }
   };
 
-  const handleDeleteBackup = async (backup: any) => {
-    if (window.confirm('Are you sure you want to delete this snapshot?')) {
-      try {
-        await backupService.deleteBackup(backup.zone, backup.id);
-        const backupList = await backupService.getBackups();
-        setBackups(backupList);
-        setSuccess('Snapshot deleted successfully');
-      } catch (error) {
-        setError(`Failed to delete snapshot: ${(error as Error).message}`);
-        console.error('Delete backup error:', error);
-      }
+  const handleDeleteBackup = (backup: any) => {
+    setBackupToDelete(backup);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteBackup = async () => {
+    if (!backupToDelete) return;
+
+    try {
+      await backupService.deleteBackup(backupToDelete.zone, backupToDelete.id);
+      const backupList = await backupService.getBackups();
+      setBackups(backupList);
+      setSuccess('Snapshot deleted successfully');
+    } catch (error) {
+      setError(`Failed to delete snapshot: ${(error as Error).message}`);
+      console.error('Delete backup error:', error);
+    } finally {
+      setDeleteDialogOpen(false);
+      setBackupToDelete(null);
     }
   };
 
@@ -1553,6 +1563,37 @@ function Snapshots() {
             startIcon={importing ? <CircularProgress size={20} /> : <UploadIcon />}
           >
             {importing ? 'Importing...' : 'Import'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => {
+          setDeleteDialogOpen(false);
+          setBackupToDelete(null);
+        }}
+      >
+        <DialogTitle>Delete Snapshot</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete the snapshot for "{backupToDelete?.zone}" from{' '}
+            {backupToDelete ? new Date(backupToDelete.timestamp).toLocaleString() : ''}? This
+            action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setDeleteDialogOpen(false);
+              setBackupToDelete(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteBackup} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
