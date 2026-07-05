@@ -3,10 +3,13 @@ import React, { useState } from 'react';
 import {
   Box, Typography, IconButton, Divider, Button, Menu, MenuItem, Chip,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert,
-  CircularProgress,
+  CircularProgress, Drawer,
 } from '@mui/material';
 import { useLocation } from 'react-router-dom';
-import { Brightness4, Brightness7, AccountCircle, Logout, Lock } from '@mui/icons-material';
+import {
+  Brightness4, Brightness7, AccountCircle, Logout, Lock,
+  Menu as MenuIcon,
+} from '@mui/icons-material';
 import Navigation from './Navigation';
 import PendingChangesDrawer from './PendingChangesDrawer';
 import { useConfig } from '../context/ConfigContext';
@@ -22,6 +25,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const { config } = useConfig();
   const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -111,6 +115,18 @@ function Layout({ children }: { children: React.ReactNode }) {
       bgcolor: 'background.default',
       color: 'text.primary'
     }}>
+      {/* Mobile navigation: temporary drawer toggled by the hamburger button */}
+      <Drawer
+        variant="temporary"
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{ display: { xs: 'block', md: 'none' } }}
+        PaperProps={{ sx: { width: 240 } }}
+      >
+        <Navigation onNavigate={() => setMobileNavOpen(false)} />
+      </Drawer>
+      {/* Desktop navigation: permanent sidebar at md and up */}
       <Box
         component="nav"
         sx={{
@@ -121,27 +137,42 @@ function Layout({ children }: { children: React.ReactNode }) {
           height: '100vh',
           overflow: 'auto',
           position: 'fixed',
-          bgcolor: 'background.paper'
+          bgcolor: 'background.paper',
+          display: { xs: 'none', md: 'block' }
         }}
       >
         <Navigation />
       </Box>
       <Box sx={{
         flexGrow: 1,
-        ml: '240px',
+        minWidth: 0,
+        ml: { xs: 0, md: '240px' },
         p: 3,
-        pb: 8
+        pb: { xs: 3, md: 8 }
       }}>
         <Box sx={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 1,
           mb: 3
         }}>
-          <Typography variant="h6">
-            {getPageTitle()}
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton
+              color="inherit"
+              aria-label="Open navigation"
+              edge="start"
+              onClick={() => setMobileNavOpen(true)}
+              sx={{ display: { xs: 'inline-flex', md: 'none' } }}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="h6">
+              {getPageTitle()}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
             <Button
               variant="outlined"
               onClick={() => setShowPendingDrawer(true)}
@@ -187,8 +218,9 @@ function Layout({ children }: { children: React.ReactNode }) {
           </Box>
         </Box>
         {children}
+        {/* Fixed at md and up; static below content on small screens */}
+        <Footer />
       </Box>
-      <Footer />
 
       {/* Change Password Dialog */}
       <Dialog open={passwordDialogOpen} onClose={() => setPasswordDialogOpen(false)} maxWidth="xs" fullWidth>
