@@ -24,4 +24,4 @@ const config: Config = {
 };
 
 export { config };
-export type { Config, KeyConfig }; 
+export type { Config };

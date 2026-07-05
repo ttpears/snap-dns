@@ -1,5 +1,4 @@
 // src/types/dns.ts
-import { KeyConfig } from '../config';
 
 // Record type enum
 export enum RecordType {
@@ -66,22 +65,6 @@ export interface PendingChange {
 
 // Input shape for queueing a change — id is assigned by the context.
 export type NewPendingChange = Omit<PendingChange, 'id'> & { id?: string };
-
-// Validation result interface
-export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
-  // Non-blocking advisories (e.g. SPF/DKIM/CAA warnings) the UI surfaces
-  // alongside errors; the validation service always returns this array.
-  warnings?: string[];
-}
-
-// DNS operation result
-export interface DNSOperationResult {
-  success: boolean;
-  message: string;
-  error?: string;
-}
 
 export interface ZoneConfig {
   server: string;

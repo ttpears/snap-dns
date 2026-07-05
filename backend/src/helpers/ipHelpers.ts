@@ -39,20 +39,3 @@ export function getClientIp(req: Request): string | undefined {
   // Fallback to req.ip (direct connection or last resort)
   return req.ip;
 }
-
-/**
- * Get all relevant IP information for debugging
- */
-export function getIpDebugInfo(req: Request): {
-  clientIp: string | undefined;
-  xForwardedFor: string | string[] | undefined;
-  xRealIp: string | undefined;
-  reqIp: string | undefined;
-} {
-  return {
-    clientIp: getClientIp(req),
-    xForwardedFor: req.headers['x-forwarded-for'],
-    xRealIp: req.headers['x-real-ip'] as string | undefined,
-    reqIp: req.ip,
-  };
-}
