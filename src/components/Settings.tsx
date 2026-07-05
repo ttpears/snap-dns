@@ -39,7 +39,6 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { Config, ensureValidConfig, WebhookProvider } from '../types/config';
 import { Key } from '../types/keys';
-import { backupService } from '../services/backupService';
 
 // Webhook provider options with display names and descriptions
 const WEBHOOK_PROVIDERS: Array<{
@@ -144,7 +143,7 @@ function a11yProps(index: number) {
 function Settings() {
   const { config, updateConfig } = useConfig();
   const { user } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
   const [currentTab, setCurrentTab] = useState(0);
   const [defaultTTL, setDefaultTTL] = useState(config.defaultTTL);
   const [webhookUrl, setWebhookUrl] = useState(config.webhookUrl || '');
@@ -162,7 +161,6 @@ function Settings() {
   const [selectedKeyId, setSelectedKeyId] = useState('');
   const [importType, setImportType] = useState<'full' | 'zones' | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [exportBackups, setExportBackups] = useState(true);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
@@ -257,10 +255,6 @@ function Settings() {
           delete exportData.dns_manager_config.defaultTTL;
           delete exportData.dns_manager_config.webhookUrl;
           delete exportData.dns_manager_config.webhookProvider;
-        }
-
-        if (exportBackups) {
-          exportData.dnsBackups = backupService.getBackups();
         }
       }
 
@@ -375,16 +369,13 @@ function Settings() {
 
         await updateConfig(newConfig);
 
-        // Import backups if present, ensuring server field is preserved
+        // Snapshots now live server-side; legacy dnsBackups entries in old
+        // export files are not written to localStorage (nothing reads it).
         if (importedData.dnsBackups?.length) {
-          const backups = importedData.dnsBackups.map(backup => ({
-            ...backup,
-            server: backup.server || '' // Ensure server field exists
-          }));
-          localStorage.setItem('dnsBackups', JSON.stringify(backups));
+          showInfo(`${importedData.dnsBackups.length} legacy snapshot entr${importedData.dnsBackups.length === 1 ? 'y was' : 'ies were'} ignored - use Snapshots > Import Snapshot to import individual snapshots`);
         }
 
-        showSuccess('Configuration and backups imported successfully');
+        showSuccess('Configuration imported successfully');
       }
 
       setImportDialogOpen(false);
@@ -596,7 +587,6 @@ function Settings() {
                     if (e.target.checked) {
                       setExportKeys(false);
                       setExportSettings(false);
-                      setExportBackups(false);
                     }
                   }}
                 />
@@ -622,15 +612,6 @@ function Settings() {
                     />
                   }
                   label="Include application settings"
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={exportBackups}
-                      onChange={(e) => setExportBackups(e.target.checked)}
-                    />
-                  }
-                  label="Include zone backups"
                 />
               </>
             )}
