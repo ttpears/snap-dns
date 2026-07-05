@@ -7,6 +7,7 @@ import { requireAuth, requireRole } from '../middleware/auth';
 import { LoginCredentials, UserCreateData, UserRole, AuthenticatedRequest } from '../types/auth';
 import { validateLogin, validateUserCreate, validateChangePassword } from '../middleware/validation';
 import { getClientIp } from '../helpers/ipHelpers';
+import { regenerateSession } from '../helpers/session';
 
 const router = Router();
 
@@ -63,6 +64,10 @@ router.post('/login', loginLimiter, validateLogin, async (req: Request, res: Res
         code: 'INVALID_CREDENTIALS'
       });
     }
+
+    // Regenerate the session id before populating authenticated fields so the
+    // pre-auth session id is discarded (session fixation mitigation).
+    await regenerateSession(req.session);
 
     // Create session
     req.session.userId = user.id;
