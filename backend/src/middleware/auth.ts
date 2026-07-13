@@ -2,6 +2,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest, UserRole } from '../types/auth';
 import { userService } from '../services/userService';
+import { apiTokenService } from '../services/apiTokenService';
+import { auditService, AuditEventType } from '../services/auditService';
 
 /**
  * Middleware to check if user is authenticated.
@@ -16,48 +18,116 @@ import { userService } from '../services/userService';
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authReq = req as AuthenticatedRequest;
 
+  // Session auth stays PRIMARY: when a session is present it fully decides the
+  // request and the bearer fallback below is never consulted.
+  if (req.session && req.session.userId) {
+    try {
+      // Re-load current privileges from the user store (in-memory, cheap).
+      const dbUser = await userService.getUserById(req.session.userId);
+
+      if (!dbUser) {
+        // User was deleted mid-session: destroy the session so it stops working
+        // immediately, then reject.
+        req.session.destroy(() => {
+          res.status(401).json({
+            success: false,
+            error: 'Authentication required',
+            code: 'NOT_AUTHENTICATED'
+          });
+        });
+        return;
+      }
+
+      // Identity comes from the session; privileges (and the forced
+      // password-change flag) come from the database so a cleared flag takes
+      // effect on the very next request.
+      authReq.user = {
+        userId: req.session.userId,
+        username: req.session.username || dbUser.username,
+        role: dbUser.role,
+        allowedKeyIds: dbUser.allowedKeyIds,
+        allowedZones: dbUser.allowedZones || [],
+        mustChangePassword: dbUser.mustChangePassword ?? false,
+      };
+
+      next();
+      return;
+    } catch (err) {
+      next(err);
+      return;
+    }
+  }
+
+  // Bearer fallback: a personal API token authenticates as its OWNER with the
+  // owner's CURRENT privileges (loaded live from userService, so revocations and
+  // role changes take effect immediately). The raw token / hash is never logged
+  // — only the 12-char prefix appears in audit details.
+  const header = req.headers?.authorization;
+  if (header && header.startsWith('Bearer sdns_')) {
+    const raw = header.slice(7).trim();
+    try {
+      const result = await apiTokenService.verifyToken(raw);
+      if (result.status !== 'valid') {
+        await auditService.log(AuditEventType.TOKEN_AUTH_FAILED, {
+          success: false,
+          ipAddress: req.ip,
+          details: { reason: result.status, prefix: raw.slice(0, 12) },
+        }).catch(() => { /* audit is best-effort; never block the 401 */ });
+        res.status(401).json({ success: false, error: 'Invalid API token', code: 'INVALID_TOKEN' });
+        return;
+      }
+
+      const dbUser = await userService.getUserById(result.token.userId);
+      if (!dbUser) {
+        await auditService.log(AuditEventType.TOKEN_AUTH_FAILED, {
+          success: false,
+          ipAddress: req.ip,
+          details: { reason: 'user_missing', prefix: raw.slice(0, 12) },
+        }).catch(() => { /* audit is best-effort; never block the 401 */ });
+        res.status(401).json({ success: false, error: 'Invalid API token', code: 'INVALID_TOKEN' });
+        return;
+      }
+
+      authReq.user = {
+        userId: dbUser.id,
+        username: dbUser.username,
+        role: dbUser.role,
+        allowedKeyIds: dbUser.allowedKeyIds,
+        allowedZones: dbUser.allowedZones || [],
+        mustChangePassword: dbUser.mustChangePassword ?? false,
+      };
+
+      next();
+      return;
+    } catch (err) {
+      next(err);
+      return;
+    }
+  }
+
+  res.status(401).json({
+    success: false,
+    error: 'Authentication required',
+    code: 'NOT_AUTHENTICATED'
+  });
+}
+
+/**
+ * Middleware that requires an interactive session (never a bearer token). Used
+ * to guard token creation/revocation so an API token can never mint or manage
+ * tokens. Must run AFTER requireAuth in the chain; it checks the session
+ * directly rather than req.user so a bearer-authenticated request is rejected.
+ */
+export function requireSessionAuth(req: Request, res: Response, next: NextFunction): void {
   if (!req.session || !req.session.userId) {
     res.status(401).json({
       success: false,
-      error: 'Authentication required',
-      code: 'NOT_AUTHENTICATED'
+      error: 'This action requires an interactive session, not an API token',
+      code: 'SESSION_REQUIRED'
     });
     return;
   }
-
-  try {
-    // Re-load current privileges from the user store (in-memory, cheap).
-    const dbUser = await userService.getUserById(req.session.userId);
-
-    if (!dbUser) {
-      // User was deleted mid-session: destroy the session so it stops working
-      // immediately, then reject.
-      req.session.destroy(() => {
-        res.status(401).json({
-          success: false,
-          error: 'Authentication required',
-          code: 'NOT_AUTHENTICATED'
-        });
-      });
-      return;
-    }
-
-    // Identity comes from the session; privileges (and the forced
-    // password-change flag) come from the database so a cleared flag takes
-    // effect on the very next request.
-    authReq.user = {
-      userId: req.session.userId,
-      username: req.session.username || dbUser.username,
-      role: dbUser.role,
-      allowedKeyIds: dbUser.allowedKeyIds,
-      allowedZones: dbUser.allowedZones || [],
-      mustChangePassword: dbUser.mustChangePassword ?? false,
-    };
-
-    next();
-  } catch (err) {
-    next(err);
-  }
+  next();
 }
 
 /**

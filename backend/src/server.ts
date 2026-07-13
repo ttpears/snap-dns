@@ -10,6 +10,7 @@ import { getAllowedOrigins, isOriginAllowed } from './middleware/corsOrigin';
 import { generalApiLimiter } from './middleware/rateLimiter';
 import { userService } from './services/userService';
 import { tsigKeyService } from './services/tsigKeyService';
+import { apiTokenService } from './services/apiTokenService';
 import { backupService } from './services/backupService';
 import { webhookConfigService } from './services/webhookConfigService';
 import { ssoConfigService } from './services/ssoConfigService';
@@ -19,6 +20,7 @@ import zoneRoutes from './routes/zoneRoutes';
 import keyRoutes from './routes/keyRoutes';
 import webhookRoutes from './routes/webhookRoutes';
 import tsigKeyRoutes from './routes/tsigKeyRoutes';
+import tokenRoutes from './routes/tokenRoutes';
 import backupRoutes from './routes/backupRoutes';
 import webhookConfigRoutes from './routes/webhookConfigRoutes';
 import ssoConfigRoutes from './routes/ssoConfigRoutes';
@@ -143,6 +145,7 @@ app.use('/api', generalApiLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/sso', ssoAuthRoutes);
 app.use('/api/tsig-keys', tsigKeyRoutes);
+app.use('/api/tokens', tokenRoutes);
 app.use('/api/zones', zoneRoutes);
 app.use('/api/keys', keyRoutes);
 app.use('/api/webhook', webhookRoutes);
@@ -211,6 +214,9 @@ const startServer = async () => {
 
     console.log('Initializing TSIG key service...');
     await tsigKeyService.initialize();
+
+    console.log('Initializing API token service...');
+    await apiTokenService.initialize();
 
     console.log('Initializing backup service...');
     await backupService.initialize();

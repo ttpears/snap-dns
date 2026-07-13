@@ -2,12 +2,33 @@
 // Rate limiting middleware for DNS operations and API endpoints
 
 import { rateLimit } from 'express-rate-limit';
+import type { Request } from 'express';
+import crypto from 'crypto';
 import { isRateLimitEnabled } from '../config/securityToggles';
 
 // Rate limiting is ON by default (secure) and only skipped when explicitly
 // disabled via RATE_LIMIT_ENABLED=false -- not based on NODE_ENV. See
 // config/securityToggles.ts for the rationale.
 const rateLimitDisabled = !isRateLimitEnabled();
+
+/**
+ * Per-principal rate-limit key. Limiters run BEFORE requireAuth, so this inspects
+ * the session/header directly: prefer the authenticated user, then a stable
+ * fingerprint of a bearer API token (so token traffic is throttled per token
+ * rather than lumped into a shared per-IP bucket, which would let co-located
+ * token clients starve each other), then finally the client IP.
+ */
+export function principalKey(req: Request): string {
+  if (req.session?.userId) {
+    return `user:${req.session.userId}`;
+  }
+  const header = req.headers?.authorization;
+  if (header && header.startsWith('Bearer sdns_')) {
+    const raw = header.slice(7).trim();
+    return `token:${crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16)}`;
+  }
+  return req.ip || 'unknown';
+}
 
 /**
  * Rate limiter for DNS zone queries (GET operations)
@@ -26,7 +47,8 @@ export const dnsQueryLimiter = rateLimit({
   // Skip only when rate limiting is explicitly disabled (default: enabled)
   skip: (_req) => {
     return rateLimitDisabled;
-  }
+  },
+  keyGenerator: principalKey
 });
 
 /**
@@ -47,15 +69,7 @@ export const dnsModifyLimiter = rateLimit({
   skip: (_req) => {
     return rateLimitDisabled;
   },
-  // Use user ID as key for authenticated requests
-  keyGenerator: (req) => {
-    // If authenticated, use user ID for per-user limits
-    if (req.session?.userId) {
-      return `user:${req.session.userId}`;
-    }
-    // Fall back to IP address
-    return req.ip || 'unknown';
-  }
+  keyGenerator: principalKey
 });
 
 /**
@@ -76,12 +90,28 @@ export const keyManagementLimiter = rateLimit({
   skip: (_req) => {
     return rateLimitDisabled;
   },
-  keyGenerator: (req) => {
-    if (req.session?.userId) {
-      return `user:${req.session.userId}`;
-    }
-    return req.ip || 'unknown';
-  }
+  keyGenerator: principalKey
+});
+
+/**
+ * Rate limiter for personal API token operations (create/list/revoke)
+ * Moderate per-user limits; token management is sensitive but low-frequency.
+ */
+export const tokenLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 20, // 20 token operations per 5 minutes
+  message: {
+    success: false,
+    error: 'Too many token operations, please slow down',
+    code: 'RATE_LIMIT_EXCEEDED'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip only when rate limiting is explicitly disabled (default: enabled)
+  skip: (_req) => {
+    return rateLimitDisabled;
+  },
+  keyGenerator: principalKey
 });
 
 /**
@@ -102,12 +132,7 @@ export const webhookLimiter = rateLimit({
   skip: (_req) => {
     return rateLimitDisabled;
   },
-  keyGenerator: (req) => {
-    if (req.session?.userId) {
-      return `user:${req.session.userId}`;
-    }
-    return req.ip || 'unknown';
-  }
+  keyGenerator: principalKey
 });
 
 /**
@@ -127,5 +152,6 @@ export const generalApiLimiter = rateLimit({
   // Skip only when rate limiting is explicitly disabled (default: enabled)
   skip: (_req) => {
     return rateLimitDisabled;
-  }
+  },
+  keyGenerator: principalKey
 });
