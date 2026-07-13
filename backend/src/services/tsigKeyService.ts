@@ -201,8 +201,10 @@ class TSIGKeyService {
 
     let keysArray = Array.from(this.keys.values());
 
-    // Filter by allowed keys if provided
-    if (allowedKeyIds && allowedKeyIds.length > 0) {
+    // Deny-by-default: an allowlist that is *provided* is always applied, even when
+    // empty (empty => sees nothing), matching getKeyForZone's use-path semantics.
+    // Callers that should see every key (admins) pass no allowlist (undefined).
+    if (allowedKeyIds) {
       keysArray = keysArray.filter(k => allowedKeyIds.includes(k.id));
     }
 

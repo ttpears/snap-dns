@@ -14,14 +14,14 @@ import { BatchChange } from '../services/dnsService';
 
 const router = Router();
 
-// Fetch allowedZones from DB on each request so changes take effect without re-login
+// Fetch allowedZones from DB on each request so changes take effect without re-login.
+// Deny-by-default: a non-admin with no allowedZones may access no zone (consistent
+// with allowedKeyIds). Admins bypass the gate entirely.
 async function checkZoneAccess(user: { role: string; userId: string }, zone: string): Promise<boolean> {
   if (user.role === 'admin') return true;
   const dbUser = await userService.getUserById(user.userId);
   if (!dbUser) return false;
-  const allowedZones = dbUser.allowedZones;
-  if (allowedZones.length === 0) return true;
-  return allowedZones.some(z => z.toLowerCase() === zone.toLowerCase());
+  return dbUser.allowedZones.some(z => z.toLowerCase() === zone.toLowerCase());
 }
 
 // Add custom error types

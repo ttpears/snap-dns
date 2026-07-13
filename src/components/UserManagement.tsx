@@ -334,7 +334,7 @@ function UserManagement() {
                   {user.role === 'admin' ? (
                     <Chip label="All Zones" size="small" color="success" />
                   ) : !user.allowedZones || user.allowedZones.length === 0 ? (
-                    <Chip label="All Zones" size="small" color="default" />
+                    <Chip label="No Zones" size="small" />
                   ) : (
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                       {user.allowedZones.map(z => (
@@ -471,7 +471,7 @@ function UserManagement() {
                 </Typography>
               )}
               <FormHelperText>
-                Leave all unchecked to allow access to all zones covered by the assigned keys
+                Select every zone this user may access. Leaving all unchecked grants no zone access.
               </FormHelperText>
             </Box>
           )}
@@ -560,7 +560,7 @@ function UserManagement() {
                 </Typography>
               )}
               <FormHelperText>
-                Leave all unchecked to allow access to all zones covered by the assigned keys
+                Select every zone this user may access. Leaving all unchecked grants no zone access.
               </FormHelperText>
             </Box>
           )}
