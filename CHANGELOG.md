@@ -1,0 +1,36 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [3.0.0] - 2026-07-13
+
+### ⚠️ Breaking Changes
+
+- **Per-user zone access is now deny-by-default.** An empty `allowedZones` list
+  previously granted a non-admin user access to **all** zones; it now grants
+  access to **no** zones, matching the existing deny-by-default semantics of
+  `allowedKeyIds`. Admins are unaffected (they bypass the zone gate).
+
+  **Upgrade action required:** before or immediately after upgrading, review every
+  non-admin (editor/viewer) user. Any such user who relied on an empty
+  `allowedZones` to reach zones must have their zones assigned explicitly in
+  Settings → Users, or they will be denied access to all zones. New SSO users are
+  created with an empty `allowedZones`, so they also require explicit zone grants.
+
+  A key's own `zones: []` still means "this key is valid for all zones" — that is
+  an admin-configured key capability, not a per-user access grant, and is
+  unchanged.
+
+### Security
+
+- **Fixed a TSIG key metadata leak in the key listing.** `GET /api/tsig-keys`
+  filtered the returned keys only when the caller's allowlist was non-empty, so a
+  non-admin editor/viewer with an empty `allowedKeyIds` received every key's
+  metadata (name, server, key name, algorithm, zones). Secrets were never exposed.
+  The list path now applies a provided allowlist even when empty (empty → sees
+  nothing), consistent with the key-use path (`getKeyForZone`).
+
+[3.0.0]: https://github.com/ttpears/snap-dns/releases/tag/v3.0.0

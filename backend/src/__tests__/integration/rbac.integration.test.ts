@@ -32,7 +32,8 @@ describe('RBAC on mutation routes (HTTP)', () => {
   beforeAll(async () => {
     app = buildTestApp();
     await seedUser({ username: 'viewer1', password: 'viewer-pass-123', role: UserRole.VIEWER });
-    await seedUser({ username: 'editor1', password: 'editor-pass-123', role: UserRole.EDITOR });
+    // Grant the zone explicitly: allowedZones is deny-by-default (empty => no zones).
+    await seedUser({ username: 'editor1', password: 'editor-pass-123', role: UserRole.EDITOR, allowedZones: ['example.com'] });
   });
 
   describe('TSIG key creation', () => {
