@@ -2,6 +2,12 @@
 import { DNSRecord } from '../types/dns';
 import { DNSValidationService } from './dnsValidationService';
 
+// A reverse-DNS zone lives under in-addr.arpa (IPv4) or ip6.arpa (IPv6). Accepts
+// names with or without a trailing dot.
+export function isReverseZone(zone: string): boolean {
+  return /\.(in-addr|ip6)\.arpa\.?$/i.test(zone);
+}
+
 // We can't directly use dns-packet in the frontend due to Node.js dependencies,
 // but we can follow its formatting rules
 export class DNSRecordFormatter {

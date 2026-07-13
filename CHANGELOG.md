@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-07-13
+
+### Added
+
+- **Reverse-zone sub-selection in the TSIG Key Selection panel.** When the zone
+  list contains more than 5 reverse zones (`.in-addr.arpa` / `.ip6.arpa`), they
+  are collapsed behind a single "Reverse zones (N)…" entry in the main zone
+  dropdown; choosing it reveals a dedicated reverse-zone dropdown. This keeps
+  forward zones easy to find when many reverse zones are present. At 5 or fewer
+  reverse zones the list is unchanged (all zones inline). The three key/zone
+  selects also gained proper label associations for accessibility.
+
 ## [3.0.0] - 2026-07-13
 
 ### ⚠️ Breaking Changes
@@ -33,4 +45,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The list path now applies a provided allowlist even when empty (empty → sees
   nothing), consistent with the key-use path (`getKeyForZone`).
 
+[3.1.0]: https://github.com/ttpears/snap-dns/releases/tag/v3.1.0
 [3.0.0]: https://github.com/ttpears/snap-dns/releases/tag/v3.0.0
