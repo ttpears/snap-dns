@@ -20,6 +20,9 @@ export interface DNSBackup {
   timestamp: number;
   zone: string;
   server: string;
+  // TSIG key/view this snapshot was taken through. Optional for backward
+  // compatibility with snapshots created before split-view support.
+  keyId?: string;
   records: DNSRecord[];
   type: 'auto' | 'manual';
   description?: string;
@@ -32,6 +35,7 @@ export interface BackupListItem {
   timestamp: number;
   zone: string;
   server: string;
+  keyId?: string;
   recordCount: number;
   type: 'auto' | 'manual';
   description?: string;
@@ -91,6 +95,7 @@ class BackupService {
           timestamp: b.timestamp,
           zone: b.zone,
           server: b.server,
+          keyId: b.keyId,
           recordCount: b.records.length,
           type: b.type,
           description: b.description,
@@ -147,6 +152,7 @@ class BackupService {
     userId: string,
     options: {
       server: string;
+      keyId?: string;
       type: 'auto' | 'manual';
       description?: string;
     }
@@ -159,6 +165,7 @@ class BackupService {
         timestamp: Date.now(),
         zone,
         server: options.server,
+        keyId: options.keyId,
         records,
         type: options.type,
         description: options.description,
@@ -260,6 +267,7 @@ class BackupService {
           timestamp: b.timestamp,
           zone: b.zone,
           server: b.server,
+          keyId: b.keyId,
           recordCount: b.records.length,
           type: b.type,
           description: b.description,

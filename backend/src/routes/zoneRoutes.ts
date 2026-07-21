@@ -47,6 +47,84 @@ const ErrorCodes = {
 // Add type for error codes
 type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
 
+// Result of resolving the explicitly-selected TSIG key for a request.
+type KeyResolution =
+  | { ok: true; keyConfig: ZoneConfig }
+  | { ok: false; status: number; code: ErrorCode; error: string; details?: unknown };
+
+// Resolve the TSIG key a request must use by its EXPLICIT keyId, never by zone
+// name. In split-horizon DNS the same zone name exists under two keys (an
+// internal and an external view); resolving by zone name alone silently picks
+// whichever key sorts first, so an internal edit could land on the external
+// server. Requiring keyId makes the target view unambiguous.
+//
+// Authorization order: the key must be in the caller's allowlist (admins may use
+// any key), it must exist, and it must actually serve the requested zone (an
+// empty zones list is a wildcard that serves any zone).
+async function resolveZoneKey(
+  user: { role: string; userId: string; allowedKeyIds: string[] },
+  zone: string,
+  keyId: unknown
+): Promise<KeyResolution> {
+  if (!keyId || typeof keyId !== 'string') {
+    return {
+      ok: false,
+      status: 400,
+      code: ErrorCodes.MISSING_CONFIG,
+      error: 'A keyId is required to identify which TSIG key/view to use',
+      details: { missingFields: ['keyId'] },
+    };
+  }
+
+  let allowedKeyIds = user.allowedKeyIds;
+  if (user.role === 'admin') {
+    const allKeys = await tsigKeyService.listKeys();
+    allowedKeyIds = allKeys.map(k => k.id);
+  }
+  if (!allowedKeyIds.includes(keyId)) {
+    return {
+      ok: false,
+      status: 403,
+      code: ErrorCodes.PERMISSION_DENIED,
+      error: 'Access denied to the specified key',
+      details: { keyId },
+    };
+  }
+
+  const tsigKey = await tsigKeyService.getKey(keyId);
+  if (!tsigKey) {
+    return {
+      ok: false,
+      status: 404,
+      code: ErrorCodes.MISSING_CONFIG,
+      error: 'The specified TSIG key does not exist',
+      details: { keyId },
+    };
+  }
+
+  const servesZone = tsigKey.zones.length === 0 || tsigKey.zones.includes(zone);
+  if (!servesZone) {
+    return {
+      ok: false,
+      status: 400,
+      code: ErrorCodes.MISSING_CONFIG,
+      error: 'The selected key is not configured for this zone',
+      details: { zone, keyId },
+    };
+  }
+
+  return {
+    ok: true,
+    keyConfig: {
+      server: tsigKey.server,
+      keyName: tsigKey.keyName,
+      keyValue: tsigKey.keyValue, // Already decrypted by getKey
+      algorithm: tsigKey.algorithm,
+      id: tsigKey.id,
+    },
+  };
+}
+
 // Get zone records - requires authentication and rate limiting
 router.get('/:zone', dnsQueryLimiter, requireAuth, async (req: Request, res: Response) => {
   try {
@@ -63,36 +141,20 @@ router.get('/:zone', dnsQueryLimiter, requireAuth, async (req: Request, res: Res
       });
     }
 
-    // For admins, get all key IDs; otherwise use the user's allowed keys
-    let allowedKeyIds = user.allowedKeyIds;
-    if (user.role === 'admin') {
-      // Admins have access to all keys
-      const allKeys = await tsigKeyService.listKeys();
-      allowedKeyIds = allKeys.map(k => k.id);
-    }
-
-    // Fetch TSIG key from storage for this zone
-    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
-
-    if (!tsigKey) {
-      return res.status(403).json({
+    // Resolve the key by the explicitly requested keyId (query param), so a
+    // split-horizon zone is read from the exact view the user selected.
+    const resolved = await resolveZoneKey(user, zone, req.query.keyId);
+    if (!resolved.ok) {
+      return res.status(resolved.status).json({
         success: false,
-        code: ErrorCodes.MISSING_CONFIG,
-        error: 'No TSIG key found for this zone. Please configure a key first.',
-        details: { zone }
+        code: resolved.code,
+        error: resolved.error,
+        details: resolved.details,
       });
     }
+    const keyConfig = resolved.keyConfig;
 
-    // Build key config from stored key
-    const keyConfig: ZoneConfig = {
-      server: tsigKey.server,
-      keyName: tsigKey.keyName,
-      keyValue: tsigKey.keyValue, // Already decrypted
-      algorithm: tsigKey.algorithm,
-      id: tsigKey.id
-    };
-
-    console.log('Fetching records for zone:', zone, 'using stored key:', tsigKey.name);
+    console.log('Fetching records for zone:', zone, 'using key id:', keyConfig.id);
 
     const records = await dnsService.fetchZoneRecords(zone, keyConfig);
     res.json({ success: true, records });
@@ -171,32 +233,18 @@ router.post(
       });
     }
 
-    // For admins, get all key IDs; otherwise use the user's allowed keys
-    let allowedKeyIds = user.allowedKeyIds;
-    if (user.role === 'admin') {
-      const allKeys = await tsigKeyService.listKeys();
-      allowedKeyIds = allKeys.map(k => k.id);
-    }
-
-    // Fetch TSIG key from storage
-    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
-
-    if (!tsigKey) {
-      return res.status(403).json({
+    // Resolve the key by the explicitly requested keyId (request body), so a
+    // split-horizon zone is written to the exact view the user selected.
+    const resolved = await resolveZoneKey(user, zone, req.body.keyId);
+    if (!resolved.ok) {
+      return res.status(resolved.status).json({
         success: false,
-        code: ErrorCodes.MISSING_CONFIG,
-        error: 'No TSIG key found for this zone',
-        details: { zone }
+        code: resolved.code,
+        error: resolved.error,
+        details: resolved.details,
       });
     }
-
-    const keyConfig: ZoneConfig = {
-      server: tsigKey.server,
-      keyName: tsigKey.keyName,
-      keyValue: tsigKey.keyValue,
-      algorithm: tsigKey.algorithm,
-      id: tsigKey.id
-    };
+    const keyConfig = resolved.keyConfig;
 
     const result = await dnsService.addRecord(zone, record, keyConfig);
 
@@ -280,32 +328,18 @@ router.delete(
       });
     }
 
-    // For admins, get all key IDs; otherwise use the user's allowed keys
-    let allowedKeyIds = user.allowedKeyIds;
-    if (user.role === 'admin') {
-      const allKeys = await tsigKeyService.listKeys();
-      allowedKeyIds = allKeys.map(k => k.id);
-    }
-
-    // Fetch TSIG key from storage
-    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
-
-    if (!tsigKey) {
-      return res.status(403).json({
+    // Resolve the key by the explicitly requested keyId (request body), so a
+    // split-horizon zone is written to the exact view the user selected.
+    const resolved = await resolveZoneKey(user, zone, req.body.keyId);
+    if (!resolved.ok) {
+      return res.status(resolved.status).json({
         success: false,
-        code: ErrorCodes.MISSING_CONFIG,
-        error: 'No TSIG key found for this zone',
-        details: { zone }
+        code: resolved.code,
+        error: resolved.error,
+        details: resolved.details,
       });
     }
-
-    const keyConfig: ZoneConfig = {
-      server: tsigKey.server,
-      keyName: tsigKey.keyName,
-      keyValue: tsigKey.keyValue,
-      algorithm: tsigKey.algorithm,
-      id: tsigKey.id
-    };
+    const keyConfig = resolved.keyConfig;
 
     const result = await dnsService.deleteRecord(zone, record, keyConfig);
 
@@ -409,32 +443,18 @@ router.patch(
       });
     }
 
-    // For admins, get all key IDs; otherwise use the user's allowed keys
-    let allowedKeyIds = user.allowedKeyIds;
-    if (user.role === 'admin') {
-      const allKeys = await tsigKeyService.listKeys();
-      allowedKeyIds = allKeys.map(k => k.id);
-    }
-
-    // Fetch TSIG key from storage
-    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
-
-    if (!tsigKey) {
-      return res.status(403).json({
+    // Resolve the key by the explicitly requested keyId (request body), so a
+    // split-horizon zone is written to the exact view the user selected.
+    const resolved = await resolveZoneKey(user, zone, req.body.keyId);
+    if (!resolved.ok) {
+      return res.status(resolved.status).json({
         success: false,
-        code: ErrorCodes.MISSING_CONFIG,
-        error: 'No TSIG key found for this zone',
-        details: { zone }
+        code: resolved.code,
+        error: resolved.error,
+        details: resolved.details,
       });
     }
-
-    const keyConfig: ZoneConfig = {
-      server: tsigKey.server,
-      keyName: tsigKey.keyName,
-      keyValue: tsigKey.keyValue,
-      algorithm: tsigKey.algorithm,
-      id: tsigKey.id
-    };
+    const keyConfig = resolved.keyConfig;
 
     // Use atomic update operation
     const result = await dnsService.updateRecord(zone, oldRecord, newRecord, keyConfig);
@@ -547,30 +567,19 @@ router.post(
       }
     }
 
-    // For admins, get all key IDs; otherwise use the user's allowed keys
-    let allowedKeyIds = user.allowedKeyIds;
-    if (user.role === 'admin') {
-      const allKeys = await tsigKeyService.listKeys();
-      allowedKeyIds = allKeys.map(k => k.id);
-    }
-
-    const tsigKey = await tsigKeyService.getKeyForZone(zone, user.userId, allowedKeyIds);
-    if (!tsigKey) {
-      return res.status(403).json({
+    // Resolve the key by the explicitly requested keyId (request body). The
+    // apply flow groups pending changes by (zone, keyId) and sends one batch per
+    // group, so each split-horizon view is written through its own key.
+    const resolved = await resolveZoneKey(user, zone, req.body.keyId);
+    if (!resolved.ok) {
+      return res.status(resolved.status).json({
         success: false,
-        code: ErrorCodes.MISSING_CONFIG,
-        error: 'No TSIG key found for this zone',
-        details: { zone }
+        code: resolved.code,
+        error: resolved.error,
+        details: resolved.details,
       });
     }
-
-    const keyConfig: ZoneConfig = {
-      server: tsigKey.server,
-      keyName: tsigKey.keyName,
-      keyValue: tsigKey.keyValue,
-      algorithm: tsigKey.algorithm,
-      id: tsigKey.id
-    };
+    const keyConfig = resolved.keyConfig;
 
     const result = await dnsService.applyBatch(zone, changes, keyConfig);
 

@@ -494,6 +494,20 @@ function Snapshots() {
     return backendKeys.filter(key => key.zones?.includes(selectedZone)) || [];
   }, [backendKeys, selectedZone]);
 
+  // Resolve which key/view a backup belongs to, so compare/restore read and
+  // write the SAME split-horizon view the snapshot was taken from. Prefer the
+  // key the snapshot recorded; for older snapshots (no keyId) fall back to a
+  // key on the same server serving the zone, then any key serving the zone.
+  const resolveBackupKeyId = useCallback(
+    (backup: { zone: string; keyId?: string; server?: string }): string | null => {
+      if (backup.keyId && backendKeys.some(k => k.id === backup.keyId)) return backup.keyId;
+      const serving = backendKeys.filter(k => k.zones?.includes(backup.zone));
+      const sameServer = backup.server ? serving.find(k => k.server === backup.server) : undefined;
+      return (sameServer || serving[0])?.id ?? null;
+    },
+    [backendKeys]
+  );
+
   // Auto-select the DNS key that serves the chosen zone in the Create Snapshot
   // panel, mirroring the Zone Editor sidebar: keep the current key if it still
   // serves the zone, otherwise pick the first key whose `zones` include it. This
@@ -543,12 +557,13 @@ function Snapshots() {
         throw new Error('No key configuration found');
       }
 
-      const records = await dnsService.fetchZoneRecords(selectedZone);
+      const records = await dnsService.fetchZoneRecords(selectedZone, keyConfig.id);
 
       const backup = await backupService.createBackup(selectedZone, records, {
         type: 'manual',
         description: 'Manual snapshot',
         server: keyConfig.server,
+        keyId: keyConfig.id,
         config: config as any
       });
 
@@ -695,7 +710,11 @@ function Snapshots() {
       const fullBackup = await backupService.getBackup(backupListItem.zone, backupListItem.id);
       setSelectedBackup(fullBackup);
 
-      const currentRecords = await dnsService.fetchZoneRecords(backupListItem.zone);
+      const keyId = resolveBackupKeyId(fullBackup);
+      if (!keyId) {
+        throw new Error('No key found for this zone');
+      }
+      const currentRecords = await dnsService.fetchZoneRecords(backupListItem.zone, keyId);
 
       if (!Array.isArray(currentRecords) || currentRecords.length === 0) {
         throw new Error('Failed to fetch current zone records or zone is empty');
@@ -859,13 +878,15 @@ function Snapshots() {
   // selected subset.
   const confirmRestore = async (recordsToRestore: DNSRecord[], isFullRestore = false) => {
     try {
-      const keyForZone = backendKeys.find(k => k.zones?.includes(selectedBackup.zone));
+      // Restore through the key/view the snapshot was taken from, so the queued
+      // changes carry the correct keyId and the apply flow targets that view.
+      const keyId = resolveBackupKeyId(selectedBackup);
 
-      if (!keyForZone) {
+      if (!keyId) {
         throw new Error('No key found for this zone');
       }
 
-      const currentRecords = await dnsService.fetchZoneRecords(selectedBackup.zone);
+      const currentRecords = await dnsService.fetchZoneRecords(selectedBackup.zone, keyId);
 
       const changes = computeRestoreChanges(
         currentRecords,
@@ -874,7 +895,7 @@ function Snapshots() {
         isFullRestore,
         {
           zone: selectedBackup.zone,
-          keyId: keyForZone.id,
+          keyId,
           source: {
             type: 'backup',
             id: selectedBackup.id,

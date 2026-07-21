@@ -109,7 +109,7 @@ router.post('/zone/:zone', requireAuth, requireWriteAccess, requirePasswordCurre
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;
     const { zone } = req.params;
-    const { records, server, type, description } = req.body;
+    const { records, server, keyId, type, description } = req.body;
 
     // Validate required fields
     if (!records || !Array.isArray(records)) {
@@ -138,6 +138,7 @@ router.post('/zone/:zone', requireAuth, requireWriteAccess, requirePasswordCurre
 
     const backup = await backupService.createBackup(zone, records, user.userId, {
       server,
+      keyId,
       type,
       description,
     });

@@ -272,7 +272,7 @@ function ZoneEditor() {
     setError(null);
 
     try {
-      const records = await dnsService.fetchZoneRecords(selectedZone);
+      const records = await dnsService.fetchZoneRecords(selectedZone, selectedKey.id);
       setRecords(records);
     } catch (err) {
       console.error('Failed to load zone records:', err);

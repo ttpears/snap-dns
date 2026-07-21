@@ -118,18 +118,26 @@ class DNSService {
     };
   }
 
-  async fetchZoneRecords(zone: string): Promise<DNSRecord[]> {
+  async fetchZoneRecords(zone: string, keyId: string): Promise<DNSRecord[]> {
     try {
       if (!zone) {
         throw new Error('Zone name is required');
       }
+      if (!keyId) {
+        // keyId identifies which TSIG key/view to read. Split-horizon zones
+        // share a name across views, so this must be explicit.
+        throw new Error('A key must be selected to read this zone');
+      }
 
       const headers = this.createHeaders();
-      const response = await fetch(`${this.baseUrl}/api/zones/${encodeURIComponent(zone)}`, {
-        method: 'GET',
-        headers,
-        credentials: 'include' // Send authentication cookies
-      });
+      const response = await fetch(
+        `${this.baseUrl}/api/zones/${encodeURIComponent(zone)}?keyId=${encodeURIComponent(keyId)}`,
+        {
+          method: 'GET',
+          headers,
+          credentials: 'include' // Send authentication cookies
+        }
+      );
 
       if (!response.ok) {
         const error = await response.json();
@@ -144,16 +152,20 @@ class DNSService {
     }
   }
 
-  async addRecord(zone: string, record: DNSRecord): Promise<{ warnings?: string[] }> {
+  async addRecord(zone: string, record: DNSRecord, keyId: string): Promise<{ warnings?: string[] }> {
     try {
       if (!zone || !record) {
         throw new Error('Zone and record are required');
+      }
+      if (!keyId) {
+        throw new Error('A key must be selected to modify this zone');
       }
 
       const headers = this.createHeaders();
       const preparedRecord = this.prepareRecordForRequest(record);
 
       const requestBody = {
+        keyId,
         record: preparedRecord
       };
 
@@ -187,16 +199,20 @@ class DNSService {
     }
   }
 
-  async deleteRecord(zone: string, record: DNSRecord): Promise<{ warnings?: string[] }> {
+  async deleteRecord(zone: string, record: DNSRecord, keyId: string): Promise<{ warnings?: string[] }> {
     try {
       if (!zone || !record) {
         throw new Error('Zone and record are required');
+      }
+      if (!keyId) {
+        throw new Error('A key must be selected to modify this zone');
       }
 
       const headers = this.createHeaders();
       const preparedRecord = this.prepareRecordForRequest(record);
 
       const requestBody = {
+        keyId,
         record: preparedRecord
       };
 
@@ -233,11 +249,15 @@ class DNSService {
   async updateRecord(
     zone: string,
     oldRecord: DNSRecord,
-    newRecord: DNSRecord
+    newRecord: DNSRecord,
+    keyId: string
   ): Promise<{ warnings?: string[] }> {
     try {
       if (!zone || !oldRecord || !newRecord) {
         throw new Error('Zone, old record, and new record are required');
+      }
+      if (!keyId) {
+        throw new Error('A key must be selected to modify this zone');
       }
 
       const headers = this.createHeaders();
@@ -245,6 +265,7 @@ class DNSService {
       const preparedNewRecord = this.prepareRecordForRequest(newRecord);
 
       const requestBody = {
+        keyId,
         oldRecord: preparedOldRecord,
         newRecord: preparedNewRecord
       };
@@ -284,10 +305,13 @@ class DNSService {
    * Apply a set of changes to one zone atomically (single backend transaction).
    * Each record is formatted the same way the single-record calls format it.
    */
-  async applyBatch(zone: string, changes: BatchChange[]): Promise<{ warnings?: string[] }> {
+  async applyBatch(zone: string, changes: BatchChange[], keyId: string): Promise<{ warnings?: string[] }> {
     try {
       if (!zone || !changes || changes.length === 0) {
         throw new Error('Zone and at least one change are required');
+      }
+      if (!keyId) {
+        throw new Error('A key must be selected to apply changes to this zone');
       }
 
       const prepared = changes.map((c) =>
@@ -304,7 +328,7 @@ class DNSService {
         method: 'POST',
         headers: this.createHeaders(),
         credentials: 'include',
-        body: JSON.stringify({ changes: prepared }),
+        body: JSON.stringify({ keyId, changes: prepared }),
       });
 
       if (!response.ok) {
