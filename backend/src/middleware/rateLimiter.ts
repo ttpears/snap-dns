@@ -8,8 +8,9 @@ import { isRateLimitEnabled } from '../config/securityToggles';
 
 // Rate limiting is ON by default (secure) and only skipped when explicitly
 // disabled via RATE_LIMIT_ENABLED=false -- not based on NODE_ENV. See
-// config/securityToggles.ts for the rationale.
-const rateLimitDisabled = !isRateLimitEnabled();
+// config/securityToggles.ts for the rationale. The toggle is evaluated PER
+// REQUEST (in each limiter's skip below), matching loginLimiter, so a runtime
+// change takes effect without a restart and tests can flip it per file.
 
 /**
  * Per-principal rate-limit key. Limiters run BEFORE requireAuth, so this inspects
@@ -45,9 +46,7 @@ export const dnsQueryLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip only when rate limiting is explicitly disabled (default: enabled)
-  skip: (_req) => {
-    return rateLimitDisabled;
-  },
+  skip: () => !isRateLimitEnabled(),
   keyGenerator: principalKey
 });
 
@@ -66,19 +65,19 @@ export const dnsModifyLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip only when rate limiting is explicitly disabled (default: enabled)
-  skip: (_req) => {
-    return rateLimitDisabled;
-  },
+  skip: () => !isRateLimitEnabled(),
   keyGenerator: principalKey
 });
 
 /**
- * Rate limiter for TSIG key operations
- * Very strict since key management is highly sensitive
+ * Rate limiter for TSIG key MUTATIONS (create/update/delete).
+ * Strict since key management is sensitive, but only applied to mutating routes
+ * — read/list stays on the general limiter so a burst of edits can never lock a
+ * user out of even viewing their keys (which previously looked like data loss).
  */
 export const keyManagementLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 10, // 10 key operations per 5 minutes
+  max: 30, // 30 key mutations per 5 minutes (headroom for setting up several keys)
   message: {
     success: false,
     error: 'Too many key management operations, please slow down',
@@ -87,9 +86,7 @@ export const keyManagementLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip only when rate limiting is explicitly disabled (default: enabled)
-  skip: (_req) => {
-    return rateLimitDisabled;
-  },
+  skip: () => !isRateLimitEnabled(),
   keyGenerator: principalKey
 });
 
@@ -108,9 +105,7 @@ export const tokenLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip only when rate limiting is explicitly disabled (default: enabled)
-  skip: (_req) => {
-    return rateLimitDisabled;
-  },
+  skip: () => !isRateLimitEnabled(),
   keyGenerator: principalKey
 });
 
@@ -129,9 +124,7 @@ export const webhookLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip only when rate limiting is explicitly disabled (default: enabled)
-  skip: (_req) => {
-    return rateLimitDisabled;
-  },
+  skip: () => !isRateLimitEnabled(),
   keyGenerator: principalKey
 });
 
@@ -150,8 +143,6 @@ export const generalApiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip only when rate limiting is explicitly disabled (default: enabled)
-  skip: (_req) => {
-    return rateLimitDisabled;
-  },
+  skip: () => !isRateLimitEnabled(),
   keyGenerator: principalKey
 });
