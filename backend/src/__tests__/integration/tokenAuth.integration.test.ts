@@ -11,41 +11,42 @@ import { dnsService } from '../../services/dnsService';
 import { tsigKeyService } from '../../services/tsigKeyService';
 import request from 'supertest';
 
-const fakeKey = {
-  id: 'key-1',
-  name: 'test-key',
-  server: '192.0.2.53',
-  keyName: 'test-key.',
-  keyValue: 'plaintext-secret',
-  algorithm: 'hmac-sha256',
-  zones: ['example.com'],
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  createdBy: 'someone',
-};
-
 describe('API token auth (HTTP)', () => {
   let app: Express;
+  // A real key serving example.com; zone operations now require an explicit
+  // keyId that is resolved (getKey) and authorized against the caller's
+  // allowlist, so the token owners are granted this key below.
+  let zoneKeyId: string;
 
   beforeAll(async () => {
     app = buildTestApp();
+
+    const key = await tsigKeyService.createKey('seed', {
+      name: 'tok-key', server: '192.0.2.53', keyName: 'tok-key.',
+      keyValue: 'c25hcC1kbnMtdGVzdC1rZXk=', algorithm: 'hmac-sha256', zones: ['example.com'],
+    });
+    zoneKeyId = key.id;
+
     await seedUser({
       username: 'tokedit',
       password: 'editor-pass-123',
       role: UserRole.EDITOR,
       allowedZones: ['example.com'],
+      allowedKeyIds: [zoneKeyId],
     });
     await seedUser({
       username: 'otheruser',
       password: 'other-pass-123',
       role: UserRole.EDITOR,
       allowedZones: ['example.com'],
+      allowedKeyIds: [zoneKeyId],
     });
     await seedUser({
       username: 'tokviewer',
       password: 'viewer-pass-123',
       role: UserRole.VIEWER,
       allowedZones: ['example.com'],
+      allowedKeyIds: [zoneKeyId],
     });
     await seedUser({
       username: 'mustchange',
@@ -76,20 +77,20 @@ describe('API token auth (HTTP)', () => {
   });
 
   it('authenticates a bearer request with the owner\'s RBAC', async () => {
-    jest.spyOn(tsigKeyService, 'getKeyForZone').mockResolvedValue(fakeKey);
     jest.spyOn(dnsService, 'fetchZoneRecords').mockResolvedValue([] as never);
 
     const { raw } = await mintToken();
 
-    // Owner has example.com → 200.
+    // Owner has example.com + the key → 200. keyId identifies the view.
     const ok = await request(app)
-      .get('/api/zones/example.com')
+      .get('/api/zones/example.com?keyId=' + zoneKeyId)
       .set('Authorization', 'Bearer ' + raw);
     expect(ok.status).toBe(200);
 
-    // A zone not in the owner's allowedZones → 403 PERMISSION_DENIED.
+    // A zone not in the owner's allowedZones → 403 PERMISSION_DENIED (the zone
+    // gate rejects before key resolution).
     const denied = await request(app)
-      .get('/api/zones/notmine.com')
+      .get('/api/zones/notmine.com?keyId=' + zoneKeyId)
       .set('Authorization', 'Bearer ' + raw);
     expect(denied.status).toBe(403);
     expect(denied.body.code).toBe('PERMISSION_DENIED');
@@ -216,14 +217,13 @@ describe('API token auth (HTTP)', () => {
   });
 
   it("lets an editor's token perform a write (200)", async () => {
-    jest.spyOn(tsigKeyService, 'getKeyForZone').mockResolvedValue(fakeKey);
     const addSpy = jest.spyOn(dnsService, 'addRecord').mockResolvedValue({ success: true } as never);
 
     const { raw } = await mintToken();
     const res = await request(app)
       .post('/api/zones/example.com/records')
       .set('Authorization', 'Bearer ' + raw)
-      .send({ record: { name: 'www.example.com', type: 'A', value: '192.0.2.10', ttl: 3600, class: 'IN' } });
+      .send({ keyId: zoneKeyId, record: { name: 'www.example.com', type: 'A', value: '192.0.2.10', ttl: 3600, class: 'IN' } });
 
     expect(res.status).toBe(200);
     expect(addSpy).toHaveBeenCalledTimes(1);

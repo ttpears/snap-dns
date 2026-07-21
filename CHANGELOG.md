@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-07-21
+
+### Added
+
+- **Personal API tokens for programmatic access.** Users can mint bearer tokens
+  (`sdns_<40 hex>`) from the new "API Tokens" tab in Settings to drive DNS
+  operations from scripts/CI. Only a SHA-256 hash is stored server-side
+  (`data/api-tokens.json`); the raw token is shown exactly once and never logged.
+  A token authenticates as its owner with the owner's **live** privileges
+  (role/zone/key allowlists re-read per request, so revocations apply
+  immediately). Sessions remain the primary auth path and always take precedence.
+  Token create/list/revoke are session-only (a token can never manage tokens),
+  require the current password, are rate-limited per principal, and audited.
+  Tokens can be given an optional expiry (capped at 365 days).
+
+  Note: because zone operations require an explicit `keyId` (see 3.2.0),
+  programmatic callers must include the `keyId` (query param on `GET`, body field
+  on writes) just as the UI does.
+
+### Fixed
+
+- **Snapshot storage is now bounded.** Server-side snapshots could grow without
+  limit and fill the disk. A global size budget (`BACKUP_MAX_TOTAL_SIZE_MB`,
+  default 512 MB) now evicts the globally-oldest snapshots once a new one would
+  exceed it, and a snapshot larger than the whole budget is rejected. Snapshot
+  creation is also gated by the same deny-by-default zone-access check as the
+  zone routes, closing a path where an editor could spawn unbounded per-zone
+  files for zones they cannot access.
+
 ## [3.2.0] - 2026-07-21
 
 ### Fixed
