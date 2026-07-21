@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.1] - 2026-07-21
+
+### Fixed
+
+- **A burst of key edits no longer makes TSIG keys look wiped.** The strict
+  key-management rate limiter was applied to the whole `/api/tsig-keys` router,
+  so rapid edits also throttled `GET /api/tsig-keys`; the failed list fetch then
+  rendered as "No TSIG keys configured" — indistinguishable from the keys being
+  deleted. The limiter now applies only to mutating routes (create/update/delete);
+  reads use the general limiter, and the per-window mutation cap was raised from
+  10 to 30 for legitimate multi-key setup. Keys were never actually lost.
+- **The Keys panel now distinguishes a failed load from an empty list.** When the
+  list fetch errors (e.g. a 429), the table shows a "Couldn't load — they have not
+  been changed" state and a reassuring message instead of the empty "No TSIG keys
+  configured" state.
+
+### Changed
+
+- Rate limiters in `rateLimiter.ts` now evaluate the `RATE_LIMIT_ENABLED` toggle
+  per request (matching `loginLimiter`) instead of caching it at module load, so
+  the setting takes effect without a restart.
+
 ## [3.3.0] - 2026-07-21
 
 ### Added

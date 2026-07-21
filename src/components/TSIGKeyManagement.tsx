@@ -39,6 +39,10 @@ export default function TSIGKeyManagement() {
   const [keys, setKeys] = useState<TSIGKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Distinguishes "the list fetch failed" from "the list is genuinely empty".
+  // Without this, a failed/rate-limited load renders the empty-state row
+  // ("No TSIG keys configured"), which looks exactly like the keys were wiped.
+  const [loadError, setLoadError] = useState(false);
   const [formError, setFormError] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -66,8 +70,15 @@ export default function TSIGKeyManagement() {
       setError('');
       const data = await tsigKeyService.listKeys();
       setKeys(data);
+      setLoadError(false);
     } catch (err: any) {
-      setError(err.message || 'Failed to load TSIG keys');
+      // A failed load does NOT mean the keys are gone — they live server-side.
+      // Flag it so the table shows a "couldn't load" state, not the empty state.
+      setLoadError(true);
+      setError(
+        (err.message || 'Failed to load TSIG keys') +
+          ' — your keys have not been changed. If you were making rapid changes you may be briefly rate limited; try again shortly.'
+      );
     } finally {
       setLoading(false);
     }
@@ -242,7 +253,15 @@ export default function TSIGKeyManagement() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {keys.length === 0 ? (
+            {keys.length === 0 && loadError ? (
+              <TableRow>
+                <TableCell colSpan={6} align="center">
+                  <Typography color="text.secondary" py={2}>
+                    Couldn't load TSIG keys. They have not been changed — retry shortly.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : keys.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} align="center">
                   <Typography color="text.secondary" py={2}>

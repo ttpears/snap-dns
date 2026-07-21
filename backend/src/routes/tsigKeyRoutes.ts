@@ -9,8 +9,11 @@ import { auditService, AuditEventType } from '../services/auditService';
 
 const router = Router();
 
-// Apply rate limiting to all TSIG key routes
-router.use(keyManagementLimiter);
+// The strict key-management limiter is applied per-MUTATION-route below
+// (create/update/delete). GET/list is intentionally left on the app-level
+// general limiter: throttling reads with the strict mutation budget meant a
+// burst of edits also 429'd the list fetch, which the UI rendered as
+// "No TSIG keys configured" — indistinguishable from the keys being wiped.
 
 /**
  * GET /api/tsig-keys
@@ -43,7 +46,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
  * POST /api/tsig-keys
  * Create a new TSIG key (admin or editor only)
  */
-router.post('/', requireAuth, requirePasswordCurrent, requireWriteAccess, validateTSIGKeyCreate, async (req: Request, res: Response) => {
+router.post('/', keyManagementLimiter, requireAuth, requirePasswordCurrent, requireWriteAccess, validateTSIGKeyCreate, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;
@@ -134,7 +137,7 @@ router.get('/:keyId', requireAuth, async (req: Request, res: Response) => {
  * PUT /api/tsig-keys/:keyId
  * Update a TSIG key (admin or editor only)
  */
-router.put('/:keyId', requireAuth, requirePasswordCurrent, requireWriteAccess, validateTSIGKeyUpdate, async (req: Request, res: Response) => {
+router.put('/:keyId', keyManagementLimiter, requireAuth, requirePasswordCurrent, requireWriteAccess, validateTSIGKeyUpdate, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;
@@ -189,7 +192,7 @@ router.put('/:keyId', requireAuth, requirePasswordCurrent, requireWriteAccess, v
  * DELETE /api/tsig-keys/:keyId
  * Delete a TSIG key (admin only)
  */
-router.delete('/:keyId', requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
+router.delete('/:keyId', keyManagementLimiter, requireAuth, requirePasswordCurrent, requireRole(UserRole.ADMIN), async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const user = authReq.user!;
