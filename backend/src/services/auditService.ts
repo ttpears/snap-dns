@@ -24,6 +24,11 @@ export enum AuditEventType {
   KEY_DELETED = 'tsig.deleted',
   KEY_ACCESSED = 'tsig.accessed',
 
+  // API token management
+  TOKEN_CREATED = 'token.created',
+  TOKEN_REVOKED = 'token.revoked',
+  TOKEN_AUTH_FAILED = 'token.auth.failed',
+
   // DNS operations
   RECORD_ADDED = 'dns.record.added',
   RECORD_DELETED = 'dns.record.deleted',

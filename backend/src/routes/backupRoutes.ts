@@ -4,6 +4,7 @@ import { requireAuth, requireWriteAccess, requirePasswordCurrent } from '../midd
 import { AuthenticatedRequest } from '../types/auth';
 import { backupService } from '../services/backupService';
 import { auditService, AuditEventType } from '../services/auditService';
+import { checkZoneAccess } from '../helpers/zoneAccess';
 
 const router = Router();
 
@@ -110,6 +111,17 @@ router.post('/zone/:zone', requireAuth, requireWriteAccess, requirePasswordCurre
     const user = authReq.user!;
     const { zone } = req.params;
     const { records, server, keyId, type, description } = req.body;
+
+    // A snapshot writes a per-zone file on disk, so it must be gated by the same
+    // deny-by-default zone check as the zone routes. Without this an editor could
+    // POST to arbitrarily many distinct zones and spawn unbounded files.
+    if (!await checkZoneAccess(user, zone)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this zone',
+        code: 'PERMISSION_DENIED',
+      });
+    }
 
     // Validate required fields
     if (!records || !Array.isArray(records)) {

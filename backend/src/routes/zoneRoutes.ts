@@ -5,24 +5,14 @@ import { dnsService } from '../services';
 import { requireAuth, requireWriteAccess, requirePasswordCurrent } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/auth';
 import { tsigKeyService } from '../services/tsigKeyService';
-import { userService } from '../services/userService';
 import { validationService } from '../services/validationService';
 import { auditService } from '../services/auditService';
 import { dnsQueryLimiter, dnsModifyLimiter } from '../middleware/rateLimiter';
 import { validateAddRecord, validateDeleteRecord, validateUpdateRecord, validateBatch } from '../middleware/validation';
 import { BatchChange } from '../services/dnsService';
+import { checkZoneAccess } from '../helpers/zoneAccess';
 
 const router = Router();
-
-// Fetch allowedZones from DB on each request so changes take effect without re-login.
-// Deny-by-default: a non-admin with no allowedZones may access no zone (consistent
-// with allowedKeyIds). Admins bypass the gate entirely.
-async function checkZoneAccess(user: { role: string; userId: string }, zone: string): Promise<boolean> {
-  if (user.role === 'admin') return true;
-  const dbUser = await userService.getUserById(user.userId);
-  if (!dbUser) return false;
-  return dbUser.allowedZones.some(z => z.toLowerCase() === zone.toLowerCase());
-}
 
 // Add custom error types
 interface DNSError extends Error {

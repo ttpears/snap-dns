@@ -123,6 +123,16 @@ export const TSIGKeyUpdateSchema = z.object({
 });
 
 /**
+ * Personal API token schemas
+ */
+export const TokenCreateSchema = z.object({
+  name: z.string().min(1, 'Token name is required').max(100),
+  // Cap explicit lifetimes at one year to match the UI options and avoid
+  // decade-long tokens; omit for a non-expiring token.
+  expiresInDays: z.number().int().min(1).max(365).optional(),
+});
+
+/**
  * Authentication schemas
  */
 export const LoginRequestSchema = z.object({
@@ -192,6 +202,7 @@ export const validateUpdateRecord = validateRequest(UpdateRecordRequestSchema);
 export const validateBatch = validateRequest(BatchRequestSchema);
 export const validateTSIGKeyCreate = validateRequest(TSIGKeyCreateSchema);
 export const validateTSIGKeyUpdate = validateRequest(TSIGKeyUpdateSchema);
+export const validateTokenCreate = validateRequest(TokenCreateSchema);
 export const validateLogin = validateRequest(LoginRequestSchema);
 export const validateUserCreate = validateRequest(UserCreateSchema);
 export const validateChangePassword = validateRequest(ChangePasswordSchema);

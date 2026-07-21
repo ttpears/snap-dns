@@ -34,6 +34,7 @@ import { notificationService } from '../services/notificationService';
 import TSIGKeyManagement from './TSIGKeyManagement';
 import UserManagement from './UserManagement';
 import SSOConfiguration from './SSOConfiguration';
+import TokenManagement from './TokenManagement';
 import AuditLog from './AuditLog';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -475,7 +476,8 @@ function Settings() {
             <Tab label="Keys" {...a11yProps(1)} />
             <Tab label="Users" {...a11yProps(2)} />
             <Tab label="SSO" {...a11yProps(3)} />
-            {user?.role === 'admin' && <Tab label="Audit Logs" {...a11yProps(4)} />}
+            <Tab label="API Tokens" {...a11yProps(4)} />
+            {user?.role === 'admin' && <Tab label="Audit Logs" {...a11yProps(5)} />}
           </Tabs>
         </Box>
 
@@ -637,9 +639,16 @@ function Settings() {
           </Box>
         </TabPanel>
 
+        {/* API Tokens Tab (all roles - personal tokens) */}
+        <TabPanel value={currentTab} index={4}>
+          <Box sx={{ p: 3 }}>
+            <TokenManagement />
+          </Box>
+        </TabPanel>
+
         {/* Audit Logs Tab (Admin only) */}
         {user?.role === 'admin' && (
-          <TabPanel value={currentTab} index={4}>
+          <TabPanel value={currentTab} index={5}>
             <Box sx={{ p: 3 }}>
               <AuditLog />
             </Box>

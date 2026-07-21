@@ -3,8 +3,8 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
+import { BackupConfig, resolveBackupConfig } from '../config/backups';
 
-const BACKUPS_DIR = path.join(process.cwd(), 'data', 'backups');
 const MAX_BACKUPS_PER_ZONE = 50;
 
 export interface DNSRecord {
@@ -43,8 +43,15 @@ export interface BackupListItem {
   createdBy: string;
 }
 
-class BackupService {
+export class BackupService {
   private initialized = false;
+  private readonly dir: string;
+  private readonly maxTotalBytes: number;
+
+  constructor(cfg: BackupConfig = resolveBackupConfig()) {
+    this.dir = cfg.dir;
+    this.maxTotalBytes = cfg.maxTotalBytes;
+  }
 
   /**
    * Initialize the service - create backups directory
@@ -53,8 +60,8 @@ class BackupService {
     if (this.initialized) return;
 
     try {
-      await fs.mkdir(BACKUPS_DIR, { recursive: true });
-      console.log(`Backup directory initialized: ${BACKUPS_DIR}`);
+      await fs.mkdir(this.dir, { recursive: true });
+      console.log(`Backup directory initialized: ${this.dir}`);
       this.initialized = true;
     } catch (error) {
       console.error('Failed to initialize backup service:', error);
@@ -68,7 +75,7 @@ class BackupService {
   private getZoneBackupFile(zone: string): string {
     // Sanitize zone name for filename
     const sanitizedZone = zone.replace(/[^a-zA-Z0-9.-]/g, '_');
-    return path.join(BACKUPS_DIR, `${sanitizedZone}.json`);
+    return path.join(this.dir, `${sanitizedZone}.json`);
   }
 
   /**
@@ -173,35 +180,111 @@ class BackupService {
         createdBy: userId,
       };
 
-      // Load existing backups
-      const filePath = this.getZoneBackupFile(zone);
-      let backups: DNSBackup[] = [];
-
-      try {
-        const data = await fs.readFile(filePath, 'utf-8');
-        backups = JSON.parse(data);
-      } catch (error: any) {
-        if (error.code !== 'ENOENT') {
-          throw error;
-        }
+      // A snapshot that alone exceeds the whole budget can never be stored;
+      // reject it rather than evict everything else and still overflow.
+      const soloBytes = this.fileBytes([backup]);
+      if (soloBytes > this.maxTotalBytes) {
+        throw new Error(
+          `Snapshot (${soloBytes} bytes) exceeds the total backup size budget of ${this.maxTotalBytes} bytes`
+        );
       }
 
-      // Add new backup at the beginning
-      backups.unshift(backup);
-
-      // Maintain max backups limit
-      if (backups.length > MAX_BACKUPS_PER_ZONE) {
-        backups = backups.slice(0, MAX_BACKUPS_PER_ZONE);
+      // Work over the whole store in memory so eviction can pick the globally
+      // oldest snapshot regardless of which zone it lives in.
+      const files = await this.loadAllFiles();
+      const targetFile = this.getZoneBackupFile(zone);
+      const targetArr = files.get(targetFile) ?? [];
+      targetArr.unshift(backup);
+      if (targetArr.length > MAX_BACKUPS_PER_ZONE) {
+        targetArr.length = MAX_BACKUPS_PER_ZONE;
       }
+      files.set(targetFile, targetArr);
 
-      // Save to file
-      await fs.writeFile(filePath, JSON.stringify(backups, null, 2), 'utf-8');
+      const changed = new Set<string>([targetFile]);
+      this.evictToBudget(files, backup.id, changed);
+      await this.persistFiles(files, changed);
 
       console.log(`Backup created for zone ${zone}: ${backup.id} by user ${userId}`);
       return backup;
     } catch (error) {
       console.error(`Failed to create backup for zone ${zone}:`, error);
       throw error;
+    }
+  }
+
+  /** Serialized byte size of a zone's backup array as written to disk. */
+  private fileBytes(backups: DNSBackup[]): number {
+    if (backups.length === 0) return 0;
+    return Buffer.byteLength(JSON.stringify(backups, null, 2), 'utf-8');
+  }
+
+  /** Load every zone backup file into memory, keyed by absolute file path. */
+  private async loadAllFiles(): Promise<Map<string, DNSBackup[]>> {
+    const files = new Map<string, DNSBackup[]>();
+    let names: string[];
+    try {
+      names = await fs.readdir(this.dir);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') return files;
+      throw error;
+    }
+    for (const name of names) {
+      if (!name.endsWith('.json')) continue;
+      const filePath = path.join(this.dir, name);
+      const data = await fs.readFile(filePath, 'utf-8');
+      files.set(filePath, JSON.parse(data));
+    }
+    return files;
+  }
+
+  /**
+   * Evict the globally-oldest snapshots (by timestamp, across all zones) until the
+   * total serialized size is within budget. The just-created snapshot (`keepId`)
+   * is never evicted; since its solo size is guaranteed <= budget, the loop always
+   * terminates under budget. Mutates `files` and records touched paths in `changed`.
+   */
+  private evictToBudget(files: Map<string, DNSBackup[]>, keepId: string, changed: Set<string>): void {
+    const sizes = new Map<string, number>();
+    let total = 0;
+    for (const [file, arr] of files) {
+      const bytes = this.fileBytes(arr);
+      sizes.set(file, bytes);
+      total += bytes;
+    }
+    if (total <= this.maxTotalBytes) return;
+
+    // Oldest-first across every zone, excluding the snapshot we must keep.
+    const candidates: { file: string; id: string; timestamp: number }[] = [];
+    for (const [file, arr] of files) {
+      for (const b of arr) {
+        if (b.id !== keepId) candidates.push({ file, id: b.id, timestamp: b.timestamp });
+      }
+    }
+    candidates.sort((a, b) => a.timestamp - b.timestamp);
+
+    for (const c of candidates) {
+      if (total <= this.maxTotalBytes) break;
+      const arr = files.get(c.file);
+      if (!arr) continue;
+      const idx = arr.findIndex(b => b.id === c.id);
+      if (idx === -1) continue;
+      arr.splice(idx, 1);
+      const newBytes = this.fileBytes(arr);
+      total += newBytes - (sizes.get(c.file) ?? 0);
+      sizes.set(c.file, newBytes);
+      changed.add(c.file);
+    }
+  }
+
+  /** Write changed zone files; remove any that were emptied by eviction. */
+  private async persistFiles(files: Map<string, DNSBackup[]>, changed: Set<string>): Promise<void> {
+    for (const file of changed) {
+      const arr = files.get(file) ?? [];
+      if (arr.length === 0) {
+        await fs.rm(file, { force: true });
+      } else {
+        await fs.writeFile(file, JSON.stringify(arr, null, 2), 'utf-8');
+      }
     }
   }
 
@@ -247,13 +330,13 @@ class BackupService {
     if (!this.initialized) await this.initialize();
 
     try {
-      const files = await fs.readdir(BACKUPS_DIR);
+      const files = await fs.readdir(this.dir);
       const allBackups: BackupListItem[] = [];
 
       for (const file of files) {
         if (!file.endsWith('.json')) continue;
 
-        const filePath = path.join(BACKUPS_DIR, file);
+        const filePath = path.join(this.dir, file);
         const data = await fs.readFile(filePath, 'utf-8');
         const backups: DNSBackup[] = JSON.parse(data);
 
