@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-07-21
+
+### Fixed
+
+- **Split-horizon views are no longer conflated.** When the same zone name
+  existed under two TSIG keys (e.g. an internal and an external view), a record
+  edit was routed to whichever key the backend happened to resolve first by zone
+  name, so an internal-view change could land on the external server (and vice
+  versa). Every zone operation now carries the explicitly selected key, and the
+  backend targets that exact key/view.
+
+### Changed
+
+- **Zone API operations now require an explicit `keyId`.** `GET /api/zones/:zone`
+  takes a `keyId` query parameter; the record add/delete/update and batch
+  endpoints take a `keyId` in the request body. The backend authorizes the key
+  (it must be in the caller's allowlist and configured for the zone) and resolves
+  the DNS server from it, instead of guessing a key from the zone name. Requests
+  without a `keyId` are rejected. The frontend sends the selected key
+  automatically; any programmatic API client must be updated to include it.
+- **Pending changes apply per (zone, key).** The apply flow groups queued changes
+  by both zone and key, so a batch is sent through the exact view each change was
+  queued under — changes across different keys are never collapsed into one
+  transaction. The confirmation dialog now names the key/view for each group.
+- **Snapshots record the key/view they were taken through** (`keyId`), and
+  compare/restore read and write that same view. Older snapshots without a
+  recorded key fall back to a key on the same server (then any key serving the
+  zone).
+
 ## [3.1.0] - 2026-07-13
 
 ### Added

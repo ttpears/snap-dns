@@ -65,15 +65,22 @@ export const DNSRecordSchema = z.object({
 /**
  * Zone operation request schemas
  */
+// keyId identifies which TSIG key/view the operation targets. It is optional at
+// the schema layer (so the field survives Zod's unknown-key stripping) and its
+// presence is enforced uniformly by resolveZoneKey in the route handler, which
+// also authorizes the key and checks it serves the zone.
 export const AddRecordRequestSchema = z.object({
+  keyId: z.string().optional(),
   record: DNSRecordSchema
 });
 
 export const DeleteRecordRequestSchema = z.object({
+  keyId: z.string().optional(),
   record: DNSRecordSchema
 });
 
 export const UpdateRecordRequestSchema = z.object({
+  keyId: z.string().optional(),
   oldRecord: DNSRecordSchema,
   newRecord: DNSRecordSchema
 });
@@ -90,6 +97,7 @@ export const BatchChangeSchema = z.object({
 });
 
 export const BatchRequestSchema = z.object({
+  keyId: z.string().optional(),
   changes: z.array(BatchChangeSchema).min(1, 'At least one change is required').max(1000, 'Too many changes in one batch')
 });
 

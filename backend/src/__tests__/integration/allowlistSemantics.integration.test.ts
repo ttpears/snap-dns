@@ -100,7 +100,8 @@ describe('Allowlist empty-set semantics (deny-by-default)', () => {
         allowedKeyIds: [keyAId],
       });
       const { agent } = await loginAgent(app, 'okzone', 'okzone-pass-123');
-      const res = await agent.get('/api/zones/example.com');
+      // keyId is now required to identify the view; keyA serves example.com.
+      const res = await agent.get(`/api/zones/example.com?keyId=${keyAId}`);
       expect(res.status).toBe(200);
       expect(res.body.code).not.toBe('PERMISSION_DENIED');
     });
@@ -109,7 +110,8 @@ describe('Allowlist empty-set semantics (deny-by-default)', () => {
       // admin1 has empty allowedZones but the admin role bypasses the gate.
       jest.spyOn(dnsService, 'fetchZoneRecords').mockResolvedValue([] as never);
       const { agent } = await loginAgent(app, 'admin1', 'admin-pass-123');
-      const res = await agent.get('/api/zones/example.com');
+      // Admin may use any key; keyA serves example.com.
+      const res = await agent.get(`/api/zones/example.com?keyId=${keyAId}`);
       expect(res.status).toBe(200);
     });
   });

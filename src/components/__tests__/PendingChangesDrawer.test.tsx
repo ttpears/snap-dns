@@ -44,10 +44,10 @@ jest.mock('../../context/ConfigContext', () => ({
 
 const applyBatch = dnsService.applyBatch as jest.Mock;
 
-const addChange = (zone: string, value: string): NewPendingChange => ({
+const addChange = (zone: string, value: string, keyId = 'key-1'): NewPendingChange => ({
   type: 'ADD',
   zone,
-  keyId: 'key-1',
+  keyId,
   record: { name: 'www', type: 'A', value, ttl: 300 } as any
 });
 
@@ -121,6 +121,26 @@ describe('PendingChangesDrawer apply flow', () => {
       expect.objectContaining({ zones: ['alpha.test', 'beta.test'] })
     );
     expect(screen.getByText('Pending Changes (0)')).toBeInTheDocument();
+  });
+
+  it('applies split-horizon changes (same zone, two keys) as separate batches per key', async () => {
+    // The reported bug: a zone name existing under an internal and an external
+    // key must NOT be collapsed. Each (zone, key) pair is its own batch, sent
+    // with its own keyId, so an internal edit can never hit the external view.
+    applyBatch.mockResolvedValue({});
+    renderDrawer([
+      addChange('split.test', '192.0.2.1', 'key-internal'),
+      addChange('split.test', '192.0.2.2', 'key-external'),
+    ]);
+
+    await startApply();
+
+    await waitFor(() => expect(applyBatch).toHaveBeenCalledTimes(2));
+    const calls = applyBatch.mock.calls;
+    // Each call: (zone, changes, keyId). Same zone name, distinct keys.
+    const keyIdsUsed = calls.map((c: any[]) => c[2]).sort();
+    expect(keyIdsUsed).toEqual(['key-external', 'key-internal']);
+    calls.forEach((c: any[]) => expect(c[0]).toBe('split.test'));
   });
 
   it('keeps only the failed zone pending on partial failure', async () => {

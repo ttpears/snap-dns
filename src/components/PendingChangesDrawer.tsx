@@ -129,14 +129,23 @@ function PendingChangesDrawer({
     setPendingChanges(items);
   };
 
-  // Group changes by zone; used by both the confirmation dialog and apply
-  const changesByZone = pendingChanges.reduce((acc: Record<string, PendingChange[]>, change) => {
-    if (!acc[change.zone]) {
-      acc[change.zone] = [];
+  // Group changes by (zone, keyId); used by both the confirmation dialog and
+  // apply. A split-horizon zone shares its name across keys/views, so each
+  // (zone, key) pair is its own atomic transaction and must be applied through
+  // the exact key it was queued under — never collapsed by zone name alone.
+  const changeGroups: { zone: string; keyId: string; changes: PendingChange[] }[] = (() => {
+    const map = new Map<string, { zone: string; keyId: string; changes: PendingChange[] }>();
+    for (const change of pendingChanges) {
+      const groupKey = `${change.zone} ${change.keyId}`;
+      let group = map.get(groupKey);
+      if (!group) {
+        group = { zone: change.zone, keyId: change.keyId, changes: [] };
+        map.set(groupKey, group);
+      }
+      group.changes.push(change);
     }
-    acc[change.zone].push(change);
-    return acc;
-  }, {});
+    return Array.from(map.values());
+  })();
 
   const handleApplyChanges = async () => {
     setConfirmOpen(false);
@@ -151,18 +160,20 @@ function PendingChangesDrawer({
     const failures: ZoneApplyFailure[] = [];
     const allWarnings: string[] = [];
 
-    for (const [zone, changes] of Object.entries(changesByZone) as [string, PendingChange[]][]) {
+    for (const { zone, keyId, changes } of changeGroups) {
       try {
-        // Create automatic snapshot before applying changes
+        // Create automatic snapshot before applying changes. Read and snapshot
+        // through the SAME key the changes will be applied with, so the backup
+        // reflects the correct split-horizon view.
         try {
-          const currentRecords = await dnsService.fetchZoneRecords(zone);
-          const firstChange = changes[0];
-          const keyConfig = backendKeys.find(k => k.id === firstChange.keyId);
+          const currentRecords = await dnsService.fetchZoneRecords(zone, keyId);
+          const keyConfig = (backendKeys || []).find(k => k.id === keyId);
 
           await backupService.createBackup(zone, currentRecords, {
             type: 'auto',
             description: `Automatic snapshot before applying ${changes.length} change${changes.length !== 1 ? 's' : ''}`,
             server: keyConfig?.server || 'unknown',
+            keyId,
             config: config as any
           });
         } catch (backupError) {
@@ -187,7 +198,7 @@ function PendingChangesDrawer({
           }
         });
 
-        const batchResult = await dnsService.applyBatch(zone, batchChanges);
+        const batchResult = await dnsService.applyBatch(zone, batchChanges, keyId);
         if (batchResult?.warnings?.length) allWarnings.push(...batchResult.warnings);
         appliedChanges.push(...changes);
         appliedZones.push(zone);
@@ -543,13 +554,18 @@ function PendingChangesDrawer({
         <DialogTitle>Apply changes to live DNS?</DialogTitle>
         <DialogContent>
           <DialogContentText component="div">
-            {Object.entries(changesByZone).map(([zone, changes]) => (
-              <Typography variant="body2" key={zone}>
-                {zone}: {changes.length} change{changes.length !== 1 ? 's' : ''}
-              </Typography>
-            ))}
+            {changeGroups.map(({ zone, keyId, changes }) => {
+              const key = (backendKeys || []).find(k => k.id === keyId);
+              // Name the key/view so a split-horizon zone reads unambiguously.
+              const keyLabel = key ? `${key.name} (${key.server})` : 'unknown key';
+              return (
+                <Typography variant="body2" key={`${zone} ${keyId}`}>
+                  {zone} — {keyLabel}: {changes.length} change{changes.length !== 1 ? 's' : ''}
+                </Typography>
+              );
+            })}
             <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
-              An automatic snapshot of each zone is taken before applying.
+              An automatic snapshot of each zone is taken (per key/view) before applying.
             </Typography>
           </DialogContentText>
         </DialogContent>
