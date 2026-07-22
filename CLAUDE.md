@@ -104,6 +104,7 @@ The frontend is a React application with Material-UI components and follows a co
 - `dnsService.ts` - Frontend HTTP client for DNS operations (session-cookie auth; includes `applyBatch` for atomic per-zone bulk apply)
 - `authService.ts` - Login/logout/session/change-password API client
 - `tsigKeyService.ts` - TSIG key management API client (`/api/tsig-keys`)
+- `tokenService.ts` - Personal API token API client (`/api/tokens`): create/list/revoke
 - `backupService.ts` - API client for server-side snapshots (`/api/backups`): create, compare, restore
 - `auditService.ts` / `userService.ts` - Audit log and user management API clients (admin)
 - `notificationService.ts` - Multi-provider webhook notifications (Slack, Discord, Teams, Mattermost)
@@ -115,7 +116,7 @@ The frontend is a React application with Material-UI components and follows a co
 - `Login` - Username/password and SSO sign-in
 - `ZoneEditor` - Zone record table plus add/edit record forms (`AddDNSRecord`, `RecordEditor`)
 - `Snapshots` - Server-side backup create/compare/restore UI
-- `Settings` - Tabbed UI: General, Keys (`TSIGKeyManagement`), Users (`UserManagement`), SSO (`SSOConfiguration`), Audit Logs (`AuditLog`, admin-only)
+- `Settings` - Tabbed UI: General, Keys (`TSIGKeyManagement`), Users (`UserManagement`), SSO (`SSOConfiguration`), API Tokens (`TokenManagement`, all roles — personal tokens), Audit Logs (`AuditLog`, admin-only)
 
 ### Backend Structure
 
@@ -125,13 +126,13 @@ The backend is an Express TypeScript application that executes DNS operations:
 - Session middleware (`express-session` with a file store under `data/sessions`, httpOnly cookies)
 - CORS configuration with environment-specific allowed origins
 - Middleware: logging, JSON parsing (10mb limit), DNS message parsing, global API rate limiting
-- Routes mounted at `/api/auth`, `/api/auth/sso`, `/api/tsig-keys`, `/api/zones`, `/api/keys` (legacy no-op stub), `/api/webhook`, `/api/backups`, `/api/webhook-config`, `/api/sso-config`, `/api/audit`
-- Initializes user, TSIG key, backup, webhook-config, and SSO-config services at startup; all persist JSON under `data/`
+- Routes mounted at `/api/auth`, `/api/auth/sso`, `/api/tsig-keys`, `/api/tokens`, `/api/zones`, `/api/keys` (legacy no-op stub), `/api/webhook`, `/api/backups`, `/api/webhook-config`, `/api/sso-config`, `/api/audit`
+- Initializes user, TSIG key, API token, backup, webhook-config, and SSO-config services at startup; all persist JSON under `data/`
 
 **Middleware (backend/src/middleware/):**
-- `auth.ts` - `requireAuth`, `requireRole`, `requireWriteAccess` (roles: admin/editor/viewer)
-- `rateLimiter.ts` - express-rate-limit instances (general API, DNS query/modify, key management, webhook, login)
-- `validation.ts` - Zod request schemas (DNS records, login, change-password, TSIG key create/update)
+- `auth.ts` - `requireAuth` (session is primary; falls back to a `Bearer sdns_…` personal API token, authenticating as the token's owner with the owner's live privileges), `requireRole`, `requireWriteAccess`, `requireSessionAuth` (rejects bearer — used to gate token management), `requirePasswordCurrent` (roles: admin/editor/viewer)
+- `rateLimiter.ts` - express-rate-limit instances (general API, DNS query/modify, key-management *mutations*, personal-token ops, webhook, login). Keyed per-principal via `principalKey` (session user, else a hashed token fingerprint, else IP). The `RATE_LIMIT_ENABLED` toggle is evaluated per request.
+- `validation.ts` - Zod request schemas (DNS records incl. `keyId`, login, change-password, TSIG key create/update, token create)
 
 **Services (backend/src/services/):**
 - `dnsService.ts` - Executes `nsupdate` and `dig` commands via child_process
@@ -139,8 +140,9 @@ The backend is an Express TypeScript application that executes DNS operations:
   - `addRecord()`/`deleteRecord()`/`updateRecord()`/`applyBatch()` - Create temporary nsupdate files and execute them (batch = one atomic transaction per zone)
   - Record normalization and deduplication logic
 - `tsigKeyService.ts` - Server-side TSIG key storage, AES-256-CBC encrypted at rest (`data/tsig-keys.json`)
+- `apiTokenService.ts` - Personal API tokens (`data/api-tokens.json`); only a SHA-256 hash is stored (raw `sdns_…` value returned once, never logged); O(1) verify with revocation/expiry checks
 - `userService.ts` - Local user accounts with bcrypt password hashes (`data/users.json`)
-- `backupService.ts` - Server-side zone backups (`data/backups/`, capped per zone)
+- `backupService.ts` - Server-side zone backups (`data/backups/`, capped per zone and bounded by a global size budget with oldest-first eviction; config resolved in `config/backups.ts`)
 - `auditService.ts` - Persistent audit log (JSON lines appended to `data/audit.log`)
 - `validationService.ts` / `dnsSafety.ts` / `dnsPresentation.ts` - Server-side record validation, name/injection guards, display formatting
 - `webhookConfigService.ts` / `ssoConfigService.ts` / `msalService.ts` - Server-side webhook config, SSO config, and Microsoft Entra ID (MSAL) integration
@@ -148,14 +150,18 @@ The backend is an Express TypeScript application that executes DNS operations:
 - `keyService.ts` - Legacy stub (no-op; superseded by `tsigKeyService.ts`)
 
 **Routes:**
-- `zoneRoutes.ts` - GET `/api/zones/:zone`, POST/DELETE/PATCH `/api/zones/:zone/records`, POST `/api/zones/:zone/records/batch` — all require auth and are rate limited; TSIG keys are resolved server-side per zone
+- `zoneRoutes.ts` - GET `/api/zones/:zone`, POST/DELETE/PATCH `/api/zones/:zone/records`, POST `/api/zones/:zone/records/batch` — all require auth and are rate limited. Every operation requires an explicit `keyId` (query param for GET, body field for writes); `resolveZoneKey` authorizes that key (must be in the caller's allowlist and configured for the zone) and targets its server. This is what keeps split-horizon views distinct — resolving by zone name alone would conflate an internal and external key sharing the same zone name.
 - `authRoutes.ts` / `ssoAuthRoutes.ts` - Login, logout, session, change-password; admin-only user CRUD; Entra ID SSO flow
-- `tsigKeyRoutes.ts` - TSIG key CRUD (rate limited; delete is admin-only)
-- `backupRoutes.ts` - Server-side zone backup CRUD
+- `tsigKeyRoutes.ts` - TSIG key CRUD; the strict key-management limiter is applied to mutations only (create/update/delete) so a burst of edits can't 429 the read/list; delete is admin-only
+- `tokenRoutes.ts` - Personal API tokens: POST create + DELETE revoke are session-only (`requireSessionAuth`, so a token can't manage tokens) and require the current password; GET list accepts session or bearer; the raw token is returned once
+- `backupRoutes.ts` - Server-side zone backup CRUD; create is gated by the shared deny-by-default zone-access check
 - `webhookConfigRoutes.ts` / `ssoConfigRoutes.ts` - Server-side webhook and SSO configuration (SSO config admin-only)
 - `auditRoutes.ts` - Audit log queries (admin-only)
-- `webhookRoutes.ts` - Webhook testing
+- `webhookRoutes.ts` - Webhook testing/dispatch proxy (behind `requireAuth`)
 - `keyRoutes.ts` - Legacy no-op stub
+
+**Helpers (backend/src/helpers/):**
+- `zoneAccess.ts` - `checkZoneAccess`, the deny-by-default per-user zone gate shared by the zone and backup routes
 
 ### Type System
 
@@ -175,9 +181,9 @@ The project uses shared TypeScript types between frontend and backend:
 1. User logs in (local account or SSO); the session cookie authenticates all subsequent requests
 2. User selects zone and modifies records in the UI
 3. Changes are tracked in `PendingChangesContext` (flat queue; individual changes can be removed)
-4. When applied (after a confirmation dialog), frontend `dnsService.applyBatch()` sends one batch request per zone — no TSIG material is sent; the backend resolves the zone's TSIG key from its encrypted server-side store
+4. When applied (after a confirmation dialog), the frontend groups pending changes by **(zone, keyId)** and `dnsService.applyBatch()` sends one batch per group. No TSIG key *material* is sent — only the `keyId` identifying the view; the backend resolves and authorizes that exact key server-side and reads its decrypted secret from the encrypted store
 5. Backend validates every record, creates a temporary nsupdate command file, and executes `nsupdate` as a single atomic transaction per zone
-6. The change is written to the audit log and webhooks are triggered
+6. The change is written to the audit log and webhook notifications are dispatched via the authenticated proxy (`POST /api/webhook/notify`); a notification failure never fails the DNS apply
 7. Zone records are refreshed via `dig AXFR`
 
 ### Record Type Handling
@@ -205,9 +211,11 @@ The application handles special formatting for:
 - `TEMP_DIR` - Temporary file directory (default: /tmp/snap-dns)
 - `SESSION_SECRET` - Session cookie signing secret
 - `TSIG_ENCRYPTION_KEY` - Key used to encrypt stored TSIG secrets at rest
+- `RATE_LIMIT_ENABLED` - Rate limiting is on by default; set `false` to disable (evaluated per request, not tied to `NODE_ENV`)
+- `BACKUP_MAX_TOTAL_SIZE_MB` - Global on-disk budget for all snapshots (default 512); oldest are evicted first once exceeded. `BACKUP_DIR` overrides the backups directory
 
 **Backend Persistent State (`data/` directory):**
-- `sessions/`, `users.json`, `tsig-keys.json`, `backups/`, `audit.log`, `webhook-configs.json`, `sso-config.json`
+- `sessions/`, `users.json`, `tsig-keys.json`, `api-tokens.json`, `backups/`, `audit.log`, `webhook-configs.json`, `sso-config.json`
 
 **Frontend Environment Variables:**
 - `REACT_APP_API_URL` - Backend API URL
@@ -227,7 +235,7 @@ The application handles special formatting for:
 
 1. ~~**Legacy TSIG Keys in localStorage**~~ — **RESOLVED**: TSIG key material never touches localStorage. Key storage is server-side and encrypted (`tsigKeyService`); the frontend `Config` type (`src/types/config.ts`) has no `keys` field, and `KeyContext` reads keys only from the backend (`/api/tsig-keys`) with no localStorage fallback. `ConfigContext` performs a one-time scrub that deletes any legacy `keys` array from stored config on load and never writes it back. The Settings config-import flow routes imported keys through the backend API (`tsigKeyService.createKey`/`updateKey`) and ignores legacy `dnsBackups` blobs (they are reported via a toast, never persisted to localStorage). Covered by tests in `src/context/__tests__/ConfigContext.test.tsx`, `src/context/__tests__/KeyContext.test.tsx`, and `src/components/__tests__/Settings.test.tsx`.
 
-2. ~~**TSIG Keys Transmitted in HTTP Headers**~~ — **RESOLVED**: the frontend sends no key material (src/services/dnsService.ts `createHeaders()`); requests authenticate with the session cookie and the backend resolves the zone's TSIG key from its encrypted server-side store (backend/src/routes/zoneRoutes.ts). Vestigial `x-dns-*` entries remain in the CORS `allowedHeaders` list (backend/src/server.ts) and could be removed.
+2. ~~**TSIG Keys Transmitted in HTTP Headers**~~ — **RESOLVED**: the frontend sends no key material (src/services/dnsService.ts `createHeaders()`) — only the session cookie plus an explicit `keyId` naming which key/view to use; the backend resolves and authorizes that key from its encrypted server-side store (`resolveZoneKey` in backend/src/routes/zoneRoutes.ts). Vestigial `x-dns-*` entries remain in the CORS `allowedHeaders` list (backend/src/server.ts) and could be removed.
 
 3. ~~**No Authentication/Authorization System**~~ — **RESOLVED**: session-based auth (`express-session`, file store, httpOnly cookies) with local bcrypt users and Microsoft Entra ID SSO; roles (admin/editor/viewer) enforced via `requireAuth`/`requireRole`/`requireWriteAccess` (backend/src/middleware/auth.ts); per-user key and zone allowlists; persistent audit trail. Note: the legacy `/api/keys` stub route is still mounted without auth (it is a no-op).
 
@@ -306,7 +314,7 @@ The application handles special formatting for:
 
 ### Security Considerations
 
-1. **TSIG Key Handling**: Keys are stored server-side, encrypted at rest (`tsigKeyService`), and are never sent by the frontend; requests authenticate via the session cookie. Never log full key values (use '[REDACTED]').
+1. **TSIG Key Handling**: Keys are stored server-side, encrypted at rest (`tsigKeyService`); key *material* is never sent by the frontend. Requests authenticate via the session cookie (or a personal API token) and carry an explicit `keyId` identifying which key/view to use; the backend authorizes that key. Never log full key values (use '[REDACTED]').
 
 2. **Input Validation**: All DNS records go through validation in both frontend and backend. Special attention to:
    - SQL injection-like patterns in TXT records
@@ -347,4 +355,4 @@ When modifying DNS operations:
 
 ### Working with Pending Changes
 
-Pending changes are a flat queue in `PendingChangesContext`; each change gets a unique id and can be removed individually. Undo/redo is implemented in ZoneEditor over snapshots of that queue, and applied change ids are purged from every history entry so undo can never resurrect a committed change. Changes are only sent to the backend when "Apply Changes" is confirmed in the drawer's confirmation dialog — grouped by zone and applied via `dnsService.applyBatch()`, one atomic nsupdate transaction per zone.
+Pending changes are a flat queue in `PendingChangesContext`; each change gets a unique id and carries its `zone` and `keyId`, and can be removed individually. Undo/redo is implemented in ZoneEditor over snapshots of that queue, and applied change ids are purged from every history entry so undo can never resurrect a committed change. Changes are only sent to the backend when "Apply Changes" is confirmed in the drawer's confirmation dialog — grouped by **(zone, keyId)** and applied via `dnsService.applyBatch()`, one atomic nsupdate transaction per group, so changes queued under different keys (e.g. split-horizon internal vs external) are never collapsed together.
