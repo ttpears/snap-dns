@@ -29,6 +29,7 @@ function KeySelector() {
     selectedZone,
     selectKey,
     selectZone,
+    selectKeyAndZone,
     availableZones,
     availableKeys
   } = useKey();
@@ -75,6 +76,65 @@ function KeySelector() {
   const groupReverse = reverseZones.length > REVERSE_GROUP_THRESHOLD;
   const selectedIsReverse = !!validSelectedZone && isReverseZone(validSelectedZone);
   const showReverseSelect = groupReverse && (reverseOpen || selectedIsReverse);
+
+  // A zone name can be served by more than one key (e.g. split-horizon internal
+  // vs external). Until a key is chosen, that zone is ambiguous — the union list
+  // shows it once and a key would be auto-picked arbitrarily. Expand such zones
+  // into one option per serving key so the user picks the exact key/view.
+  // Composite option value is `${zone}${DELIM}${keyId}` — `|` can't appear in a
+  // DNS name or in our key IDs (`key_<ts>_<hex>`). Once a key IS selected the
+  // list is already narrowed to that key's zones, so no splitting is needed.
+  const ZONE_KEY_DELIM = '|';
+  const keysServingZone = (zone: string) =>
+    availableKeys.filter(k => k.zones?.includes(zone));
+  const hasMultiKeyZones =
+    !selectedKey && visibleZones.some(z => keysServingZone(z).length > 1);
+  // A selected zone with no key that is served by >1 key is genuinely ambiguous
+  // (no view chosen). In that state the dropdown only offers per-key options, so
+  // the plain zone name is not a selectable value — bind the Select to '' rather
+  // than an out-of-range value (which would blank the field and warn), and let
+  // the helper text prompt for a key/view. Reachable by deselecting the key or
+  // reloading a persisted zone-only selection.
+  const ambiguousZoneOnly =
+    !selectedKey && !!validSelectedZone && keysServingZone(validSelectedZone).length > 1;
+
+  const renderZoneMenuItems = (zones: string[]) =>
+    zones.flatMap(zone => {
+      const serving = selectedKey ? [] : keysServingZone(zone);
+      if (serving.length > 1) {
+        return serving.map(k => {
+          const value = `${zone}${ZONE_KEY_DELIM}${k.id}`;
+          return (
+            <MenuItem key={value} value={value}>
+              {zone} — {k.name} ({k.server})
+            </MenuItem>
+          );
+        });
+      }
+      return [
+        <MenuItem key={zone} value={zone}>
+          {zone}
+        </MenuItem>,
+      ];
+    });
+
+  const handleZoneSelect = (value: string) => {
+    if (value === REVERSE_SENTINEL) {
+      // Reveal the sub-selection without committing a zone.
+      setReverseOpen(true);
+      return;
+    }
+    setReverseOpen(false);
+    const sep = value.indexOf(ZONE_KEY_DELIM);
+    if (sep !== -1) {
+      // Composite per-key entry: set the exact key and zone together.
+      const zone = value.slice(0, sep);
+      const key = availableKeys.find(k => k.id === value.slice(sep + 1)) || null;
+      selectKeyAndZone(key, zone);
+      return;
+    }
+    selectZone(value || null);
+  };
 
   const renderKeyOptions = () => {
     return (
@@ -159,28 +219,15 @@ function KeySelector() {
         <InputLabel id="zone-select-label">Select Zone</InputLabel>
         <Select
           labelId="zone-select-label"
-          value={groupReverse && selectedIsReverse ? REVERSE_SENTINEL : validSelectedZone}
-          onChange={(e) => {
-            const value = e.target.value;
-            if (value === REVERSE_SENTINEL) {
-              // Reveal the sub-selection without committing a zone.
-              setReverseOpen(true);
-              return;
-            }
-            setReverseOpen(false);
-            selectZone(value || null);
-          }}
+          value={groupReverse && selectedIsReverse ? REVERSE_SENTINEL : ambiguousZoneOnly ? '' : validSelectedZone}
+          onChange={(e) => handleZoneSelect(e.target.value)}
           label="Select Zone"
           SelectDisplayProps={{ id: 'zone-select' } as React.HTMLAttributes<HTMLDivElement>}
         >
           <MenuItem value="">
             <em>None</em>
           </MenuItem>
-          {(groupReverse ? forwardZones : visibleZones).map((zone) => (
-            <MenuItem key={zone} value={zone}>
-              {zone}
-            </MenuItem>
-          ))}
+          {renderZoneMenuItems(groupReverse ? forwardZones : visibleZones)}
           {groupReverse && (
             <MenuItem value={REVERSE_SENTINEL}>
               Reverse zones ({reverseZones.length})…
@@ -188,11 +235,15 @@ function KeySelector() {
           )}
         </Select>
         <FormHelperText>
-          {validSelectedZone
-            ? `Managing ${validSelectedZone}`
-            : !selectedKey
-              ? 'Select a zone and a matching key is chosen automatically'
-              : 'Select a zone to manage'}
+          {ambiguousZoneOnly
+            ? `${validSelectedZone} is served by multiple keys — pick the intended key/view`
+            : validSelectedZone
+              ? `Managing ${validSelectedZone}`
+              : hasMultiKeyZones
+                ? 'Some zones exist on multiple keys — pick the intended key/view'
+                : !selectedKey
+                  ? 'Select a zone and a matching key is chosen automatically'
+                  : 'Select a zone to manage'}
         </FormHelperText>
       </FormControl>
 
@@ -201,19 +252,15 @@ function KeySelector() {
           <InputLabel id="reverse-zone-select-label">Reverse Zone</InputLabel>
           <Select
             labelId="reverse-zone-select-label"
-            value={selectedIsReverse ? validSelectedZone : ''}
-            onChange={(e) => selectZone(e.target.value || null)}
+            value={selectedIsReverse && !ambiguousZoneOnly ? validSelectedZone : ''}
+            onChange={(e) => handleZoneSelect(e.target.value)}
             label="Reverse Zone"
             SelectDisplayProps={{ id: 'reverse-zone-select' } as React.HTMLAttributes<HTMLDivElement>}
           >
             <MenuItem value="">
               <em>None</em>
             </MenuItem>
-            {reverseZones.map((zone) => (
-              <MenuItem key={zone} value={zone}>
-                {zone}
-              </MenuItem>
-            ))}
+            {renderZoneMenuItems(reverseZones)}
           </Select>
         </FormControl>
       )}
