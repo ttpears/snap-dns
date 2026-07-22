@@ -96,7 +96,7 @@ The frontend is a React application with Material-UI components and follows a co
 - `ThemeProvider` - Dark/light mode theming
 - `NotificationProvider` - Snackbar UI notifications
 - `AuthProvider` - Session authentication state (user, role, login/logout); unauthenticated users see `Login` instead of the app
-- `ConfigProvider` - Application settings (localStorage-backed for TTL/display settings and a legacy `keys` field; webhook config is loaded from and saved to the backend `/api/webhook-config`)
+- `ConfigProvider` - Application settings (localStorage-backed for TTL/display settings only; a one-time scrub strips any legacy `keys` field from stored config on load, and it is never written back; webhook config is loaded from and saved to the backend `/api/webhook-config`)
 - `KeyProvider` - TSIG keys fetched from the backend (`/api/tsig-keys`); only the current key/zone selection is persisted to localStorage
 - `PendingChangesProvider` - Tracks queued DNS record changes (flat list; undo/redo lives in ZoneEditor, not the context)
 
@@ -192,8 +192,8 @@ The application handles special formatting for:
 ### Configuration and State
 
 **Frontend Configuration (localStorage: 'dns_manager_config'):**
-- Default TTL and display settings
-- Legacy `keys` field (superseded by server-side TSIG keys, but still read as a fallback and writable via the Settings import flow)
+- Default TTL and display settings only
+- No TSIG key material: the `Config` type has no `keys` field, and `ConfigContext` scrubs any legacy `keys` array left by older versions on load
 - Webhook config is no longer stored here — it lives server-side (`/api/webhook-config`)
 
 **Backend Configuration (Environment Variables):**
@@ -219,17 +219,13 @@ The application handles special formatting for:
 **WARNING**: Earlier versions of this application had significant security and architectural issues. Many have since been resolved (struck-through items below); the remaining open items should be addressed before production use.
 
 ### Summary of Open Issues
-- **Security**: A legacy localStorage `keys` field and Settings import path can still hold TSIG key material (see #1); logging has not been fully audited for sensitive data
+- **Security**: logging has not been fully audited for sensitive data (see #16); the legacy localStorage TSIG key path is now closed (see #1, resolved)
 - **Code Organization**: Duplicate type definitions between frontend and backend (no shared-types package exists)
 - **Operational**: Dev/test CORS allows all origins; whole zones are deduplicated in memory
 
 ### 🔴 Critical Security Issues
 
-1. **Legacy TSIG Keys in localStorage** (src/context/KeyContext.tsx:65, src/components/Settings.tsx:356-372)
-   - Primary key storage is now server-side and encrypted (`tsigKeyService`), and the UI no longer stores key material by default
-   - BUT: `config.keys` in localStorage is still read as a fallback by `KeyContext`, and the Settings config-import flow can still write TSIG key material (and legacy `dnsBackups`) into localStorage
-   - **Impact**: Key material can still end up XSS-readable via the legacy path
-   - **Fix**: Remove the `keys` field from frontend config, drop the fallback, and migrate the import flow to `/api/tsig-keys`
+1. ~~**Legacy TSIG Keys in localStorage**~~ — **RESOLVED**: TSIG key material never touches localStorage. Key storage is server-side and encrypted (`tsigKeyService`); the frontend `Config` type (`src/types/config.ts`) has no `keys` field, and `KeyContext` reads keys only from the backend (`/api/tsig-keys`) with no localStorage fallback. `ConfigContext` performs a one-time scrub that deletes any legacy `keys` array from stored config on load and never writes it back. The Settings config-import flow routes imported keys through the backend API (`tsigKeyService.createKey`/`updateKey`) and ignores legacy `dnsBackups` blobs (they are reported via a toast, never persisted to localStorage). Covered by tests in `src/context/__tests__/ConfigContext.test.tsx`, `src/context/__tests__/KeyContext.test.tsx`, and `src/components/__tests__/Settings.test.tsx`.
 
 2. ~~**TSIG Keys Transmitted in HTTP Headers**~~ — **RESOLVED**: the frontend sends no key material (src/services/dnsService.ts `createHeaders()`); requests authenticate with the session cookie and the backend resolves the zone's TSIG key from its encrypted server-side store (backend/src/routes/zoneRoutes.ts). Vestigial `x-dns-*` entries remain in the CORS `allowedHeaders` list (backend/src/server.ts) and could be removed.
 
@@ -281,7 +277,7 @@ The application handles special formatting for:
 
 17. ~~**No Request Validation Middleware**~~ — **RESOLVED**: Zod schemas in `backend/src/middleware/validation.ts` (DNS records, login, change-password, TSIG key create/update) applied on the relevant routes, alongside `validationService` record validation.
 
-18. ~~**Backups Stored in localStorage**~~ — **RESOLVED**: backups are stored server-side (`data/backups/`, capped per zone) via the authenticated `/api/backups` routes; the frontend `backupService` is a pure API client and the Snapshots UI handles create/compare/restore. Note: the legacy Settings import flow can still write an old-style `dnsBackups` blob to localStorage (see #1).
+18. ~~**Backups Stored in localStorage**~~ — **RESOLVED**: backups are stored server-side (`data/backups/`, capped per zone) via the authenticated `/api/backups` routes; the frontend `backupService` is a pure API client and the Snapshots UI handles create/compare/restore. Legacy `dnsBackups` blobs found in old import files are ignored (reported via a toast) and never written to localStorage.
 
 ## Development Guidelines
 
