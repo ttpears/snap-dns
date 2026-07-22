@@ -68,7 +68,7 @@ function PendingChangesDrawer({
     setShowPendingDrawer
   } = usePendingChanges();
   const { config } = useConfig();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showWarning } = useNotification();
   const [applying, setApplying] = useState(false);
   const [applyFailures, setApplyFailures] = useState<ZoneApplyFailure[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -229,7 +229,11 @@ function PendingChangesDrawer({
           totalChanges: appliedChanges.length
         });
       } catch (notifyError) {
+        // The DNS changes already succeeded; a failed webhook notification must
+        // not be reported as an apply failure. Surface it as a non-blocking
+        // warning so a broken notification path can't go unnoticed.
         console.warn('Failed to send notification:', notifyError);
+        showWarning(`Changes applied, but the webhook notification failed: ${(notifyError as Error).message}`);
       }
     }
 

@@ -34,8 +34,13 @@ jest.mock('../../services/tsigKeyService', () => ({
 
 const mockShowSuccess = jest.fn();
 const mockShowError = jest.fn();
+const mockShowWarning = jest.fn();
 jest.mock('../../context/NotificationContext', () => ({
-  useNotification: () => ({ showSuccess: mockShowSuccess, showError: mockShowError })
+  useNotification: () => ({
+    showSuccess: mockShowSuccess,
+    showError: mockShowError,
+    showWarning: mockShowWarning
+  })
 }));
 
 jest.mock('../../context/ConfigContext', () => ({
@@ -177,6 +182,30 @@ describe('PendingChangesDrawer apply flow', () => {
       expect.objectContaining({ zones: ['alpha.test'] })
     );
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('still succeeds but warns the user when the webhook notification fails', async () => {
+    // A failed notification must NOT turn a successful apply into a failure:
+    // the changes are committed and cleared, success is reported, and a
+    // separate non-blocking warning surfaces the notification failure.
+    applyBatch.mockResolvedValue({});
+    (notificationService.sendNotification as jest.Mock).mockRejectedValueOnce(
+      new Error('webhook 401')
+    );
+    const onClose = jest.fn();
+    renderDrawer([addChange('alpha.test', '192.0.2.1')], onClose);
+
+    await startApply();
+
+    await waitFor(() => expect(mockShowSuccess).toHaveBeenCalled());
+    expect(mockShowSuccess).toHaveBeenCalledWith('Successfully applied 1 change to 1 zone');
+    expect(mockShowWarning).toHaveBeenCalledWith(
+      'Changes applied, but the webhook notification failed: webhook 401'
+    );
+    expect(mockShowError).not.toHaveBeenCalled();
+    // Apply still completed: queue cleared and drawer closed.
+    expect(screen.getByText('Pending Changes (0)')).toBeInTheDocument();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
   it('leaves everything pending when every zone fails', async () => {
