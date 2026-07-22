@@ -5,6 +5,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { resolveTsigEncryptionKey } from '../config/secrets';
+import { writeJsonAtomic } from '../utils/atomicJson';
 
 const KEYS_FILE = path.join(process.cwd(), 'data', 'tsig-keys.json');
 
@@ -122,7 +123,9 @@ class TSIGKeyService {
    */
   private async saveKeys(): Promise<void> {
     const keysArray = Array.from(this.keys.values());
-    await fs.writeFile(KEYS_FILE, JSON.stringify(keysArray, null, 2), 'utf-8');
+    // Atomic + per-path serialized write so a crash cannot truncate the file and
+    // concurrent callers cannot clobber each other.
+    await writeJsonAtomic(KEYS_FILE, keysArray);
   }
 
   /**

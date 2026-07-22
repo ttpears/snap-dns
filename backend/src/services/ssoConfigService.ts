@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { SSOConfig, SSOConfigResponse, SSOProvider } from '../types/sso';
+import { writeJsonAtomic } from '../utils/atomicJson';
 
 const SSO_CONFIG_FILE = path.join(process.cwd(), 'data', 'sso-config.json');
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-encryption-key-change-in-production';
@@ -99,8 +100,8 @@ class SSOConfigService {
       configToStore.clientSecret = this.encrypt(configToStore.clientSecret);
     }
 
-    // Save to file
-    await fs.writeFile(SSO_CONFIG_FILE, JSON.stringify(configToStore, null, 2), 'utf-8');
+    // Save to file atomically and serialized against other writers.
+    await writeJsonAtomic(SSO_CONFIG_FILE, configToStore);
 
     console.log(`SSO config updated: ${this.config.enabled ? 'enabled' : 'disabled'} (${this.config.provider})`);
   }

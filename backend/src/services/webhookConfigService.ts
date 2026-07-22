@@ -3,6 +3,7 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
+import { writeJsonAtomic } from '../utils/atomicJson';
 
 const WEBHOOK_CONFIG_FILE = path.join(process.cwd(), 'data', 'webhook-configs.json');
 
@@ -59,7 +60,8 @@ class WebhookConfigService {
    */
   private async saveConfigs(): Promise<void> {
     const configsArray = Array.from(this.configs.values());
-    await fs.writeFile(WEBHOOK_CONFIG_FILE, JSON.stringify(configsArray, null, 2), 'utf-8');
+    // Atomic + per-path serialized write (see utils/atomicJson).
+    await writeJsonAtomic(WEBHOOK_CONFIG_FILE, configsArray);
   }
 
   /**

@@ -8,6 +8,7 @@ import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { ApiTokenService } from '../apiTokenService';
+import { flushFileLock } from '../../utils/atomicJson';
 
 const sha256hex = (raw: string): string =>
   crypto.createHash('sha256').update(raw).digest('hex');
@@ -26,6 +27,9 @@ describe('ApiTokenService', () => {
 
   afterEach(async () => {
     jest.restoreAllMocks();
+    // verifyToken persists its lastUsedAt touch fire-and-forget; drain any
+    // in-flight atomic write so its temp file cannot race the directory removal.
+    await flushFileLock(filePath);
     await fs.rm(dir, { recursive: true, force: true });
   });
 
