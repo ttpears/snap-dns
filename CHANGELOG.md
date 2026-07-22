@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.2] - 2026-07-21
+
+### Fixed
+
+- **Webhook "Test" and change notifications no longer fail with "Authentication
+  required".** The frontend posts webhook notifications through the authenticated
+  backend proxy (`POST /api/webhook/notify`, behind `requireAuth`), but the
+  `fetch` in `notificationService.sendWebhook` omitted `credentials: 'include'`,
+  so the session cookie was never sent and the request returned 401
+  `NOT_AUTHENTICATED`. This affected both the "Test Webhook" button and real
+  post-change notifications (the latter failed silently). Sending the cookie
+  fixes both. The webhook delivery itself was never broken — only snap-dns's
+  authenticated proxy was rejecting the request.
+
 ## [3.3.1] - 2026-07-21
 
 ### Fixed
