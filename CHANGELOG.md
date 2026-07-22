@@ -5,6 +5,36 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-07-21
+
+### Added
+
+- **KeySelector disambiguates zones served by multiple keys.** When no key is
+  selected, a zone name served by more than one key (e.g. a split-horizon
+  internal vs external view) now expands into one dropdown entry per key
+  (`zone — keyName (server)`); selecting one sets the key and zone together.
+  Single-key zones are unchanged, and once a key is selected the list is already
+  that key's zones. `KeyContext` gained `selectKeyAndZone` to set both atomically.
+
+### Fixed
+
+- **Webhook "Test" and change notifications no longer fail silently / with
+  "Authentication required".** Notification failures after applying changes are
+  now surfaced as a non-blocking UI warning (the DNS change still succeeds)
+  instead of only a console warning.
+- **JSON-backed persistence is now crash-safe and race-safe.** `tsigKeyService`,
+  `apiTokenService`, `userService`, `backupService`, `webhookConfigService`, and
+  `ssoConfigService` write via a shared atomic helper (temp file + `fsync` +
+  rename) with per-file serialization, so a crash mid-write can't corrupt a store
+  and concurrent writers can't clobber each other.
+
+### Documentation
+
+- Refreshed `CLAUDE.md` to reflect features shipped in 3.2.0–3.3.2 (personal API
+  tokens, the split-view `keyId` requirement, the key-management rate-limiter
+  split, the webhook auth proxy, the snapshot size budget) and corrected the
+  now-resolved legacy-localStorage security note.
+
 ## [3.3.2] - 2026-07-21
 
 ### Fixed
