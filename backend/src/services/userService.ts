@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { User, UserCreateData, UserResponse, UserRole } from '../types/auth';
+import { writeJsonAtomic } from '../utils/atomicJson';
 
 const SALT_ROUNDS = 12;
 const USERS_FILE = path.join(process.cwd(), 'data', 'users.json');
@@ -127,7 +128,10 @@ class UserService {
   private async saveUsers(): Promise<void> {
     try {
       const usersArray = Array.from(this.users.values());
-      await fs.writeFile(USERS_FILE, JSON.stringify(usersArray, null, 2), 'utf-8');
+      // Atomic + per-path serialized write so a crash cannot truncate the file
+      // and concurrent saves (e.g. a login touching lastLogin while an admin
+      // edits a user) cannot clobber each other.
+      await writeJsonAtomic(USERS_FILE, usersArray);
     } catch (error) {
       console.error('Failed to save users:', error);
       throw error;

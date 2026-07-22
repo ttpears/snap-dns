@@ -4,6 +4,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { BackupConfig, resolveBackupConfig } from '../config/backups';
+import { writeJsonAtomic, removeFileLocked } from '../utils/atomicJson';
 
 const MAX_BACKUPS_PER_ZONE = 50;
 
@@ -276,14 +277,20 @@ export class BackupService {
     }
   }
 
-  /** Write changed zone files; remove any that were emptied by eviction. */
+  /**
+   * Write changed zone files; remove any that were emptied by eviction. Each
+   * write is atomic (temp file + rename) and each file's write/remove is
+   * serialized against other writers of that same path, so a crash cannot
+   * truncate a zone file and a concurrent createBackup for another zone cannot
+   * clobber this one. Distinct files still persist concurrently.
+   */
   private async persistFiles(files: Map<string, DNSBackup[]>, changed: Set<string>): Promise<void> {
     for (const file of changed) {
       const arr = files.get(file) ?? [];
       if (arr.length === 0) {
-        await fs.rm(file, { force: true });
+        await removeFileLocked(file);
       } else {
-        await fs.writeFile(file, JSON.stringify(arr, null, 2), 'utf-8');
+        await writeJsonAtomic(file, arr);
       }
     }
   }
@@ -313,8 +320,8 @@ export class BackupService {
       // Remove the backup
       backups = backups.filter(b => b.id !== backupId);
 
-      // Save updated list
-      await fs.writeFile(filePath, JSON.stringify(backups, null, 2), 'utf-8');
+      // Save updated list atomically and serialized against other writers.
+      await writeJsonAtomic(filePath, backups);
 
       console.log(`Backup deleted: ${backupId} from zone ${zone} by user ${userId}`);
     } catch (error) {

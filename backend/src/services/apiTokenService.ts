@@ -12,6 +12,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { writeJsonAtomic } from '../utils/atomicJson';
 
 const TOKENS_FILE = path.join(process.cwd(), 'data', 'api-tokens.json');
 
@@ -107,7 +108,10 @@ export class ApiTokenService {
    */
   private async save(): Promise<void> {
     const arr = Array.from(this.tokens.values());
-    await fs.writeFile(this.filePath, JSON.stringify(arr, null, 2), 'utf-8');
+    // Atomic + per-path serialized write. This matters most for the throttled,
+    // fire-and-forget lastUsedAt touch in verifyToken(), which can otherwise
+    // race a create/revoke and lose an update.
+    await writeJsonAtomic(this.filePath, arr);
   }
 
   /**
