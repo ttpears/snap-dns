@@ -125,6 +125,10 @@ class NotificationService {
         headers: {
           'Content-Type': 'application/json',
         },
+        // Send the session cookie: /api/webhook/notify is behind requireAuth, so
+        // without this the request is unauthenticated (401 NOT_AUTHENTICATED) and
+        // both the "Test Webhook" button and real change notifications fail.
+        credentials: 'include',
         body: JSON.stringify({
           config,
           payload
