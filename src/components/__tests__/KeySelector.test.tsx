@@ -130,4 +130,22 @@ describe('KeySelector multi-key zone disambiguation', () => {
     // No per-key split labels inside the zone list.
     expect(list.queryByText(/example\.com\s+—/)).not.toBeInTheDocument();
   });
+
+  it('renders cleanly (no out-of-range value) when a multi-key zone is selected with no key', () => {
+    // Reachable by deselecting the key or reloading a persisted zone-only
+    // selection: the only options are per-key composites, so the plain zone name
+    // is not a selectable value. The field must not bind to it (blank + warning);
+    // instead it shows unselected and the helper text prompts for a key/view.
+    setup({ availableKeys: twoKeys, availableZones: ['example.com'], selectedKey: null, selectedZone: 'example.com' });
+
+    // The zone trigger does not display the (unselectable) plain zone name...
+    expect(screen.getByRole('combobox', { name: /select zone/i })).not.toHaveTextContent('example.com');
+    // ...and the helper text prompts for the view rather than claiming "Managing".
+    expect(screen.getByText(/pick the intended key\/view/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Managing/)).not.toBeInTheDocument();
+    // The per-key options are available to disambiguate.
+    const list = openSelect(/select zone/i);
+    expect(list.getByText(/internal.*10\.0\.0\.53/)).toBeInTheDocument();
+    expect(list.getByText(/external.*203\.0\.113\.53/)).toBeInTheDocument();
+  });
 });

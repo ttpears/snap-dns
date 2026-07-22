@@ -89,6 +89,14 @@ function KeySelector() {
     availableKeys.filter(k => k.zones?.includes(zone));
   const hasMultiKeyZones =
     !selectedKey && visibleZones.some(z => keysServingZone(z).length > 1);
+  // A selected zone with no key that is served by >1 key is genuinely ambiguous
+  // (no view chosen). In that state the dropdown only offers per-key options, so
+  // the plain zone name is not a selectable value — bind the Select to '' rather
+  // than an out-of-range value (which would blank the field and warn), and let
+  // the helper text prompt for a key/view. Reachable by deselecting the key or
+  // reloading a persisted zone-only selection.
+  const ambiguousZoneOnly =
+    !selectedKey && !!validSelectedZone && keysServingZone(validSelectedZone).length > 1;
 
   const renderZoneMenuItems = (zones: string[]) =>
     zones.flatMap(zone => {
@@ -211,7 +219,7 @@ function KeySelector() {
         <InputLabel id="zone-select-label">Select Zone</InputLabel>
         <Select
           labelId="zone-select-label"
-          value={groupReverse && selectedIsReverse ? REVERSE_SENTINEL : validSelectedZone}
+          value={groupReverse && selectedIsReverse ? REVERSE_SENTINEL : ambiguousZoneOnly ? '' : validSelectedZone}
           onChange={(e) => handleZoneSelect(e.target.value)}
           label="Select Zone"
           SelectDisplayProps={{ id: 'zone-select' } as React.HTMLAttributes<HTMLDivElement>}
@@ -227,13 +235,15 @@ function KeySelector() {
           )}
         </Select>
         <FormHelperText>
-          {validSelectedZone
-            ? `Managing ${validSelectedZone}`
-            : hasMultiKeyZones
-              ? 'Some zones exist on multiple keys — pick the intended key/view'
-              : !selectedKey
-                ? 'Select a zone and a matching key is chosen automatically'
-                : 'Select a zone to manage'}
+          {ambiguousZoneOnly
+            ? `${validSelectedZone} is served by multiple keys — pick the intended key/view`
+            : validSelectedZone
+              ? `Managing ${validSelectedZone}`
+              : hasMultiKeyZones
+                ? 'Some zones exist on multiple keys — pick the intended key/view'
+                : !selectedKey
+                  ? 'Select a zone and a matching key is chosen automatically'
+                  : 'Select a zone to manage'}
         </FormHelperText>
       </FormControl>
 
@@ -242,7 +252,7 @@ function KeySelector() {
           <InputLabel id="reverse-zone-select-label">Reverse Zone</InputLabel>
           <Select
             labelId="reverse-zone-select-label"
-            value={selectedIsReverse ? validSelectedZone : ''}
+            value={selectedIsReverse && !ambiguousZoneOnly ? validSelectedZone : ''}
             onChange={(e) => handleZoneSelect(e.target.value)}
             label="Reverse Zone"
             SelectDisplayProps={{ id: 'reverse-zone-select' } as React.HTMLAttributes<HTMLDivElement>}
