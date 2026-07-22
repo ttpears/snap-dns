@@ -18,6 +18,11 @@ interface KeyContextType {
   selectedZone: string | null;
   selectKey: (key: AvailableKey | null) => void;
   selectZone: (zone: string | null) => void;
+  // Set key and zone together in one update. Needed when a single UI action
+  // chooses both (e.g. picking a specific key/view for a zone served by more
+  // than one key): calling selectKey then selectZone would read stale state and
+  // re-run the auto-pick, clobbering the chosen key.
+  selectKeyAndZone: (key: AvailableKey | null, zone: string | null) => void;
   // availableZones is ALWAYS the union of zones across all keys, regardless of
   // whether a key is selected. Consumers that need only the selected key's
   // zones should read selectedKey.zones directly.
@@ -170,12 +175,21 @@ export function KeyProvider({ children }: { children: React.ReactNode }) {
     saveSelections(nextKey, zone);
   };
 
+  // Set both explicitly, with no auto-pick — the caller has already decided the
+  // exact (key, zone) pair.
+  const selectKeyAndZone = (key: AvailableKey | null, zone: string | null) => {
+    setSelectedKey(key);
+    setSelectedZone(zone);
+    saveSelections(key, zone);
+  };
+
   return (
     <KeyContext.Provider value={{
       selectedKey,
       selectedZone,
       selectKey,
       selectZone,
+      selectKeyAndZone,
       availableZones,
       availableKeys,
       keysLoading

@@ -19,6 +19,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     selectedZone: null,
     selectKey: jest.fn(),
     selectZone,
+    selectKeyAndZone: jest.fn(),
     availableKeys: [],
     availableZones: [],
     ...overrides
@@ -83,5 +84,50 @@ describe('KeySelector reverse-zone sub-selection', () => {
     expect(within(reverseTrigger).getByText('2.0.192.in-addr.arpa')).toBeInTheDocument();
     // The main dropdown shows the sub-selection entry rather than a zone.
     expect(screen.getByRole('combobox', { name: /select zone/i })).toHaveTextContent(/reverse zones/i);
+  });
+});
+
+describe('KeySelector multi-key zone disambiguation', () => {
+  beforeEach(() => mockUseKey.mockReset());
+
+  const twoKeys = [
+    { id: 'k-int', name: 'internal', server: '10.0.0.53', keyName: 'int.', algorithm: 'hmac-sha256', zones: ['example.com'] },
+    { id: 'k-ext', name: 'external', server: '203.0.113.53', keyName: 'ext.', algorithm: 'hmac-sha256', zones: ['example.com'] },
+  ];
+
+  it('expands a zone served by multiple keys into one entry per key (no key selected)', () => {
+    setup({ availableKeys: twoKeys, availableZones: ['example.com'] });
+
+    const list = openSelect(/select zone/i);
+    expect(list.getByText(/example\.com.*internal.*10\.0\.0\.53/)).toBeInTheDocument();
+    expect(list.getByText(/example\.com.*external.*203\.0\.113\.53/)).toBeInTheDocument();
+  });
+
+  it('leaves a zone served by a single key as a plain entry', () => {
+    setup({ availableKeys: [twoKeys[0]], availableZones: ['example.com'] });
+
+    const list = openSelect(/select zone/i);
+    expect(list.getByText('example.com')).toBeInTheDocument();
+    expect(list.queryByText(/internal/)).not.toBeInTheDocument();
+  });
+
+  it('selecting a per-key entry sets both the key and the zone atomically', () => {
+    const selectKeyAndZone = jest.fn();
+    setup({ availableKeys: twoKeys, availableZones: ['example.com'], selectKeyAndZone });
+
+    fireEvent.click(openSelect(/select zone/i).getByText(/external.*203\.0\.113\.53/));
+    expect(selectKeyAndZone).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'k-ext' }),
+      'example.com'
+    );
+  });
+
+  it('does not split zones once a key is selected (list is that key\'s zones, plain)', () => {
+    setup({ availableKeys: twoKeys, availableZones: ['example.com'], selectedKey: twoKeys[0] });
+
+    const list = openSelect(/select zone/i);
+    expect(list.getByText('example.com')).toBeInTheDocument();
+    // No per-key split labels inside the zone list.
+    expect(list.queryByText(/example\.com\s+—/)).not.toBeInTheDocument();
   });
 });
