@@ -7,6 +7,8 @@
 
 A modern, enterprise-ready web-based DNS management interface for BIND9 DNS servers using nsupdate for dynamic DNS updates.
 
+Field notes: [Keeping TSIG keys out of a browser-based DNS editor](https://hackyourworld.com/snap-dns-tsig-keys-localstorage-split-dns/) explains the credential migration, split-DNS identity boundary, and restore authorization checks behind the current architecture.
+
 ## Features
 
 ### Core Functionality
