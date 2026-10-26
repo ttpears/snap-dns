@@ -107,4 +107,52 @@ describe('BackupService total-size budget', () => {
     const remaining = await svc.getBackupsForZone('example.com', 'u1', 'admin');
     expect(remaining.map(b => b.id)).toEqual([second.id, first.id]);
   });
+
+  it('caps each zone at 50 snapshots and preserves the newest', async () => {
+    const svc = new BackupService({ dir, maxTotalBytes: 10 * 1024 * 1024 });
+    const ids: string[] = [];
+    for (let i = 0; i < 55; i++) {
+      ids.push((await svc.createBackup('example.com', recordsOfSize(100), 'u1', opts)).id);
+    }
+    const remaining = await svc.getBackupsForZone('example.com', 'u1', 'admin');
+    expect(remaining.map(b => b.id)).toEqual(ids.slice(-50).reverse());
+  });
+
+  it('preserves simultaneous snapshots in the same zone', async () => {
+    const svc = new BackupService({ dir, maxTotalBytes: 10 * 1024 * 1024 });
+    const created = await Promise.all(Array.from({ length: 10 }, () =>
+      svc.createBackup('example.com', recordsOfSize(100), 'u1', opts)));
+    const remaining = await svc.getBackupsForZone('example.com', 'u1', 'admin');
+    expect(remaining.map(b => b.id).sort()).toEqual(created.map(b => b.id).sort());
+  });
+
+  it('enforces the global budget during simultaneous writes to different zones', async () => {
+    const svc = new BackupService({ dir, maxTotalBytes: 20 * 1024 });
+    await Promise.all(Array.from({ length: 10 }, (_, i) =>
+      svc.createBackup(`zone${i}.example.com`, recordsOfSize(4 * 1024), 'u1', opts)));
+    expect(await dirTotalBytes(dir)).toBeLessThanOrEqual(20 * 1024);
+    const remaining = await svc.getAllBackups('u1', 'admin');
+    expect(remaining.length).toBeGreaterThan(0);
+    expect(remaining.length).toBeLessThan(10);
+  });
+
+  it('does not resurrect a deleted snapshot when a create overlaps it', async () => {
+    const svc = new BackupService({ dir, maxTotalBytes: 10 * 1024 * 1024 });
+    const first = await svc.createBackup('example.com', recordsOfSize(100), 'u1', opts);
+    const [, newest] = await Promise.all([
+      svc.deleteBackup('example.com', first.id, 'u1', 'admin'),
+      svc.createBackup('example.com', recordsOfSize(100), 'u1', opts),
+    ]);
+    const remaining = await svc.getBackupsForZone('example.com', 'u1', 'admin');
+    expect(remaining.map(b => b.id)).toEqual([newest.id]);
+  });
+
+  it('can still save after an oversized snapshot is rejected', async () => {
+    const svc = new BackupService({ dir, maxTotalBytes: 2 * 1024 });
+    await expect(svc.createBackup('example.com', recordsOfSize(8 * 1024), 'u1', opts))
+      .rejects.toThrow(/budget/i);
+    const newest = await svc.createBackup('example.com', recordsOfSize(100), 'u1', opts);
+    expect((await svc.getBackupsForZone('example.com', 'u1', 'admin')).map(b => b.id))
+      .toEqual([newest.id]);
+  });
 });

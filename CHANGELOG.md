@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.1] - 2026-10-26
+
+### Security
+
+- Upgrade all development, build, and production stages to Node 24.22.1 LTS,
+  including the October 2026 security fixes. Pin the base image by digest and
+  the frontend static server to `serve@14.2.6`; install from lockfiles with `npm ci`.
+  Override its vulnerable `compression` dependency with patched 1.8.2 and audit
+  both production dependency trees in CI.
+- Refresh dependency lockfiles and upgrade bcrypt, MSAL, and React Router to
+  patched releases. The backend dependency audit is clean. The legacy CRA
+  development/build toolchain still has advisories; it is absent from the
+  production frontend image, which contains only static assets and `serve`.
+
+### Fixed
+
+- Serialize snapshot creation and deletion across the whole store. Concurrent
+  saves can no longer overwrite each other or bypass the global size budget.
+- Verify #66's browser-quota failure with a regression test: pre-change snapshots
+  use the server-side API without writing to browser storage. Server snapshots
+  retain at most 50 per zone and obey a configurable total size budget (512 MiB
+  by default), evicting the oldest first while preserving the new snapshot.
+- Run frontend tests in CI on the same Node version used by production.
+
 ## [3.4.0] - 2026-07-21
 
 ### Added
