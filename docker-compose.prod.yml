@@ -79,6 +79,7 @@ services:
       - MAX_ZONE_RECORDS=${MAX_ZONE_RECORDS:-10000}
       - ZONE_RECORDS_WARNING_THRESHOLD=${ZONE_RECORDS_WARNING_THRESHOLD:-5000}
       - MAX_DIG_OUTPUT_SIZE=${MAX_DIG_OUTPUT_SIZE:-52428800}
+      - BACKUP_MAX_TOTAL_SIZE_MB=${BACKUP_MAX_TOTAL_SIZE_MB:-512}
     # labels:
     #   - "traefik.enable=true"
     #   - "traefik.docker.network=proxy"

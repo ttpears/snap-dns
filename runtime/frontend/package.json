@@ -1,0 +1,10 @@
+{
+  "name": "snap-dns-static-server",
+  "private": true,
+  "dependencies": {
+    "serve": "14.2.6"
+  },
+  "overrides": {
+    "compression": "1.8.2"
+  }
+}

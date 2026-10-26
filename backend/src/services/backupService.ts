@@ -4,7 +4,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { BackupConfig, resolveBackupConfig } from '../config/backups';
-import { writeJsonAtomic, removeFileLocked } from '../utils/atomicJson';
+import { writeJsonAtomic, removeFileLocked, withFileLock } from '../utils/atomicJson';
 
 const MAX_BACKUPS_PER_ZONE = 50;
 
@@ -158,6 +158,17 @@ export class BackupService {
     zone: string,
     records: DNSRecord[],
     userId: string,
+    options: Pick<DNSBackup, 'server' | 'keyId' | 'type' | 'description'>
+  ): Promise<DNSBackup> {
+    // Eviction spans every zone. Lock the whole read/modify/write transaction,
+    // not only each final file write, so concurrent requests share one budget.
+    return withFileLock(this.dir, () => this.createBackupUnlocked(zone, records, userId, options));
+  }
+
+  private async createBackupUnlocked(
+    zone: string,
+    records: DNSRecord[],
+    userId: string,
     options: {
       server: string;
       keyId?: string;
@@ -299,6 +310,10 @@ export class BackupService {
    * Delete a backup
    */
   async deleteBackup(zone: string, backupId: string, userId: string, userRole: string): Promise<void> {
+    return withFileLock(this.dir, () => this.deleteBackupUnlocked(zone, backupId, userId, userRole));
+  }
+
+  private async deleteBackupUnlocked(zone: string, backupId: string, userId: string, userRole: string): Promise<void> {
     if (!this.initialized) await this.initialize();
 
     try {

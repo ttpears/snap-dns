@@ -23,7 +23,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24.22.1'
           cache: 'npm'
 
       - name: Install dependencies
@@ -31,6 +31,17 @@ jobs:
 
       - name: TypeScript type check
         run: npx tsc --noEmit
+
+      - name: Audit production static server
+        run: |
+          cd runtime/frontend
+          npm ci --omit=dev
+          npm audit --omit=dev --audit-level=low
+
+      - name: Run frontend tests
+        run: npm test -- --watchAll=false --maxWorkers=2
+        env:
+          CI: true
 
       - name: Build frontend
         run: npm run build
@@ -61,7 +72,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24.22.1'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
@@ -85,6 +96,11 @@ jobs:
         run: |
           cd backend
           npm test
+
+      - name: Audit backend production dependencies
+        run: |
+          cd backend
+          npm audit --omit=dev --audit-level=low
 
       - name: Build backend
         run: |
